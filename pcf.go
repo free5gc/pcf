@@ -13,7 +13,7 @@ import (
 	"fmt"
 	"free5gc/src/app"
 	"free5gc/src/pcf/logger"
-	"free5gc/src/pcf/pcf_service"
+	"free5gc/src/pcf/service"
 	"free5gc/src/pcf/version"
 	"os"
 
@@ -21,7 +21,7 @@ import (
 	"github.com/urfave/cli"
 )
 
-var PCF = &pcf_service.PCF{}
+var PCF = &service.PCF{}
 
 var appLog *logrus.Entry
 
