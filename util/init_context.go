@@ -6,6 +6,7 @@ import (
 	"free5gc/src/pcf/context"
 	"free5gc/src/pcf/factory"
 	"free5gc/src/pcf/logger"
+	"os"
 
 	"github.com/google/uuid"
 )
@@ -18,6 +19,15 @@ func InitpcfContext(context *context.PCFContext) {
 	context.NfId = uuid.New().String()
 	if configuration.PcfName != "" {
 		context.Name = configuration.PcfName
+	}
+	context.ServerIPv4 = os.Getenv(configuration.ServerIPv4)
+	if context.ServerIPv4 == "" {
+		logger.UtilLog.Warn("Problem parsing ServerIPv4 address from ENV Variable. Trying to parse it as string.")
+		context.ServerIPv4 = configuration.ServerIPv4
+		if context.ServerIPv4 == "" {
+			logger.UtilLog.Warn("Error parsing ServerIPv4 address as string. Using the localhost address as default.")
+			context.ServerIPv4 = "127.0.0.1"
+		}
 	}
 	sbi := configuration.Sbi
 	context.NrfUri = configuration.NrfUri

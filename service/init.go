@@ -126,7 +126,7 @@ func (pcf *PCF) Start() {
 	self := context.PCF_Self()
 	util.InitpcfContext(self)
 
-	addr := fmt.Sprintf("%s:%d", self.HttpIPv4Address, self.HttpIpv4Port)
+	addr := fmt.Sprintf("%s:%d", self.ServerIPv4, self.HttpIpv4Port)
 
 	profile, err := consumer.BuildNFInstance(self)
 	if err != nil {

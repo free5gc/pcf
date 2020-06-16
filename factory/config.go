@@ -19,6 +19,8 @@ type Info struct {
 type Configuration struct {
 	PcfName string `yaml:"pcfName,omitempty"`
 
+	ServerIPv4 string `yaml:"serverIPv4,omitempty"`
+
 	Sbi *Sbi `yaml:"sbi,omitempty"`
 
 	TimeFormat string `yaml:"timeFormat,omitempty"`
