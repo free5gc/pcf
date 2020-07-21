@@ -3,6 +3,7 @@ package pcf_producer
 import (
 	"context"
 	"fmt"
+	"free5gc/lib/openapi"
 	"free5gc/lib/openapi/Nudr_DataRepository"
 	"free5gc/lib/openapi/models"
 	pcf_context "free5gc/src/pcf/context"
@@ -129,7 +130,9 @@ func CreateSmPolicy(httpChannel chan message.HttpResponseMessage, request models
 		decision.Online = request.Online
 		decision.Offline = request.Offline
 	}
-	decision.SuppFeat = util.GetNegotiateSuppFeat(request.SuppFeat, pcfSelf.PcfSuppFeats[models.ServiceName_NPCF_SMPOLICYCONTROL])
+
+	requestSuppFeat, _ := openapi.NewSupportedFeature(request.SuppFeat)
+	decision.SuppFeat = pcfSelf.PcfSuppFeats[models.ServiceName_NPCF_SMPOLICYCONTROL].NegotiateWith(requestSuppFeat).String()
 	decision.QosFlowUsage = request.QosFlowUsage
 	// TODO: Trigger about UMC, ADC, NetLoc,...
 	decision.PolicyCtrlReqTriggers = util.PolicyControlReqTrigToArray(0x40780f)

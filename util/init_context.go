@@ -1,7 +1,7 @@
 package util
 
 import (
-	"encoding/hex"
+	"free5gc/lib/openapi"
 	"free5gc/lib/openapi/models"
 	"free5gc/src/pcf/context"
 	"free5gc/src/pcf/factory"
@@ -43,6 +43,6 @@ func InitpcfContext(context *context.PCFContext) {
 	context.DefaultBdtRefId = configuration.DefaultBdtRefId
 	for _, service := range context.NfService {
 		context.PcfServiceUris[service.ServiceName] = service.ApiPrefix + "/" + string(service.ServiceName) + "/" + (*service.Versions)[0].ApiVersionInUri
-		context.PcfSuppFeats[service.ServiceName], _ = hex.DecodeString(service.SupportedFeatures)
+		context.PcfSuppFeats[service.ServiceName], _ = openapi.NewSupportedFeature(service.SupportedFeatures)
 	}
 }

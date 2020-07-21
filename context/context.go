@@ -2,6 +2,7 @@ package context
 
 import (
 	"fmt"
+	"free5gc/lib/openapi"
 	"free5gc/lib/openapi/models"
 	"free5gc/src/pcf/factory"
 	"strconv"
@@ -17,7 +18,7 @@ func init() {
 	PCF_Self().DefaultBdtRefId = "BdtPolicyId-"
 	PCF_Self().NfService = make(map[models.ServiceName]models.NfService)
 	PCF_Self().PcfServiceUris = make(map[models.ServiceName]string)
-	PCF_Self().PcfSuppFeats = make(map[models.ServiceName][]byte)
+	PCF_Self().PcfSuppFeats = make(map[models.ServiceName]openapi.SupportedFeature)
 	PCF_Self().UePool = make(map[string]*UeContext)
 	PCF_Self().BdtPolicyPool = make(map[string]models.BdtPolicy)
 	PCF_Self().BdtPolicyIdGenerator = 1
@@ -35,7 +36,7 @@ type PCFContext struct {
 	DefaultBdtRefId string
 	NfService       map[models.ServiceName]models.NfService
 	PcfServiceUris  map[models.ServiceName]string
-	PcfSuppFeats    map[models.ServiceName][]byte
+	PcfSuppFeats    map[models.ServiceName]openapi.SupportedFeature
 	NrfUri          string
 	DefaultUdrUri   string
 	UePool          map[string]*UeContext
@@ -200,24 +201,33 @@ func (context *PCFContext) PcfUeFindByIPv6(v6 string) *UeContext {
 	return nil
 }
 
-// Session Binding from application request to get corresponding Sm policy
+// SessionBinding from application request to get corresponding Sm policy
 func (context *PCFContext) SessionBinding(req *models.AppSessionContextReqData) (policy *UeSmPolicyData, err error) {
 	// TODO: support dnn, snssai, ... because Ip Address is not enough with same ip address in different ip domains, details in subclause 4.2.2.2 of TS 29514
+	var selectedUE *UeContext
+
 	if ue, exist := context.UePool[req.Supi]; exist {
+		selectedUE = ue
+	}
+
+	if req.Gpsi != "" && selectedUE == nil {
+		for _, ue := range context.UePool {
+			if ue.Gpsi == req.Gpsi {
+				selectedUE = ue
+			}
+		}
+	}
+
+	if selectedUE != nil {
 		if req.UeIpv4 != "" {
-			policy = ue.SMPolicyFindByIpv4(req.UeIpv4)
+			policy = selectedUE.SMPolicyFindByIdentifiersIpv4(req.UeIpv4, req.SliceInfo, req.Dnn)
 		} else if req.UeIpv6 != "" {
-			policy = ue.SMPolicyFindByIpv6(req.UeIpv6)
+			policy = selectedUE.SMPolicyFindByIdentifiersIpv6(req.UeIpv6, req.SliceInfo, req.Dnn)
 		} else {
 			err = fmt.Errorf("Ue finding by MAC address does not support")
 		}
-	} else if req.UeIpv4 != "" {
-		policy = ue.SMPolicyFindByIpv4(req.UeIpv4)
-	} else if req.UeIpv6 != "" {
-		policy = ue.SMPolicyFindByIpv6(req.UeIpv6)
-	} else {
-		err = fmt.Errorf("Ue finding by MAC address does not support")
 	}
+
 	if err == nil && policy == nil {
 		if req.UeIpv4 != "" {
 			err = fmt.Errorf("Can't find Ue with Ipv4[%s]", req.UeIpv4)

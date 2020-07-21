@@ -12,8 +12,8 @@ package policyauthorization
 import (
 	"free5gc/lib/http_wrapper"
 	"free5gc/lib/openapi/models"
-	"free5gc/src/pcf/logger"
 	"free5gc/src/pcf/handler/message"
+	"free5gc/src/pcf/logger"
 	"free5gc/src/pcf/util"
 
 	"github.com/gin-gonic/gin"
@@ -29,8 +29,8 @@ func PostAppSessions(c *gin.Context) {
 		c.JSON(int(rsp.Status), rsp)
 		return
 	}
-	reqData := appSessionContext.AscReqData
-	if reqData == nil || reqData.SuppFeat == "" || reqData.NotifUri == "" {
+	ascReqData := appSessionContext.AscReqData
+	if ascReqData == nil || ascReqData.SuppFeat == "" || ascReqData.NotifUri == "" {
 		// Check Mandatory IEs
 		rsp := util.GetProblemDetail("Errorneous/Missing Mandotory IE", util.ERROR_INITIAL_PARAMETERS)
 		logger.HandlerLog.Errorln(rsp.Detail)
