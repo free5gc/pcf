@@ -77,13 +77,18 @@ func (*PCF) Initialize(c *cli.Context) {
 		factory.InitConfigFactory(DefaultPcfConfigPath)
 	}
 
-	initLog.Traceln("PCF debug level(string):", app.ContextSelf().Logger.PCF.DebugLevel)
 	if app.ContextSelf().Logger.PCF.DebugLevel != "" {
-		initLog.Infoln("PCF debug level(string):", app.ContextSelf().Logger.PCF.DebugLevel)
 		level, err := logrus.ParseLevel(app.ContextSelf().Logger.PCF.DebugLevel)
 		if err != nil {
+			initLog.Warnf("Log level [%s] is not valid, set to [info] level", app.ContextSelf().Logger.PCF.DebugLevel)
+			logger.SetLogLevel(logrus.InfoLevel)
+		} else {
 			logger.SetLogLevel(level)
+			initLog.Infof("Log level is set to [%s] level", level)
 		}
+	} else {
+		initLog.Infoln("Log level is default set to [info] level")
+		logger.SetLogLevel(logrus.InfoLevel)
 	}
 
 	logger.SetReportCaller(app.ContextSelf().Logger.PCF.ReportCaller)

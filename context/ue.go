@@ -384,6 +384,28 @@ func (ue *UeContext) SMPolicyFindByIpv6(v6 string) *UeSmPolicyData {
 	return nil
 }
 
+// returns SM Policy by IPv6
+func (ue *UeContext) SMPolicyFindByIdentifiersIpv4(v4 string, sNssai *models.Snssai, dnn string) *UeSmPolicyData {
+	for _, smPolicy := range ue.SmPolicyData {
+		policyContext := smPolicy.PolicyContext
+		if policyContext.Ipv4Address == v4 && reflect.DeepEqual(sNssai, policyContext.SliceInfo) && policyContext.Dnn == dnn {
+			return smPolicy
+		}
+	}
+	return nil
+}
+
+// returns SM Policy by IPv6
+func (ue *UeContext) SMPolicyFindByIdentifiersIpv6(v6 string, sNssai *models.Snssai, dnn string) *UeSmPolicyData {
+	for _, smPolicy := range ue.SmPolicyData {
+		policyContext := smPolicy.PolicyContext
+		if policyContext.Ipv6AddressPrefix == v6 && reflect.DeepEqual(sNssai, policyContext.SliceInfo) && policyContext.Dnn == dnn {
+			return smPolicy
+		}
+	}
+	return nil
+}
+
 // AppSessionIdStore -
 type AppSessionIdStore struct {
 	AppSessionId      string

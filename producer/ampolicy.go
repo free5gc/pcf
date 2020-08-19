@@ -3,15 +3,17 @@ package pcf_producer
 import (
 	"context"
 	"fmt"
+	"free5gc/lib/openapi"
 	"free5gc/lib/openapi/models"
 	"free5gc/src/pcf/consumer"
 	pcf_context "free5gc/src/pcf/context"
 	"free5gc/src/pcf/handler/message"
 	"free5gc/src/pcf/logger"
 	"free5gc/src/pcf/util"
-	"github.com/mohae/deepcopy"
 	"net/http"
 	"reflect"
+
+	"github.com/mohae/deepcopy"
 )
 
 func DeletePoliciesPolAssoId(httpChannel chan message.HttpResponseMessage, polAssoId string) {
@@ -191,7 +193,8 @@ func PostPolicies(httpChannel chan message.HttpResponseMessage, request models.P
 	// TODO: according to PCF Policy to determine ServAreaRes, Rfsp, SuppFeat
 	// amPolicy.ServAreaRes =
 	// amPolicy.Rfsp =
-	amPolicy.SuppFeat = util.GetNegotiateSuppFeat(request.SuppFeat, pcfSelf.PcfSuppFeats[models.ServiceName_NPCF_AM_POLICY_CONTROL])
+	requestSuppFeat, _ := openapi.NewSupportedFeature(request.SuppFeat)
+	amPolicy.SuppFeat = pcfSelf.PcfSuppFeats[models.ServiceName_NPCF_AM_POLICY_CONTROL].NegotiateWith(requestSuppFeat).String()
 	if amPolicy.Rfsp != 0 {
 		rsp.Rfsp = amPolicy.Rfsp
 	}

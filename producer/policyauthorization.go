@@ -3,6 +3,7 @@ package pcf_producer
 import (
 	"context"
 	"fmt"
+	"free5gc/lib/openapi"
 	"free5gc/lib/openapi/models"
 	pcf_context "free5gc/src/pcf/context"
 	"free5gc/src/pcf/handler/message"
@@ -27,16 +28,16 @@ import (
 // PostAppSessions - Creates a new Individual Application Session Context resource
 func PostAppSessionsContext(httpChannel chan message.HttpResponseMessage, request models.AppSessionContext) {
 	logger.PolicyAuthorizationlog.Traceln("Handle Create AppSessions")
-	reqData := request.AscReqData
+	ascReqData := request.AscReqData
 	pcfSelf := pcf_context.PCF_Self()
 	// Initial BDT policy indication(the only one which is not related to session)
-	if reqData.BdtRefId != "" {
+	if ascReqData.BdtRefId != "" {
 		err := handleBackgroundDataTransferPolicyIndication(pcfSelf, &request)
 		if err != nil {
 			sendProblemDetail(httpChannel, err.Error(), util.ERROR_REQUEST_PARAMETERS)
 			return
 		}
-		appSessionId := fmt.Sprintf("BdtRefId-%s", reqData.BdtRefId)
+		appSessionId := fmt.Sprintf("BdtRefId-%s", ascReqData.BdtRefId)
 		data := pcf_context.AppSessionData{
 			AppSessionId:      appSessionId,
 			AppSessionContext: &request,
@@ -50,25 +51,31 @@ func PostAppSessionsContext(httpChannel chan message.HttpResponseMessage, reques
 		message.SendHttpResponseMessage(httpChannel, headers, http.StatusCreated, request)
 		return
 	}
-	if request.AscReqData.UeIpv4 == "" && request.AscReqData.UeIpv6 == "" && request.AscReqData.UeMac == "" {
+	if ascReqData.UeIpv4 == "" && ascReqData.UeIpv6 == "" && ascReqData.UeMac == "" {
 		sendProblemDetail(httpChannel, "Ue UeIpv4 and UeIpv6 and UeMac are all empty", util.ERROR_REQUEST_PARAMETERS)
 		return
 	}
-	smPolicy, err := pcfSelf.SessionBinding(request.AscReqData)
+	if ascReqData.AfRoutReq != nil && ascReqData.Dnn == "" {
+		sendProblemDetail(httpChannel, "DNN shall be present", util.ERROR_REQUEST_PARAMETERS)
+		return
+	}
+	smPolicy, err := pcfSelf.SessionBinding(ascReqData)
 	if err != nil {
 		sendProblemDetail(httpChannel, fmt.Sprintf("Session Binding failed[%s]", err.Error()), util.PDU_SESSION_NOT_AVAILABLE)
 		return
 	}
 	ue := smPolicy.PcfUe
 	updateSMpolicy := false
-	nSuppFeat := util.GetNegotiateSuppFeat(reqData.SuppFeat, pcfSelf.PcfSuppFeats[models.ServiceName_NPCF_POLICYAUTHORIZATION])
+
+	requestSuppFeat, _ := openapi.NewSupportedFeature(ascReqData.SuppFeat)
+	nSuppFeat := pcfSelf.PcfSuppFeats[models.ServiceName_NPCF_POLICYAUTHORIZATION].NegotiateWith(requestSuppFeat).String()
 	traffRoutSupp := util.CheckSuppFeat(nSuppFeat, 1) && util.CheckSuppFeat(smPolicy.PolicyDecision.SuppFeat, 1) // InfluenceOnTrafficRouting = 1 in 29514 &  Traffic Steering Control support = 1 in 29512
 	relatedPccRuleIds := make(map[string]string)
 
-	if reqData.MedComponents != nil {
+	if ascReqData.MedComponents != nil {
 		// Handle Pcc rules
 		maxPrecedence := getMaxPrecedence(smPolicy.PolicyDecision.PccRules)
-		for _, mediaComponent := range reqData.MedComponents {
+		for _, mediaComponent := range ascReqData.MedComponents {
 			var pccRule *models.PccRule
 			// TODO: use specific algorithm instead of default, details in subsclause 7.3.3 of TS 29513
 			var var5qi int32 = 9
@@ -130,7 +137,7 @@ func PostAppSessionsContext(httpChannel chan message.HttpResponseMessage, reques
 					}
 					// Initial provisioning of traffic routing information
 					if traffRoutSupp {
-						InitialProvisioningOfTrafficRoutingInformation(smPolicy, pccRule, mediaComponent.AfRoutReq, reqData.AfRoutReq)
+						InitialProvisioningOfTrafficRoutingInformation(smPolicy, pccRule, mediaComponent.AfRoutReq, ascReqData.AfRoutReq)
 					}
 					smPolicy.PolicyDecision.PccRules[pccRule.PccRuleId] = *pccRule
 					key := fmt.Sprintf("%d-%d", mediaComponent.MedCompN, mediaSubComponent.FNum)
@@ -139,15 +146,15 @@ func PostAppSessionsContext(httpChannel chan message.HttpResponseMessage, reques
 				}
 				continue
 			} else if mediaComponent.AfAppId != "" {
-				// if mediaComponent.AfAppId has value -> find pccRule by reqData.AfAppId, otherwise create a new pcc rule
+				// if mediaComponent.AfAppId has value -> find pccRule by ascReqData.AfAppId, otherwise create a new pcc rule
 				pccRule = util.GetPccRuleByAfAppId(smPolicy.PolicyDecision.PccRules, mediaComponent.AfAppId)
 				if pccRule != nil {
 					pccRule.AppId = mediaComponent.AfAppId
 				}
-			} else if reqData.AfAppId != "" {
-				pccRule = util.GetPccRuleByAfAppId(smPolicy.PolicyDecision.PccRules, reqData.AfAppId)
+			} else if ascReqData.AfAppId != "" {
+				pccRule = util.GetPccRuleByAfAppId(smPolicy.PolicyDecision.PccRules, ascReqData.AfAppId)
 				if pccRule != nil {
-					pccRule.AppId = reqData.AfAppId
+					pccRule.AppId = ascReqData.AfAppId
 				}
 			} else {
 				sendProblemDetail(httpChannel, "Media Component needs flows of subComp or afAppId", util.REQUESTED_SERVICE_NOT_AUTHORIZED)
@@ -159,7 +166,7 @@ func PostAppSessionsContext(httpChannel chan message.HttpResponseMessage, reques
 				if mediaComponent.AfAppId != "" {
 					pccRule.AppId = mediaComponent.AfAppId
 				} else {
-					pccRule.AppId = reqData.AfAppId
+					pccRule.AppId = ascReqData.AfAppId
 				}
 				// Set QoS Data
 				// TODO: use real arp
@@ -200,28 +207,29 @@ func PostAppSessionsContext(httpChannel chan message.HttpResponseMessage, reques
 			// TODO : handle temporal or spatial validity
 			// Initial provisioning of traffic routing information
 			if traffRoutSupp {
-				InitialProvisioningOfTrafficRoutingInformation(smPolicy, pccRule, mediaComponent.AfRoutReq, reqData.AfRoutReq)
+				InitialProvisioningOfTrafficRoutingInformation(smPolicy, pccRule, mediaComponent.AfRoutReq, ascReqData.AfRoutReq)
 			}
 			updateSMpolicy = true
 		}
-	} else if reqData.AfAppId != "" {
+	} else if ascReqData.AfAppId != "" {
 		// Initial provisioning of traffic routing information
-		if reqData.AfRoutReq != nil && traffRoutSupp {
+		if ascReqData.AfRoutReq != nil && traffRoutSupp {
 			decision := smPolicy.PolicyDecision
 			cnt := 0
+			createdTcData := models.TrafficControlData{
+				FlowStatus:     models.FlowStatus_ENABLED,
+				RouteToLocs:    ascReqData.AfRoutReq.RouteToLocs,
+				UpPathChgEvent: ascReqData.AfRoutReq.UpPathChgSub,
+			}
+
 			for _, rule := range smPolicy.PolicyDecision.PccRules {
-				if rule.AppId == reqData.AfAppId {
-					tcData := models.TrafficControlData{
-						TcId:       strings.ReplaceAll(rule.PccRuleId, "PccRule", "Tc"),
-						FlowStatus: models.FlowStatus_ENABLED,
-					}
-					tcData.RouteToLocs = append(tcData.RouteToLocs, reqData.AfRoutReq.RouteToLocs...)
-					tcData.UpPathChgEvent = reqData.AfRoutReq.UpPathChgSub
-					rule.RefTcData = []string{tcData.TcId}
-					rule.AppReloc = reqData.AfRoutReq.AppReloc
-					util.SetPccRuleRelatedData(decision, &rule, &tcData, nil, nil, nil)
+				if rule.AppId == ascReqData.AfAppId {
+					createdTcData.TcId = strings.ReplaceAll(rule.PccRuleId, "PccRule", "Tc")
+					rule.RefTcData = []string{createdTcData.TcId}
+					rule.AppReloc = ascReqData.AfRoutReq.AppReloc
+					util.SetPccRuleRelatedData(decision, &rule, &createdTcData, nil, nil, nil)
 					updateSMpolicy = true
-					key := fmt.Sprintf("appId-%s-%d", reqData.AfAppId, cnt)
+					key := fmt.Sprintf("appId-%s-%d", ascReqData.AfAppId, cnt)
 					relatedPccRuleIds[key] = rule.PccRuleId
 					cnt++
 				}
@@ -230,18 +238,18 @@ func PostAppSessionsContext(httpChannel chan message.HttpResponseMessage, reques
 			if !updateSMpolicy {
 				maxPrecedence := getMaxPrecedence(smPolicy.PolicyDecision.PccRules)
 				pccRule := util.CreatePccRule(smPolicy.PccRuleIdGenarator, maxPrecedence+1, nil, false)
-				pccRule.AppId = reqData.AfAppId
+				pccRule.AppId = ascReqData.AfAppId
 				qosData := models.QosData{
 					QosId:                util.GetQosId(smPolicy.PccRuleIdGenarator),
 					DefQosFlowIndication: true,
 				}
-				tcData := util.CreateTcData(smPolicy.PccRuleIdGenarator, "")
-				pccRule.RefTcData = []string{tcData.TcId}
+				createdTcData.TcId = util.GetTcId(smPolicy.PccRuleIdGenarator)
+				pccRule.RefTcData = []string{createdTcData.TcId}
 				pccRule.RefQosData = []string{qosData.QosId}
-				util.SetPccRuleRelatedData(decision, pccRule, &tcData, &qosData, nil, nil)
+				util.SetPccRuleRelatedData(decision, pccRule, &createdTcData, &qosData, nil, nil)
 				smPolicy.PccRuleIdGenarator++
 				updateSMpolicy = true
-				key := fmt.Sprintf("appId-%s", reqData.AfAppId)
+				key := fmt.Sprintf("appId-%s", ascReqData.AfAppId)
 				relatedPccRuleIds[key] = pccRule.PccRuleId
 			}
 		} else {
@@ -255,8 +263,8 @@ func PostAppSessionsContext(httpChannel chan message.HttpResponseMessage, reques
 
 	// Event Subscription
 	eventSubs := make(map[models.AfEvent]models.AfNotifMethod)
-	if reqData.EvSubsc != nil {
-		for _, subs := range reqData.EvSubsc.Events {
+	if ascReqData.EvSubsc != nil {
+		for _, subs := range ascReqData.EvSubsc.Events {
 			if subs.NotifMethod == "" {
 				// default value "EVENT_DETECTION"
 				subs.NotifMethod = models.AfNotifMethod_EVENT_DETECTION
@@ -300,19 +308,19 @@ func PostAppSessionsContext(httpChannel chan message.HttpResponseMessage, reques
 	}
 
 	// Initial provisioning of sponsored connectivity information
-	if reqData.AspId != "" && reqData.SponId != "" {
+	if ascReqData.AspId != "" && ascReqData.SponId != "" {
 		supp := util.CheckSuppFeat(nSuppFeat, 2) && util.CheckSuppFeat(smPolicy.PolicyDecision.SuppFeat, 12) // SponsoredConnectivity = 2 in 29514 &  SponsoredConnectivity support = 12 in 29512
 		if !supp {
 			sendProblemDetail(httpChannel, "Sponsored Connectivity not supported", util.REQUESTED_SERVICE_NOT_AUTHORIZED)
 			return
 		}
-		umId := util.GetUmId(reqData.AspId, reqData.SponId)
-		umData, err := extractUmData(umId, eventSubs, reqData.EvSubsc.UsgThres)
+		umId := util.GetUmId(ascReqData.AspId, ascReqData.SponId)
+		umData, err := extractUmData(umId, eventSubs, ascReqData.EvSubsc.UsgThres)
 		if err != nil {
 			sendProblemDetail(httpChannel, err.Error(), util.REQUESTED_SERVICE_NOT_AUTHORIZED)
 			return
 		}
-		err = handleSponsoredConnectivityInformation(smPolicy, relatedPccRuleIds, reqData.AspId, reqData.SponId, reqData.SponStatus, umData, &updateSMpolicy)
+		err = handleSponsoredConnectivityInformation(smPolicy, relatedPccRuleIds, ascReqData.AspId, ascReqData.SponId, ascReqData.SponStatus, umData, &updateSMpolicy)
 		if err != nil {
 			return
 		}
@@ -338,7 +346,7 @@ func PostAppSessionsContext(httpChannel chan message.HttpResponseMessage, reques
 	// Set Event Subsciption related Data
 	if len(eventSubs) > 0 {
 		data.Events = eventSubs
-		data.EventUri = reqData.EvSubsc.NotifUri
+		data.EventUri = ascReqData.EvSubsc.NotifUri
 		if _, exist := eventSubs[models.AfEvent_PLMN_CHG]; exist {
 			afNotif := models.AfEventNotification{
 				Event: models.AfEvent_PLMN_CHG,
@@ -1011,9 +1019,11 @@ func SendAppSessionTermination(appSession *pcf_context.AppSessionData, request m
 // Handle Create/ Modify  Background Data Transfer Policy Indication
 func handleBackgroundDataTransferPolicyIndication(pcfSelf *pcf_context.PCFContext, appContext *models.AppSessionContext) (err error) {
 	req := appContext.AscReqData
+
+	requestSuppFeat, _ := openapi.NewSupportedFeature(req.SuppFeat)
 	respData := models.AppSessionContextRespData{
 		ServAuthInfo: models.ServAuthInfo_NOT_KNOWN,
-		SuppFeat:     util.GetNegotiateSuppFeat(req.SuppFeat, pcfSelf.PcfSuppFeats[models.ServiceName_NPCF_POLICYAUTHORIZATION]),
+		SuppFeat:     pcfSelf.PcfSuppFeats[models.ServiceName_NPCF_POLICYAUTHORIZATION].NegotiateWith(requestSuppFeat).String(),
 	}
 	client := util.GetNudrClient(getDefaultUdrUri(pcfSelf))
 	bdtData, resp, err1 := client.DefaultApi.PolicyDataBdtDataBdtReferenceIdGet(context.Background(), req.BdtRefId)
