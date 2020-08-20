@@ -29,8 +29,8 @@ func init() {
 type PCFContext struct {
 	NfId            string
 	Name            string
-	ServerIPv4      string
 	UriScheme       models.UriScheme
+	BindingIPv4		string
 	HttpIPv4Address string
 	HttpIpv4Port    int
 	TimeFormat      string
