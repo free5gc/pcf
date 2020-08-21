@@ -6,6 +6,7 @@ import (
 	"free5gc/src/pcf/context"
 	"free5gc/src/pcf/factory"
 	"free5gc/src/pcf/logger"
+	"os"
 
 	"github.com/google/uuid"
 )
@@ -25,8 +26,8 @@ func InitpcfContext(context *context.PCFContext) {
 	context.HttpIPv4Address = "127.0.0.1" // default localhost
 	context.HttpIpv4Port = 29507          // default port
 	if sbi != nil {
-		if sbi.IPv4Addr != "" {
-			context.HttpIPv4Address = sbi.IPv4Addr
+		if sbi.RegisterIPv4 != "" {
+			context.HttpIPv4Address = sbi.RegisterIPv4
 		}
 		if sbi.Port != 0 {
 			context.HttpIpv4Port = sbi.Port
@@ -35,6 +36,16 @@ func InitpcfContext(context *context.PCFContext) {
 			context.UriScheme = models.UriScheme_HTTPS
 		} else {
 			context.UriScheme = models.UriScheme_HTTP
+		}
+		context.BindingIPv4 = os.Getenv(sbi.BindingIPv4)
+		if context.BindingIPv4 != "" {
+			logger.UtilLog.Info("Parsing ServerIPv4 address from ENV Variable.")
+		} else {
+			context.BindingIPv4 = sbi.BindingIPv4
+			if context.BindingIPv4 == "" {
+				logger.UtilLog.Info("Error parsing ServerIPv4 address as string. Using the 0.0.0.0 address as default.")
+				context.BindingIPv4 = "0.0.0.0"
+			}
 		}
 	}
 	serviceList := configuration.ServiceList

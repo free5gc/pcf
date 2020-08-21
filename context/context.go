@@ -30,7 +30,8 @@ type PCFContext struct {
 	NfId            string
 	Name            string
 	UriScheme       models.UriScheme
-	HttpIPv4Address string
+	BindingIPv4     string
+	HttpIPv4Address string // IP register to NRF
 	HttpIpv4Port    int
 	TimeFormat      string
 	DefaultBdtRefId string
