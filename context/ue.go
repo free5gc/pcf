@@ -2,7 +2,9 @@ package context
 
 import (
 	"fmt"
+	"free5gc/lib/idgenerator"
 	"free5gc/lib/openapi/models"
+	"free5gc/src/pcf/logger"
 	"math"
 	"reflect"
 	"strconv"
@@ -24,7 +26,8 @@ type UeContext struct {
 	// SMPolicy
 	SmPolicyData map[string]*UeSmPolicyData // use smPolicyId(ue.Supi-pduSessionId) as key
 	// App Session Related
-	AppSessionIdGenerator uint64
+	//AppSessionIDGenerator uint64
+	AppSessionIDGenerator *idgenerator.IDGenerator
 	// PolicyAuth
 	AfRoutReq *models.AfRoutingRequirement
 	AspId     string
@@ -119,7 +122,8 @@ func (ue *UeContext) NewUeAMPolicyData(assolId string, req models.PolicyAssociat
 }
 
 // returns UeSmPolicyData and insert related info to Ue with smPolId
-func (ue *UeContext) NewUeSmPolicyData(key string, request models.SmPolicyContextData, smData *models.SmPolicyData) *UeSmPolicyData {
+func (ue *UeContext) NewUeSmPolicyData(
+	key string, request models.SmPolicyContextData, smData *models.SmPolicyData) *UeSmPolicyData {
 	if smData == nil {
 		return nil
 	}
@@ -224,7 +228,8 @@ func (policy *UeSmPolicyData) RemovePccRule(pccRuleId string) error {
 // Check if the afEvent exists in smPolicy
 func (policy *UeSmPolicyData) CheckRelatedAfEvent(event models.AfEvent) (found bool) {
 	for appSessionId := range policy.AppSessions {
-		if appSession, exist := PCF_Self().AppSessionPool[appSessionId]; exist {
+		if val, ok := PCF_Self().AppSessionPool.Load(appSessionId); ok {
+			appSession := val.(*AppSessionData)
 			for afEvent := range appSession.Events {
 				if afEvent == event {
 					return true
@@ -243,9 +248,11 @@ func (policy *UeSmPolicyData) ArrangeExistEventSubscription() (changed bool) {
 		switch trigger {
 		case models.PolicyControlRequestTrigger_PLMN_CH: // PLMN Change
 			afEvent = models.AfEvent_PLMN_CHG
-		case models.PolicyControlRequestTrigger_QOS_NOTIF: // SMF notify PCF when receiving from RAN that QoS can/can't be guaranteed (subsclause 4.2.4.20 in TS29512) (always)
+		case models.PolicyControlRequestTrigger_QOS_NOTIF:
+			// SMF notify PCF when receiving from RAN that QoS can/can't be guaranteed (subsclause 4.2.4.20 in TS29512) (always)
 			afEvent = models.AfEvent_QOS_NOTIF
-		case models.PolicyControlRequestTrigger_SUCC_RES_ALLO: // Successful resource allocation (subsclause 4.2.6.5.5, 4.2.4.14 in TS29512)
+		case models.PolicyControlRequestTrigger_SUCC_RES_ALLO:
+			// Successful resource allocation (subsclause 4.2.6.5.5, 4.2.4.14 in TS29512)
 			afEvent = models.AfEvent_SUCCESSFUL_RESOURCES_ALLOCATION
 		case models.PolicyControlRequestTrigger_AC_TY_CH: // Change of RatType
 			afEvent = models.AfEvent_ACCESS_TYPE_CHANGE
@@ -353,15 +360,14 @@ func (ue *UeContext) FindAMPolicy(anType models.AccessType, plmnId *models.Netwo
 
 // Return App Session Id with format "ue.Supi-%d" which be allocated
 func (ue *UeContext) AllocUeAppSessionId(context *PCFContext) string {
-	appSessionId := fmt.Sprintf("%s-%d", ue.Supi, ue.AppSessionIdGenerator)
-	_, exist := context.AppSessionPool[appSessionId]
-	for exist {
-		ue.AppSessionIdGenerator++
-		appSessionId = fmt.Sprintf("%s-%d", ue.Supi, ue.AppSessionIdGenerator)
-		_, exist = context.AppSessionPool[appSessionId]
+	var allocID int64
+	var err error
+	if allocID, err = ue.AppSessionIDGenerator.Allocate(); err != nil {
+		logger.CtxLog.Warnf("Allocate AppSessionId error: %+v", err)
+		return ""
 	}
-	ue.AppSessionIdGenerator++
-	return appSessionId
+	appSessionID := fmt.Sprintf("%s-%d", ue.Supi, allocID)
+	return appSessionID
 }
 
 // returns SM Policy by IPv4
@@ -384,11 +390,21 @@ func (ue *UeContext) SMPolicyFindByIpv6(v6 string) *UeSmPolicyData {
 	return nil
 }
 
-// returns SM Policy by IPv6
-func (ue *UeContext) SMPolicyFindByIdentifiersIpv4(v4 string, sNssai *models.Snssai, dnn string) *UeSmPolicyData {
+// returns SM Policy by IPv4
+func (ue *UeContext) SMPolicyFindByIdentifiersIpv4(
+	v4 string, sNssai *models.Snssai, dnn string, ipDomain string) *UeSmPolicyData {
 	for _, smPolicy := range ue.SmPolicyData {
 		policyContext := smPolicy.PolicyContext
-		if policyContext.Ipv4Address == v4 && reflect.DeepEqual(sNssai, policyContext.SliceInfo) && policyContext.Dnn == dnn {
+		if policyContext.Ipv4Address == v4 {
+			if dnn != "" && policyContext.Dnn != dnn {
+				continue
+			}
+			if ipDomain != "" && policyContext.IpDomain != "" && policyContext.IpDomain != ipDomain {
+				continue
+			}
+			if sNssai != nil && !reflect.DeepEqual(sNssai, policyContext.SliceInfo) {
+				continue
+			}
 			return smPolicy
 		}
 	}
@@ -399,7 +415,13 @@ func (ue *UeContext) SMPolicyFindByIdentifiersIpv4(v4 string, sNssai *models.Sns
 func (ue *UeContext) SMPolicyFindByIdentifiersIpv6(v6 string, sNssai *models.Snssai, dnn string) *UeSmPolicyData {
 	for _, smPolicy := range ue.SmPolicyData {
 		policyContext := smPolicy.PolicyContext
-		if policyContext.Ipv6AddressPrefix == v6 && reflect.DeepEqual(sNssai, policyContext.SliceInfo) && policyContext.Dnn == dnn {
+		if policyContext.Ipv6AddressPrefix == v6 {
+			if dnn != "" && policyContext.Dnn != dnn {
+				continue
+			}
+			if sNssai != nil && !reflect.DeepEqual(sNssai, policyContext.SliceInfo) {
+				continue
+			}
 			return smPolicy
 		}
 	}
@@ -422,7 +444,7 @@ var CreateFailBdtDateStore []models.BdtData
 func ConvertBitRateToKbps(bitRate string) (kBitRate float64, err error) {
 	list := strings.Split(bitRate, " ")
 	if len(list) != 2 {
-		err := fmt.Errorf("bitRate format error")
+		err = fmt.Errorf("bitRate format error")
 		return 0, err
 	}
 	// parse exponential value with 2 as base
@@ -439,7 +461,7 @@ func ConvertBitRateToKbps(bitRate string) (kBitRate float64, err error) {
 	case "bps":
 		exp = -10.0
 	default:
-		err := fmt.Errorf("bitRate format error")
+		err = fmt.Errorf("bitRate format error")
 		return 0, err
 	}
 	// parse value from string to float64
@@ -449,7 +471,7 @@ func ConvertBitRateToKbps(bitRate string) (kBitRate float64, err error) {
 	} else {
 		kBitRate = 0.0
 	}
-	return
+	return kBitRate, err
 }
 
 // Convert bitRate from float64 to String

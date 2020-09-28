@@ -15,7 +15,7 @@ func BuildNFInstance(context *pcf_context.PCFContext) (profile models.NfProfile,
 	profile.NfInstanceId = context.NfId
 	profile.NfType = models.NfType_PCF
 	profile.NfStatus = models.NfStatus_REGISTERED
-	profile.Ipv4Addresses = append(profile.Ipv4Addresses, context.HttpIPv4Address)
+	profile.Ipv4Addresses = append(profile.Ipv4Addresses, context.RegisterIPv4)
 	service := []models.NfService{}
 	for _, nfService := range context.NfService {
 		service = append(service, nfService)
@@ -39,7 +39,8 @@ func BuildNFInstance(context *pcf_context.PCFContext) (profile models.NfProfile,
 	return
 }
 
-func SendRegisterNFInstance(nrfUri, nfInstanceId string, profile models.NfProfile) (resouceNrfUri string, retrieveNfInstanceID string, err error) {
+func SendRegisterNFInstance(nrfUri, nfInstanceId string, profile models.NfProfile) (
+	resouceNrfUri string, retrieveNfInstanceID string, err error) {
 
 	// Set client and set url
 	configuration := Nnrf_NFManagement.NewConfiguration()
@@ -69,5 +70,5 @@ func SendRegisterNFInstance(nrfUri, nfInstanceId string, profile models.NfProfil
 			fmt.Println("NRF return wrong status code", status)
 		}
 	}
-	return
+	return resouceNrfUri, retrieveNfInstanceID, err
 }

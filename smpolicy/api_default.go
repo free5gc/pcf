@@ -11,78 +11,155 @@ package smpolicy
 
 import (
 	"free5gc/lib/http_wrapper"
+	"free5gc/lib/openapi"
 	"free5gc/lib/openapi/models"
-	"free5gc/src/pcf/handler/message"
 	"free5gc/src/pcf/logger"
-	"free5gc/src/pcf/util"
-
+	"free5gc/src/pcf/producer"
 	"github.com/gin-gonic/gin"
+	"net/http"
 )
 
 // SmPoliciesPost -
-func SmPoliciesPost(c *gin.Context) {
+func HTTPSmPoliciesPost(c *gin.Context) {
 
 	var smPolicyContextData models.SmPolicyContextData
-	err := c.ShouldBindJSON(&smPolicyContextData)
+	// step 1: retrieve http request body
+	requestBody, err := c.GetRawData()
 	if err != nil {
-		rsp := util.GetProblemDetail("Malformed request syntax", util.ERROR_INITIAL_PARAMETERS)
-		logger.HandlerLog.Errorln(rsp.Detail)
-		c.JSON(int(rsp.Status), rsp)
+		problemDetail := models.ProblemDetails{
+			Title:  "System failure",
+			Status: http.StatusInternalServerError,
+			Detail: err.Error(),
+			Cause:  "SYSTEM_FAILURE",
+		}
+		logger.SMpolicylog.Errorf("Get Request Body error: %+v", err)
+		c.JSON(http.StatusInternalServerError, problemDetail)
 		return
 	}
-	if smPolicyContextData.Supi == "" || smPolicyContextData.SliceInfo == nil || len(smPolicyContextData.SliceInfo.Sd) != 6 {
-		rsp := util.GetProblemDetail("Errorneous/Missing Mandotory IE", util.ERROR_INITIAL_PARAMETERS)
-		logger.HandlerLog.Errorln(rsp.Detail)
-		c.JSON(int(rsp.Status), rsp)
+
+	// step 2: convert requestBody to openapi models
+	err = openapi.Deserialize(&smPolicyContextData, requestBody, "application/json")
+	if err != nil {
+		problemDetail := "[Request Body] " + err.Error()
+		rsp := models.ProblemDetails{
+			Title:  "Malformed request syntax",
+			Status: http.StatusBadRequest,
+			Detail: problemDetail,
+		}
+		logger.SMpolicylog.Errorln(problemDetail)
+		c.JSON(http.StatusBadRequest, rsp)
 		return
 	}
 
 	req := http_wrapper.NewRequest(c.Request, smPolicyContextData)
-	channelMsg := message.NewHttpChannelMessage(message.EventSMPolicyCreate, req)
+	rsp := producer.HandleCreateSmPolicyRequest(req)
 
-	message.SendMessage(channelMsg)
-	recvMsg := <-channelMsg.HttpChannel
-	HTTPResponse := recvMsg.HTTPResponse
-
-	for key, val := range HTTPResponse.Header {
+	// step 5: response
+	for key, val := range rsp.Header { // header response is optional
 		c.Header(key, val[0])
 	}
-	c.JSON(HTTPResponse.Status, HTTPResponse.Body)
+	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
+	if err != nil {
+		logger.SMpolicylog.Errorln(err)
+		problemDetails := models.ProblemDetails{
+			Status: http.StatusInternalServerError,
+			Cause:  "SYSTEM_FAILURE",
+			Detail: err.Error(),
+		}
+		c.JSON(http.StatusInternalServerError, problemDetails)
+	} else {
+		c.Data(rsp.Status, "application/json", responseBody)
+	}
 }
 
 // SmPoliciesSmPolicyIdDeletePost -
-func SmPoliciesSmPolicyIdDeletePost(c *gin.Context) {
+func HTTPSmPoliciesSmPolicyIdDeletePost(c *gin.Context) {
 	req := http_wrapper.NewRequest(c.Request, nil)
 	req.Params["smPolicyId"] = c.Params.ByName("smPolicyId")
-	channelMsg := message.NewHttpChannelMessage(message.EventSMPolicyDelete, req)
-	message.SendMessage(channelMsg)
-	recvMsg := <-channelMsg.HttpChannel
-	HTTPResponse := recvMsg.HTTPResponse
-	c.JSON(HTTPResponse.Status, HTTPResponse.Body)
+
+	rsp := producer.HandleDeleteSmPolicyContextRequest(req)
+
+	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
+	if err != nil {
+		logger.SMpolicylog.Errorln(err)
+		problemDetails := models.ProblemDetails{
+			Status: http.StatusInternalServerError,
+			Cause:  "SYSTEM_FAILURE",
+			Detail: err.Error(),
+		}
+		c.JSON(http.StatusInternalServerError, problemDetails)
+	} else {
+		c.Data(rsp.Status, "application/json", responseBody)
+	}
 }
 
 // SmPoliciesSmPolicyIdGet -
-func SmPoliciesSmPolicyIdGet(c *gin.Context) {
+func HTTPSmPoliciesSmPolicyIDGet(c *gin.Context) {
 	req := http_wrapper.NewRequest(c.Request, nil)
 	req.Params["smPolicyId"] = c.Params.ByName("smPolicyId")
-	channelMsg := message.NewHttpChannelMessage(message.EventSMPolicyGet, req)
 
-	message.SendMessage(channelMsg)
-	recvMsg := <-channelMsg.HttpChannel
-	HTTPResponse := recvMsg.HTTPResponse
-	c.JSON(HTTPResponse.Status, HTTPResponse.Body)
+	rsp := producer.HandleGetSmPolicyContextRequest(req)
+
+	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
+	if err != nil {
+		logger.SMpolicylog.Errorln(err)
+		problemDetails := models.ProblemDetails{
+			Status: http.StatusInternalServerError,
+			Cause:  "SYSTEM_FAILURE",
+			Detail: err.Error(),
+		}
+		c.JSON(http.StatusInternalServerError, problemDetails)
+	} else {
+		c.Data(rsp.Status, "application/json", responseBody)
+	}
 }
 
 // SmPoliciesSmPolicyIdUpdatePost -
-func SmPoliciesSmPolicyIdUpdatePost(c *gin.Context) {
+func HTTPSmPoliciesSmPolicyIdUpdatePost(c *gin.Context) {
 	var smPolicyUpdateContextData models.SmPolicyUpdateContextData
-	c.ShouldBindJSON(&smPolicyUpdateContextData)
+	// step 1: retrieve http request body
+	requestBody, err := c.GetRawData()
+	if err != nil {
+		problemDetail := models.ProblemDetails{
+			Title:  "System failure",
+			Status: http.StatusInternalServerError,
+			Detail: err.Error(),
+			Cause:  "SYSTEM_FAILURE",
+		}
+		logger.SMpolicylog.Errorf("Get Request Body error: %+v", err)
+		c.JSON(http.StatusInternalServerError, problemDetail)
+		return
+	}
+
+	// step 2: convert requestBody to openapi models
+	err = openapi.Deserialize(&smPolicyUpdateContextData, requestBody, "application/json")
+	if err != nil {
+		problemDetail := "[Request Body] " + err.Error()
+		rsp := models.ProblemDetails{
+			Title:  "Malformed request syntax",
+			Status: http.StatusBadRequest,
+			Detail: problemDetail,
+		}
+		logger.SMpolicylog.Errorln(problemDetail)
+		c.JSON(http.StatusBadRequest, rsp)
+		return
+	}
+
 	req := http_wrapper.NewRequest(c.Request, smPolicyUpdateContextData)
 	req.Params["smPolicyId"] = c.Params.ByName("smPolicyId")
-	channelMsg := message.NewHttpChannelMessage(message.EventSMPolicyUpdate, req)
 
-	message.SendMessage(channelMsg)
-	recvMsg := <-channelMsg.HttpChannel
-	HTTPResponse := recvMsg.HTTPResponse
-	c.JSON(HTTPResponse.Status, HTTPResponse.Body)
+	rsp := producer.HandleUpdateSmPolicyContextRequest(req)
+
+	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
+	if err != nil {
+		logger.SMpolicylog.Errorln(err)
+		problemDetails := models.ProblemDetails{
+			Status: http.StatusInternalServerError,
+			Cause:  "SYSTEM_FAILURE",
+			Detail: err.Error(),
+		}
+		c.JSON(http.StatusInternalServerError, problemDetails)
+	} else {
+		c.Data(rsp.Status, "application/json", responseBody)
+	}
 }

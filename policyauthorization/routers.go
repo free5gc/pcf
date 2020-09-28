@@ -10,6 +10,8 @@
 package policyauthorization
 
 import (
+	"free5gc/lib/logger_util"
+	"free5gc/src/pcf/logger"
 	"net/http"
 	"strings"
 
@@ -33,7 +35,7 @@ type Routes []Route
 
 // NewRouter returns a new router.
 func NewRouter() *gin.Engine {
-	router := gin.Default()
+	router := logger_util.NewGinWithLogrus(logger.GinLog)
 	AddService(router)
 	return router
 }
@@ -72,44 +74,44 @@ var routes = Routes{
 	},
 
 	{
-		"PostAppSessions",
+		"HTTPPostAppSessions",
 		strings.ToUpper("Post"),
 		"/app-sessions",
-		PostAppSessions,
+		HTTPPostAppSessions,
 	},
 
 	{
-		"DeleteEventsSubsc",
+		"HTTPDeleteEventsSubsc",
 		strings.ToUpper("Delete"),
 		"/app-sessions/:appSessionId/events-subscription",
-		DeleteEventsSubsc,
+		HTTPDeleteEventsSubsc,
 	},
 
 	{
-		"UpdateEventsSubsc",
+		"HTTPUpdateEventsSubsc",
 		strings.ToUpper("Put"),
 		"/app-sessions/:appSessionId/events-subscription",
-		UpdateEventsSubsc,
+		HTTPUpdateEventsSubsc,
 	},
 
 	{
-		"DeleteAppSession",
+		"HTTPDeleteAppSession",
 		strings.ToUpper("Post"),
 		"/app-sessions/:appSessionId/delete",
-		DeleteAppSession,
+		HTTPDeleteAppSession,
 	},
 
 	{
-		"GetAppSession",
+		"HTTPGetAppSession",
 		strings.ToUpper("Get"),
 		"/app-sessions/:appSessionId",
-		GetAppSession,
+		HTTPGetAppSession,
 	},
 
 	{
-		"ModAppSession",
+		"HTTPModAppSession",
 		strings.ToUpper("Patch"),
 		"/app-sessions/:appSessionId",
-		ModAppSession,
+		HTTPModAppSession,
 	},
 }

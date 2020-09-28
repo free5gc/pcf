@@ -10,6 +10,8 @@
 package uepolicy
 
 import (
+	"free5gc/lib/logger_util"
+	"free5gc/src/pcf/logger"
 	"net/http"
 	"strings"
 
@@ -30,7 +32,7 @@ type Route struct {
 type Routes []Route
 
 func NewRouter() *gin.Engine {
-	router := gin.Default()
+	router := logger_util.NewGinWithLogrus(logger.GinLog)
 	AddService(router)
 	return router
 }

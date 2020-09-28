@@ -11,59 +11,130 @@ package policyauthorization
 
 import (
 	"free5gc/lib/http_wrapper"
+	"free5gc/lib/openapi"
 	"free5gc/lib/openapi/models"
-	"free5gc/src/pcf/handler/message"
+	"free5gc/src/pcf/logger"
+	"free5gc/src/pcf/producer"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
 
-// DeleteAppSession - Deletes an existing Individual Application Session Context
-func DeleteAppSession(c *gin.Context) {
-
+// HTTPDeleteAppSession - Deletes an existing Individual Application Session Context
+func HTTPDeleteAppSession(c *gin.Context) {
 	var eventsSubscReqData *models.EventsSubscReqData
-	err := c.ShouldBindJSON(eventsSubscReqData)
+
+	requestBody, err := c.GetRawData()
 	if err != nil {
-		eventsSubscReqData = nil
+		problemDetail := models.ProblemDetails{
+			Title:  "System failure",
+			Status: http.StatusInternalServerError,
+			Detail: err.Error(),
+			Cause:  "SYSTEM_FAILURE",
+		}
+		logger.PolicyAuthorizationlog.Errorf("Get Request Body error: %+v", err)
+		c.JSON(http.StatusInternalServerError, problemDetail)
+		return
+	}
+
+	err = openapi.Deserialize(&eventsSubscReqData, requestBody, "application/json")
+	if err != nil {
+		problemDetail := "[Request Body] " + err.Error()
+		rsp := models.ProblemDetails{
+			Title:  "Malformed request syntax",
+			Status: http.StatusBadRequest,
+			Detail: problemDetail,
+		}
+		logger.PolicyAuthorizationlog.Errorln(problemDetail)
+		c.JSON(http.StatusBadRequest, rsp)
+		return
 	}
 
 	req := http_wrapper.NewRequest(c.Request, eventsSubscReqData)
 	req.Params["appSessionId"], _ = c.Params.Get("appSessionId")
-	channelMsg := message.NewHttpChannelMessage(message.EventDeleteAppSession, req)
 
-	message.SendMessage(channelMsg)
-	recvMsg := <-channelMsg.HttpChannel
+	rsp := producer.HandleDeleteAppSessionContext(req)
 
-	HTTPResponse := recvMsg.HTTPResponse
-	c.JSON(HTTPResponse.Status, HTTPResponse.Body)
+	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
+	if err != nil {
+		logger.PolicyAuthorizationlog.Errorln(err)
+		problemDetails := models.ProblemDetails{
+			Status: http.StatusInternalServerError,
+			Cause:  "SYSTEM_FAILURE",
+			Detail: err.Error(),
+		}
+		c.JSON(http.StatusInternalServerError, problemDetails)
+	} else {
+		c.Data(rsp.Status, "application/json", responseBody)
+	}
 }
 
-// GetAppSession - Reads an existing Individual Application Session Context
-func GetAppSession(c *gin.Context) {
-
+// HTTPGetAppSession - Reads an existing Individual Application Session Context
+func HTTPGetAppSession(c *gin.Context) {
 	req := http_wrapper.NewRequest(c.Request, nil)
 	req.Params["appSessionId"], _ = c.Params.Get("appSessionId")
-	channelMsg := message.NewHttpChannelMessage(message.EventGetAppSession, req)
 
-	message.SendMessage(channelMsg)
-	recvMsg := <-channelMsg.HttpChannel
+	rsp := producer.HandleGetAppSessionContext(req)
 
-	HTTPResponse := recvMsg.HTTPResponse
-	c.JSON(HTTPResponse.Status, HTTPResponse.Body)
+	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
+	if err != nil {
+		logger.PolicyAuthorizationlog.Errorln(err)
+		problemDetails := models.ProblemDetails{
+			Status: http.StatusInternalServerError,
+			Cause:  "SYSTEM_FAILURE",
+			Detail: err.Error(),
+		}
+		c.JSON(http.StatusInternalServerError, problemDetails)
+	} else {
+		c.Data(rsp.Status, "application/json", responseBody)
+	}
 }
 
-// ModAppSession - Modifies an existing Individual Application Session Context
-func ModAppSession(c *gin.Context) {
+// HTTPModAppSession - Modifies an existing Individual Application Session Context
+func HTTPModAppSession(c *gin.Context) {
 	var appSessionContextUpdateData models.AppSessionContextUpdateData
-	c.ShouldBindJSON(&appSessionContextUpdateData)
+
+	requestBody, err := c.GetRawData()
+	if err != nil {
+		problemDetail := models.ProblemDetails{
+			Title:  "System failure",
+			Status: http.StatusInternalServerError,
+			Detail: err.Error(),
+			Cause:  "SYSTEM_FAILURE",
+		}
+		logger.PolicyAuthorizationlog.Errorf("Get Request Body error: %+v", err)
+		c.JSON(http.StatusInternalServerError, problemDetail)
+		return
+	}
+
+	err = openapi.Deserialize(&appSessionContextUpdateData, requestBody, "application/json")
+	if err != nil {
+		problemDetail := "[Request Body] " + err.Error()
+		rsp := models.ProblemDetails{
+			Title:  "Malformed request syntax",
+			Status: http.StatusBadRequest,
+			Detail: problemDetail,
+		}
+		logger.PolicyAuthorizationlog.Errorln(problemDetail)
+		c.JSON(http.StatusBadRequest, rsp)
+		return
+	}
 
 	req := http_wrapper.NewRequest(c.Request, appSessionContextUpdateData)
 	req.Params["appSessionId"], _ = c.Params.Get("appSessionId")
-	channelMsg := message.NewHttpChannelMessage(message.EventModAppSession, req)
 
-	message.SendMessage(channelMsg)
-	recvMsg := <-channelMsg.HttpChannel
+	rsp := producer.HandleModAppSessionContext(req)
 
-	HTTPResponse := recvMsg.HTTPResponse
-	c.JSON(HTTPResponse.Status, HTTPResponse.Body)
-
+	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
+	if err != nil {
+		logger.PolicyAuthorizationlog.Errorln(err)
+		problemDetails := models.ProblemDetails{
+			Status: http.StatusInternalServerError,
+			Cause:  "SYSTEM_FAILURE",
+			Detail: err.Error(),
+		}
+		c.JSON(http.StatusInternalServerError, problemDetails)
+	} else {
+		c.Data(rsp.Status, "application/json", responseBody)
+	}
 }

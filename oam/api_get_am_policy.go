@@ -1,9 +1,13 @@
 package oam
 
 import (
-	"github.com/gin-gonic/gin"
 	"free5gc/lib/http_wrapper"
-	"free5gc/src/pcf/handler/message"
+	"free5gc/lib/openapi"
+	"free5gc/lib/openapi/models"
+	"free5gc/src/pcf/logger"
+	"free5gc/src/pcf/producer"
+	"github.com/gin-gonic/gin"
+	"net/http"
 )
 
 func setCorsHeader(c *gin.Context) {
@@ -13,18 +17,24 @@ func setCorsHeader(c *gin.Context) {
 	c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, PATCH, DELETE")
 }
 
-func OAMGetAmPolicy(c *gin.Context) {
+func HTTPOAMGetAmPolicy(c *gin.Context) {
 	setCorsHeader(c)
 
 	req := http_wrapper.NewRequest(c.Request, nil)
 	req.Params["supi"] = c.Params.ByName("supi")
 
-	handlerMsg := message.NewHttpChannelMessage(message.EventOAMGetAmPolicy, req)
-	message.SendMessage(handlerMsg)
+	rsp := producer.HandleOAMGetAmPolicyRequest(req)
 
-	rsp := <-handlerMsg.HttpChannel
-
-	HTTPResponse := rsp.HTTPResponse
-
-	c.JSON(HTTPResponse.Status, HTTPResponse.Body)
+	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
+	if err != nil {
+		logger.OamLog.Errorln(err)
+		problemDetails := models.ProblemDetails{
+			Status: http.StatusInternalServerError,
+			Cause:  "SYSTEM_FAILURE",
+			Detail: err.Error(),
+		}
+		c.JSON(http.StatusInternalServerError, problemDetails)
+	} else {
+		c.Data(rsp.Status, "application/json", responseBody)
+	}
 }

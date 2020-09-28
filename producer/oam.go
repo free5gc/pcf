@@ -1,9 +1,9 @@
-package pcf_producer
+package producer
 
 import (
+	"free5gc/lib/http_wrapper"
 	"free5gc/lib/openapi/models"
 	"free5gc/src/pcf/context"
-	"free5gc/src/pcf/handler/message"
 	"free5gc/src/pcf/logger"
 	"net/http"
 	"strconv"
@@ -22,13 +22,37 @@ type UEAmPolicy struct {
 
 type UEAmPolicys []UEAmPolicy
 
-func HandleOAMGetAmPolicy(httpChannel chan message.HttpResponseMessage, supi string) {
-	logger.OamLog.Infof("Handle OAM Get Am Policy")
+func HandleOAMGetAmPolicyRequest(request *http_wrapper.Request) *http_wrapper.Response {
+	// step 1: log
+	logger.OamLog.Infof("Handle OAMGetAmPolicy")
 
-	var response UEAmPolicys
+	// step 2: retrieve request
+	supi := request.Params["supi"]
+
+	// step 3: handle the message
+	response, problemDetails := OAMGetAmPolicyProcedure(supi)
+
+	// step 4: process the return value from step 3
+	if response != nil {
+		// status code is based on SPEC, and option headers
+		return http_wrapper.NewResponse(http.StatusOK, nil, response)
+	} else if problemDetails != nil {
+		return http_wrapper.NewResponse(int(problemDetails.Status), nil, problemDetails)
+	}
+	problemDetails = &models.ProblemDetails{
+		Status: http.StatusForbidden,
+		Cause:  "UNSPECIFIED",
+	}
+	return http_wrapper.NewResponse(http.StatusForbidden, nil, problemDetails)
+}
+
+func OAMGetAmPolicyProcedure(supi string) (response *UEAmPolicys, problemDetails *models.ProblemDetails) {
+	logger.OamLog.Infof("Handle OAM Get Am Policy")
+	response = &UEAmPolicys{}
 	pcfSelf := context.PCF_Self()
 
-	if ue, exists := pcfSelf.UePool[supi]; exists {
+	if val, exists := pcfSelf.UePool.Load(supi); exists {
+		ue := val.(*context.UeContext)
 		for _, amPolicy := range ue.AMPolicyData {
 			ueAmPolicy := UEAmPolicy{
 				PolicyAssociationID: amPolicy.PolAssoId,
@@ -42,14 +66,14 @@ func HandleOAMGetAmPolicy(httpChannel chan message.HttpResponseMessage, supi str
 				ueAmPolicy.Areas = servAreaRes.Areas
 				ueAmPolicy.MaxNumOfTAs = servAreaRes.MaxNumOfTAs
 			}
-			response = append(response, ueAmPolicy)
+			*response = append(*response, ueAmPolicy)
 		}
-		message.SendHttpResponseMessage(httpChannel, nil, http.StatusOK, response)
+		return response, nil
 	} else {
-		problem := models.ProblemDetails{
+		problemDetails = &models.ProblemDetails{
 			Status: http.StatusNotFound,
 			Cause:  "CONTEXT_NOT_FOUND",
 		}
-		message.SendHttpResponseMessage(httpChannel, nil, http.StatusNotFound, problem)
+		return nil, problemDetails
 	}
 }

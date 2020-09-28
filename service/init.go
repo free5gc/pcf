@@ -3,7 +3,16 @@ package service
 import (
 	"bufio"
 	"fmt"
+	"os/exec"
+	"sync"
+
+	"github.com/antihax/optional"
+	"github.com/gin-contrib/cors"
+	"github.com/sirupsen/logrus"
+	"github.com/urfave/cli"
+
 	"free5gc/lib/http2_util"
+	"free5gc/lib/logger_util"
 	"free5gc/lib/openapi/Nnrf_NFDiscovery"
 	"free5gc/lib/openapi/models"
 	"free5gc/lib/path_util"
@@ -12,7 +21,7 @@ import (
 	"free5gc/src/pcf/bdtpolicy"
 	"free5gc/src/pcf/consumer"
 	"free5gc/src/pcf/context"
-	"free5gc/src/pcf/handler"
+	"free5gc/src/pcf/factory"
 	"free5gc/src/pcf/httpcallback"
 	"free5gc/src/pcf/logger"
 	"free5gc/src/pcf/oam"
@@ -20,17 +29,6 @@ import (
 	"free5gc/src/pcf/smpolicy"
 	"free5gc/src/pcf/uepolicy"
 	"free5gc/src/pcf/util"
-	"os/exec"
-	"sync"
-
-	"github.com/gin-contrib/cors"
-
-	"free5gc/src/pcf/factory"
-
-	"github.com/antihax/optional"
-	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
-	"github.com/urfave/cli"
 )
 
 type PCF struct{}
@@ -109,7 +107,7 @@ func (pcf *PCF) FilterCli(c *cli.Context) (args []string) {
 
 func (pcf *PCF) Start() {
 	initLog.Infoln("Server started")
-	router := gin.Default()
+	router := logger_util.NewGinWithLogrus(logger.GinLog)
 
 	bdtpolicy.AddService(router)
 	smpolicy.AddService(router)
@@ -120,8 +118,9 @@ func (pcf *PCF) Start() {
 	oam.AddService(router)
 
 	router.Use(cors.New(cors.Config{
-		AllowMethods:     []string{"GET", "POST", "OPTIONS", "PUT", "PATCH", "DELETE"},
-		AllowHeaders:     []string{"Origin", "Content-Length", "Content-Type", "User-Agent", "Referrer", "Host", "Token", "X-Requested-With"},
+		AllowMethods: []string{"GET", "POST", "OPTIONS", "PUT", "PATCH", "DELETE"},
+		AllowHeaders: []string{"Origin", "Content-Length", "Content-Type", "User-Agent",
+			"Referrer", "Host", "Token", "X-Requested-With"},
 		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: true,
 		AllowAllOrigins:  true,
@@ -131,7 +130,7 @@ func (pcf *PCF) Start() {
 	self := context.PCF_Self()
 	util.InitpcfContext(self)
 
-	addr := fmt.Sprintf("%s:%d", self.BindingIPv4, self.HttpIpv4Port)
+	addr := fmt.Sprintf("%s:%d", self.BindingIPv4, self.SBIPort)
 
 	profile, err := consumer.BuildNFInstance(self)
 	if err != nil {
@@ -149,7 +148,8 @@ func (pcf *PCF) Start() {
 		if len(guamiList) == 0 {
 			continue
 		}
-		problemDetails, err := consumer.AmfStatusChangeSubscribe(amfInfo)
+		var problemDetails *models.ProblemDetails
+		problemDetails, err = consumer.AmfStatusChangeSubscribe(amfInfo)
 		if problemDetails != nil {
 			logger.InitLog.Warnf("AMF status subscribe Failed[%+v]", problemDetails)
 		} else if err != nil {
@@ -159,7 +159,6 @@ func (pcf *PCF) Start() {
 
 	// TODO: subscribe NRF NFstatus
 
-	go handler.Handle()
 	param := Nnrf_NFDiscovery.SearchNFInstancesParamOpts{
 		ServiceNames: optional.NewInterface([]models.ServiceName{models.ServiceName_NUDR_DR}),
 	}
@@ -167,7 +166,7 @@ func (pcf *PCF) Start() {
 	for _, nfProfile := range resp.NfInstances {
 		udruri := util.SearchNFServiceUri(nfProfile, models.ServiceName_NUDR_DR, models.NfServiceStatus_REGISTERED)
 		if udruri != "" {
-			self.DefaultUdrUri = udruri
+			self.SetDefaultUdrURI(udruri)
 			break
 		}
 	}
@@ -176,12 +175,12 @@ func (pcf *PCF) Start() {
 	}
 	server, err := http2_util.NewServer(addr, util.PCF_LOG_PATH, router)
 	if server == nil {
-		initLog.Errorln("Initialize HTTP server failed: %+v", err)
+		initLog.Errorf("Initialize HTTP server failed: %+v", err)
 		return
 	}
 
 	if err != nil {
-		initLog.Warnln("Initialize HTTP server: +%v", err)
+		initLog.Warnf("Initialize HTTP server: +%v", err)
 	}
 
 	serverScheme := factory.PcfConfig.Configuration.Sbi.Scheme
@@ -192,7 +191,7 @@ func (pcf *PCF) Start() {
 	}
 
 	if err != nil {
-		initLog.Fatalln("HTTP server setup failed: %+v", err)
+		initLog.Fatalf("HTTP server setup failed: %+v", err)
 	}
 }
 
@@ -231,7 +230,7 @@ func (pcf *PCF) Exec(c *cli.Context) error {
 
 	go func() {
 		fmt.Println("PCF start")
-		if err := command.Start(); err != nil {
+		if err = command.Start(); err != nil {
 			fmt.Printf("command.Start() error: %v", err)
 		}
 		fmt.Println("PCF end")

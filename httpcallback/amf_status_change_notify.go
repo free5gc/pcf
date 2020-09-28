@@ -2,17 +2,32 @@ package httpcallback
 
 import (
 	"free5gc/lib/http_wrapper"
+	"free5gc/lib/openapi"
 	"free5gc/lib/openapi/models"
-	"free5gc/src/pcf/handler/message"
 	"free5gc/src/pcf/logger"
-	"github.com/gin-gonic/gin"
+	"free5gc/src/pcf/producer"
 	"net/http"
+
+	"github.com/gin-gonic/gin"
 )
 
-func AmfStatusChangeNotify(c *gin.Context) {
-	var request models.AmfStatusChangeNotification
+func HTTPAmfStatusChangeNotify(c *gin.Context) {
+	var amfStatusChangeNotification models.AmfStatusChangeNotification
 
-	err := c.ShouldBindJSON(&request)
+	requestBody, err := c.GetRawData()
+	if err != nil {
+		problemDetail := models.ProblemDetails{
+			Title:  "System failure",
+			Status: http.StatusInternalServerError,
+			Detail: err.Error(),
+			Cause:  "SYSTEM_FAILURE",
+		}
+		logger.CallbackLog.Errorf("Get Request Body error: %+v", err)
+		c.JSON(http.StatusInternalServerError, problemDetail)
+		return
+	}
+
+	err = openapi.Deserialize(&amfStatusChangeNotification, requestBody, "application/json")
 	if err != nil {
 		problemDetail := "[Request Body] " + err.Error()
 		rsp := models.ProblemDetails{
@@ -25,12 +40,24 @@ func AmfStatusChangeNotify(c *gin.Context) {
 		return
 	}
 
-	req := http_wrapper.NewRequest(c.Request, request)
+	req := http_wrapper.NewRequest(c.Request, amfStatusChangeNotification)
 
-	channelMsg := message.NewHttpChannelMessage(message.EventAMFStatusChangeNotify, req)
-	message.SendMessage(channelMsg)
+	rsp := producer.HandleAmfStatusChangeNotify(req)
 
-	recvMsg := <-channelMsg.HttpChannel
-	HTTPResponse := recvMsg.HTTPResponse
-	c.JSON(HTTPResponse.Status, HTTPResponse.Body)
+	if rsp.Status == http.StatusNoContent {
+		c.Status(rsp.Status)
+	} else {
+		responseBody, err := openapi.Serialize(rsp.Body, "application/json")
+		if err != nil {
+			logger.CallbackLog.Errorln(err)
+			problemDetails := models.ProblemDetails{
+				Status: http.StatusInternalServerError,
+				Cause:  "SYSTEM_FAILURE",
+				Detail: err.Error(),
+			}
+			c.JSON(http.StatusInternalServerError, problemDetails)
+		} else {
+			c.Data(rsp.Status, "application/json", responseBody)
+		}
+	}
 }

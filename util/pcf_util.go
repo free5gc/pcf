@@ -12,6 +12,7 @@ import (
 	"free5gc/lib/openapi/models"
 	"free5gc/lib/path_util"
 	"free5gc/src/pcf/context"
+	"free5gc/src/pcf/logger"
 	"net/http"
 	"reflect"
 	"time"
@@ -97,7 +98,10 @@ func GetDefaultDataRate() models.UsageThreshold {
 func GetDefaultTime() models.TimeWindow {
 	var timeWindow models.TimeWindow
 	timeWindow.StartTime = time.Now().Format(time.RFC3339)
-	lease, _ := time.ParseDuration("720h")
+	lease, err := time.ParseDuration("720h")
+	if err != nil {
+		logger.UtilLog.Errorf("ParseDuration error: %+v", err)
+	}
 	timeWindow.StopTime = time.Now().Add(lease).Format(time.RFC3339)
 	return timeWindow
 }
@@ -157,12 +161,18 @@ func MarshToJsonString(v interface{}) (result []string) {
 	val := reflect.ValueOf(v)
 	if types.Kind() == reflect.Slice {
 		for i := 0; i < val.Len(); i++ {
-			tmp, _ := json.Marshal(val.Index(i).Interface())
+			tmp, err := json.Marshal(val.Index(i).Interface())
+			if err != nil {
+				logger.UtilLog.Errorf("Marshal error: %+v", err)
+			}
 			result = append(result, string(tmp))
 
 		}
 	} else {
-		tmp, _ := json.Marshal(v)
+		tmp, err := json.Marshal(v)
+		if err != nil {
+			logger.UtilLog.Errorf("Marshal error: %+v", err)
+		}
 		result = append(result, string(tmp))
 	}
 	return
@@ -185,7 +195,10 @@ func GetNegotiateSuppFeat(suppFeat string, serviceSuppFeat []byte) string {
 	if serviceSuppFeat == nil {
 		return ""
 	}
-	bytes, _ := hex.DecodeString(suppFeat)
+	bytes, err := hex.DecodeString(suppFeat)
+	if err != nil {
+		logger.UtilLog.Errorf("DecodeString error: %+v", err)
+	}
 	negoSuppFeat := AndBytes(bytes, serviceSuppFeat)
 	return hex.EncodeToString(negoSuppFeat)
 }
@@ -219,7 +232,8 @@ func CheckSuppFeat(suppFeat string, number int) bool {
 	return false
 }
 
-func CheckPolicyControlReqTrig(triggers []models.PolicyControlRequestTrigger, reqTrigger models.PolicyControlRequestTrigger) bool {
+func CheckPolicyControlReqTrig(
+	triggers []models.PolicyControlRequestTrigger, reqTrigger models.PolicyControlRequestTrigger) bool {
 	for _, trigger := range triggers {
 		if trigger == reqTrigger {
 			return true

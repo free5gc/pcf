@@ -10,6 +10,8 @@
 package ampolicy
 
 import (
+	"free5gc/lib/logger_util"
+	"free5gc/src/pcf/logger"
 	"net/http"
 	"strings"
 
@@ -33,7 +35,7 @@ type Routes []Route
 
 // NewRouter returns a new router.
 func NewRouter() *gin.Engine {
-	router := gin.Default()
+	router := logger_util.NewGinWithLogrus(logger.GinLog)
 	AddService(router)
 	return router
 }
@@ -72,30 +74,30 @@ var routes = Routes{
 	},
 
 	{
-		"PoliciesPolAssoIdDelete",
+		"HTTPPoliciesPolAssoIdDelete",
 		strings.ToUpper("Delete"),
 		"/policies/:polAssoId",
-		PoliciesPolAssoIdDelete,
+		HTTPPoliciesPolAssoIdDelete,
 	},
 
 	{
-		"PoliciesPolAssoIdGet",
+		"HTTPPoliciesPolAssoIdGet",
 		strings.ToUpper("Get"),
 		"/policies/:polAssoId",
-		PoliciesPolAssoIdGet,
+		HTTPPoliciesPolAssoIdGet,
 	},
 
 	{
-		"PoliciesPolAssoIdUpdatePost",
+		"HTTPPoliciesPolAssoIdUpdatePost",
 		strings.ToUpper("Post"),
 		"/policies/:polAssoId/update",
-		PoliciesPolAssoIdUpdatePost,
+		HTTPPoliciesPolAssoIdUpdatePost,
 	},
 
 	{
-		"PoliciesPost",
+		"HTTPPoliciesPost",
 		strings.ToUpper("Post"),
 		"/policies",
-		PoliciesPost,
+		HTTPPoliciesPost,
 	},
 }

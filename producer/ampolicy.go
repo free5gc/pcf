@@ -1,13 +1,13 @@
-package pcf_producer
+package producer
 
 import (
 	"context"
 	"fmt"
+	"free5gc/lib/http_wrapper"
 	"free5gc/lib/openapi"
 	"free5gc/lib/openapi/models"
 	"free5gc/src/pcf/consumer"
 	pcf_context "free5gc/src/pcf/context"
-	"free5gc/src/pcf/handler/message"
 	"free5gc/src/pcf/logger"
 	"free5gc/src/pcf/util"
 	"net/http"
@@ -16,30 +16,53 @@ import (
 	"github.com/mohae/deepcopy"
 )
 
-func DeletePoliciesPolAssoId(httpChannel chan message.HttpResponseMessage, polAssoId string) {
+func HandleDeletePoliciesPolAssoId(request *http_wrapper.Request) *http_wrapper.Response {
+	logger.AMpolicylog.Infof("Handle Policy Association Delete")
 
-	logger.AMpolicylog.Traceln("Handle Policy Association Delete")
+	polAssoId := request.Params["polAssoId"]
 
+	problemDetails := DeletePoliciesPolAssoIdProcedure(polAssoId)
+	if problemDetails == nil {
+		return http_wrapper.NewResponse(http.StatusNoContent, nil, nil)
+	} else {
+		return http_wrapper.NewResponse(int(problemDetails.Status), nil, problemDetails)
+	}
+}
+
+func DeletePoliciesPolAssoIdProcedure(polAssoId string) *models.ProblemDetails {
 	ue := pcf_context.PCF_Self().PCFUeFindByPolicyId(polAssoId)
 	if ue == nil || ue.AMPolicyData[polAssoId] == nil {
-		rsp := util.GetProblemDetail("polAssoId not found  in PCF", util.CONTEXT_NOT_FOUND)
-		message.SendHttpResponseMessage(httpChannel, nil, int(rsp.Status), rsp)
-		return
+		problemDetails := util.GetProblemDetail("polAssoId not found  in PCF", util.CONTEXT_NOT_FOUND)
+		return &problemDetails
 	}
 	delete(ue.AMPolicyData, polAssoId)
-	message.SendHttpResponseMessage(httpChannel, nil, http.StatusNoContent, nil)
+	return nil
 }
 
 // PoliciesPolAssoIdGet -
-func GetPoliciesPolAssoId(httpChannel chan message.HttpResponseMessage, polAssoId string) {
+func HandleGetPoliciesPolAssoId(request *http_wrapper.Request) *http_wrapper.Response {
+	logger.AMpolicylog.Infof("Handle Policy Association Get")
 
-	logger.AMpolicylog.Traceln("Handle Policy Association Get")
+	polAssoId := request.Params["polAssoId"]
 
+	response, problemDetails := GetPoliciesPolAssoIdProcedure(polAssoId)
+	if response != nil {
+		return http_wrapper.NewResponse(http.StatusOK, nil, response)
+	} else if problemDetails != nil {
+		return http_wrapper.NewResponse(int(problemDetails.Status), nil, problemDetails)
+	}
+	problemDetails = &models.ProblemDetails{
+		Status: http.StatusForbidden,
+		Cause:  "UNSPECIFIED",
+	}
+	return http_wrapper.NewResponse(int(problemDetails.Status), nil, problemDetails)
+}
+
+func GetPoliciesPolAssoIdProcedure(polAssoId string) (*models.PolicyAssociation, *models.ProblemDetails) {
 	ue := pcf_context.PCF_Self().PCFUeFindByPolicyId(polAssoId)
 	if ue == nil || ue.AMPolicyData[polAssoId] == nil {
-		rsp := util.GetProblemDetail("polAssoId not found  in PCF", util.CONTEXT_NOT_FOUND)
-		message.SendHttpResponseMessage(httpChannel, nil, int(rsp.Status), rsp)
-		return
+		problemDetails := util.GetProblemDetail("polAssoId not found  in PCF", util.CONTEXT_NOT_FOUND)
+		return nil, &problemDetails
 	}
 	amPolicyData := ue.AMPolicyData[polAssoId]
 	rsp := models.PolicyAssociation{
@@ -60,117 +83,152 @@ func GetPoliciesPolAssoId(httpChannel chan message.HttpResponseMessage, polAssoI
 			}
 		}
 	}
-	message.SendHttpResponseMessage(httpChannel, nil, http.StatusOK, rsp)
-
+	return &rsp, nil
 }
-func UpdatePostPoliciesPolAssoId(httpChannel chan message.HttpResponseMessage, polAssoId string, request models.PolicyAssociationUpdateRequest) {
 
-	logger.AMpolicylog.Traceln("Handle Policy Association Update")
+func HandleUpdatePostPoliciesPolAssoId(request *http_wrapper.Request) *http_wrapper.Response {
+	logger.AMpolicylog.Infof("Handle Policy Association Update")
 
+	polAssoId := request.Params["polAssoId"]
+	policyAssociationUpdateRequest := request.Body.(models.PolicyAssociationUpdateRequest)
+
+	response, problemDetails := UpdatePostPoliciesPolAssoIdProcedure(polAssoId, policyAssociationUpdateRequest)
+	if response != nil {
+		return http_wrapper.NewResponse(http.StatusOK, nil, response)
+	} else if problemDetails != nil {
+		return http_wrapper.NewResponse(int(problemDetails.Status), nil, problemDetails)
+	}
+	problemDetails = &models.ProblemDetails{
+		Status: http.StatusForbidden,
+		Cause:  "UNSPECIFIED",
+	}
+	return http_wrapper.NewResponse(int(problemDetails.Status), nil, problemDetails)
+}
+
+func UpdatePostPoliciesPolAssoIdProcedure(polAssoId string,
+	policyAssociationUpdateRequest models.PolicyAssociationUpdateRequest) (*models.PolicyUpdate, *models.ProblemDetails) {
 	ue := pcf_context.PCF_Self().PCFUeFindByPolicyId(polAssoId)
 	if ue == nil || ue.AMPolicyData[polAssoId] == nil {
-		rsp := util.GetProblemDetail("polAssoId not found  in PCF", util.CONTEXT_NOT_FOUND)
-		message.SendHttpResponseMessage(httpChannel, nil, int(rsp.Status), rsp)
-		return
+		problemDetails := util.GetProblemDetail("polAssoId not found  in PCF", util.CONTEXT_NOT_FOUND)
+		return nil, &problemDetails
 	}
 
 	amPolicyData := ue.AMPolicyData[polAssoId]
-	var rsp models.PolicyUpdate
-	if request.NotificationUri != "" {
-		amPolicyData.NotificationUri = request.NotificationUri
+	var response models.PolicyUpdate
+	if policyAssociationUpdateRequest.NotificationUri != "" {
+		amPolicyData.NotificationUri = policyAssociationUpdateRequest.NotificationUri
 	}
-	if request.AltNotifIpv4Addrs != nil {
-		amPolicyData.AltNotifIpv4Addrs = request.AltNotifIpv4Addrs
+	if policyAssociationUpdateRequest.AltNotifIpv4Addrs != nil {
+		amPolicyData.AltNotifIpv4Addrs = policyAssociationUpdateRequest.AltNotifIpv4Addrs
 	}
-	if request.AltNotifIpv6Addrs != nil {
-		amPolicyData.AltNotifIpv6Addrs = request.AltNotifIpv6Addrs
+	if policyAssociationUpdateRequest.AltNotifIpv6Addrs != nil {
+		amPolicyData.AltNotifIpv6Addrs = policyAssociationUpdateRequest.AltNotifIpv6Addrs
 	}
-	for _, trigger := range request.Triggers {
+	for _, trigger := range policyAssociationUpdateRequest.Triggers {
 		//TODO: Modify the value according to policies
 		switch trigger {
 		case models.RequestTrigger_LOC_CH:
 			//TODO: report to AF subscriber
-			if request.UserLoc == nil {
-				rsp := util.GetProblemDetail("UserLoc are nli", util.ERROR_REQUEST_PARAMETERS)
-				logger.AMpolicylog.Warnln("UserLoc doesn't exist in Policy Association Requset Update while Triggers include LOC_CH")
-				message.SendHttpResponseMessage(httpChannel, nil, int(rsp.Status), rsp)
-				return
+			if policyAssociationUpdateRequest.UserLoc == nil {
+				problemDetail := util.GetProblemDetail("UserLoc are nli", util.ERROR_REQUEST_PARAMETERS)
+				logger.AMpolicylog.Warnln(
+					"UserLoc doesn't exist in Policy Association Requset Update while Triggers include LOC_CH")
+				return nil, &problemDetail
 			}
-			amPolicyData.UserLoc = request.UserLoc
+			amPolicyData.UserLoc = policyAssociationUpdateRequest.UserLoc
 			logger.AMpolicylog.Infof("Ue[%s] UserLocation %+v", ue.Supi, amPolicyData.UserLoc)
 		case models.RequestTrigger_PRA_CH:
-			if request.PraStatuses == nil {
-				rsp := util.GetProblemDetail("PraStatuses are nli", util.ERROR_REQUEST_PARAMETERS)
-				logger.AMpolicylog.Warnln("PraStatuses doesn't exist in Policy Association Requset Update while Triggers include PRA_CH")
-				message.SendHttpResponseMessage(httpChannel, nil, int(rsp.Status), rsp)
-				return
+			if policyAssociationUpdateRequest.PraStatuses == nil {
+				problemDetail := util.GetProblemDetail("PraStatuses are nli", util.ERROR_REQUEST_PARAMETERS)
+				logger.AMpolicylog.Warnln("PraStatuses doesn't exist in Policy Association",
+					"Requset Update while Triggers include PRA_CH")
+				return nil, &problemDetail
 			}
-			for praId, praInfo := range request.PraStatuses {
+			for praId, praInfo := range policyAssociationUpdateRequest.PraStatuses {
 				//TODO: report to AF subscriber
 				logger.AMpolicylog.Infof("Policy Association Presence Id[%s] change state to %s", praId, praInfo.PresenceState)
 			}
 		case models.RequestTrigger_SERV_AREA_CH:
-			if request.ServAreaRes == nil {
-				rsp := util.GetProblemDetail("ServAreaRes are nli", util.ERROR_REQUEST_PARAMETERS)
-				logger.AMpolicylog.Warnln("ServAreaRes doesn't exist in Policy Association Requset Update while Triggers include SERV_AREA_CH")
-				message.SendHttpResponseMessage(httpChannel, nil, int(rsp.Status), rsp)
-				return
+			if policyAssociationUpdateRequest.ServAreaRes == nil {
+				problemDetail := util.GetProblemDetail("ServAreaRes are nli", util.ERROR_REQUEST_PARAMETERS)
+				logger.AMpolicylog.Warnln("ServAreaRes doesn't exist in Policy Association",
+					"Requset Update while Triggers include SERV_AREA_CH")
+				return nil, &problemDetail
 			} else {
-				amPolicyData.ServAreaRes = request.ServAreaRes
-				rsp.ServAreaRes = request.ServAreaRes
+				amPolicyData.ServAreaRes = policyAssociationUpdateRequest.ServAreaRes
+				response.ServAreaRes = policyAssociationUpdateRequest.ServAreaRes
 			}
 		case models.RequestTrigger_RFSP_CH:
-			if request.Rfsp == 0 {
-				rsp := util.GetProblemDetail("Rfsp are nli", util.ERROR_REQUEST_PARAMETERS)
+			if policyAssociationUpdateRequest.Rfsp == 0 {
+				problemDetail := util.GetProblemDetail("Rfsp are nli", util.ERROR_REQUEST_PARAMETERS)
 				logger.AMpolicylog.Warnln("Rfsp doesn't exist in Policy Association Requset Update while Triggers include RFSP_CH")
-				message.SendHttpResponseMessage(httpChannel, nil, int(rsp.Status), rsp)
-				return
+				return nil, &problemDetail
 			} else {
-				amPolicyData.Rfsp = request.Rfsp
-				rsp.Rfsp = request.Rfsp
+				amPolicyData.Rfsp = policyAssociationUpdateRequest.Rfsp
+				response.Rfsp = policyAssociationUpdateRequest.Rfsp
 			}
 		}
 	}
 	//TODO: handle TraceReq
 	//TODO: Change Request Trigger Policies if needed
-	rsp.Triggers = amPolicyData.Triggers
+	response.Triggers = amPolicyData.Triggers
 	//TODO: Change Policies if needed
 	// rsp.Pras
-	message.SendHttpResponseMessage(httpChannel, nil, http.StatusOK, rsp)
-
+	return &response, nil
 }
 
 // Create AM Policy
-func PostPolicies(httpChannel chan message.HttpResponseMessage, request models.PolicyAssociationRequest) {
-	var rsp models.PolicyAssociation
-	var err error
+func HandlePostPolicies(request *http_wrapper.Request) *http_wrapper.Response {
+	logger.AMpolicylog.Infof("Handle Policy Association Request")
 
-	logger.AMpolicylog.Traceln("Handle Policy Association Request")
+	polAssoId := request.Params["polAssoId"]
+	policyAssociationRequest := request.Body.(models.PolicyAssociationRequest)
 
+	response, locationHeader, problemDetails := PostPoliciesProcedure(polAssoId, policyAssociationRequest)
+	headers := http.Header{
+		"Location": {locationHeader},
+	}
+	if response != nil {
+		return http_wrapper.NewResponse(http.StatusCreated, headers, response)
+	} else if problemDetails != nil {
+		return http_wrapper.NewResponse(int(problemDetails.Status), nil, problemDetails)
+	}
+	problemDetails = &models.ProblemDetails{
+		Status: http.StatusForbidden,
+		Cause:  "UNSPECIFIED",
+	}
+	return http_wrapper.NewResponse(int(problemDetails.Status), nil, problemDetails)
+}
+
+func PostPoliciesProcedure(polAssoId string,
+	policyAssociationRequest models.PolicyAssociationRequest) (*models.PolicyAssociation, string, *models.ProblemDetails) {
+	var response models.PolicyAssociation
 	pcfSelf := pcf_context.PCF_Self()
-	ue := pcfSelf.UePool[request.Supi]
+	var ue *pcf_context.UeContext
+	if val, ok := pcfSelf.UePool.Load(policyAssociationRequest.Supi); ok {
+		ue = val.(*pcf_context.UeContext)
+	}
 	if ue == nil {
-		ue, err = pcfSelf.NewPCFUe(request.Supi)
-		if err != nil {
+		if newUe, err := pcfSelf.NewPCFUe(policyAssociationRequest.Supi); err != nil {
 			// supi format dose not match "imsi-..."
-			rsp := util.GetProblemDetail("Supi Format Error", util.ERROR_REQUEST_PARAMETERS)
+			problemDetail := util.GetProblemDetail("Supi Format Error", util.ERROR_REQUEST_PARAMETERS)
 			logger.AMpolicylog.Errorln(err.Error())
-			message.SendHttpResponseMessage(httpChannel, nil, int(rsp.Status), rsp)
-			return
+			return nil, "", &problemDetail
+		} else {
+			ue = newUe
 		}
 	}
 	udrUri := getUdrUri(ue)
 	if udrUri == "" {
 		// Can't find any UDR support this Ue
-		delete(pcfSelf.UePool, ue.Supi)
-		rsp := util.GetProblemDetail("Ue is not supported in PCF", util.USER_UNKNOWN)
+		pcfSelf.UePool.Delete(ue.Supi)
+		problemDetail := util.GetProblemDetail("Ue is not supported in PCF", util.USER_UNKNOWN)
 		logger.AMpolicylog.Errorf("Ue[%s] is not supported in PCF", ue.Supi)
-		message.SendHttpResponseMessage(httpChannel, nil, int(rsp.Status), rsp)
-		return
+		return nil, "", &problemDetail
 	}
 	ue.UdrUri = udrUri
 
-	rsp.Request = deepcopy.Copy(&request).(*models.PolicyAssociationRequest)
+	response.Request = deepcopy.Copy(&policyAssociationRequest).(*models.PolicyAssociationRequest)
 	assolId := fmt.Sprintf("%s-%d", ue.Supi, ue.PolAssociationIDGenerator)
 	amPolicy := ue.AMPolicyData[assolId]
 
@@ -179,13 +237,12 @@ func PostPolicies(httpChannel chan message.HttpResponseMessage, request models.P
 		var response *http.Response
 		amData, response, err := client.DefaultApi.PolicyDataUesUeIdAmDataGet(context.Background(), ue.Supi)
 		if err != nil || response == nil || response.StatusCode != http.StatusOK {
-			rsp := util.GetProblemDetail("Can't find UE AM Policy Data in UDR", util.USER_UNKNOWN)
+			problemDetail := util.GetProblemDetail("Can't find UE AM Policy Data in UDR", util.USER_UNKNOWN)
 			logger.AMpolicylog.Errorf("Can't find UE[%s] AM Policy Data in UDR", ue.Supi)
-			message.SendHttpResponseMessage(httpChannel, nil, int(rsp.Status), rsp)
-			return
+			return nil, "", &problemDetail
 		}
 		if amPolicy == nil {
-			amPolicy = ue.NewUeAMPolicyData(assolId, request)
+			amPolicy = ue.NewUeAMPolicyData(assolId, policyAssociationRequest)
 		}
 		amPolicy.AmPolicyData = &amData
 	}
@@ -193,34 +250,38 @@ func PostPolicies(httpChannel chan message.HttpResponseMessage, request models.P
 	// TODO: according to PCF Policy to determine ServAreaRes, Rfsp, SuppFeat
 	// amPolicy.ServAreaRes =
 	// amPolicy.Rfsp =
-	requestSuppFeat, _ := openapi.NewSupportedFeature(request.SuppFeat)
-	amPolicy.SuppFeat = pcfSelf.PcfSuppFeats[models.ServiceName_NPCF_AM_POLICY_CONTROL].NegotiateWith(requestSuppFeat).String()
-	if amPolicy.Rfsp != 0 {
-		rsp.Rfsp = amPolicy.Rfsp
+	var requestSuppFeat openapi.SupportedFeature
+	if suppFeat, err := openapi.NewSupportedFeature(policyAssociationRequest.SuppFeat); err != nil {
+		logger.AMpolicylog.Warnln(err)
+	} else {
+		requestSuppFeat = suppFeat
 	}
-	rsp.SuppFeat = amPolicy.SuppFeat
+	amPolicy.SuppFeat = pcfSelf.PcfSuppFeats[models.
+		ServiceName_NPCF_AM_POLICY_CONTROL].NegotiateWith(
+		requestSuppFeat).String()
+	if amPolicy.Rfsp != 0 {
+		response.Rfsp = amPolicy.Rfsp
+	}
+	response.SuppFeat = amPolicy.SuppFeat
 	// TODO: add Reports
 	// rsp.Triggers
 	// rsp.Pras
 	ue.PolAssociationIDGenerator++
 	// Create location header for update, delete, get
 	locationHeader := util.GetResourceUri(models.ServiceName_NPCF_AM_POLICY_CONTROL, assolId)
-	headers := http.Header{
-		"Location": {locationHeader},
-	}
 	logger.AMpolicylog.Tracef("AMPolicy association Id[%s] Create", assolId)
-	message.SendHttpResponseMessage(httpChannel, headers, http.StatusCreated, rsp)
 
-	if request.Guami != nil {
+	if policyAssociationRequest.Guami != nil {
 		// if consumer is AMF then subscribe this AMF Status
 		for _, statusSubsData := range pcfSelf.AMFStatusSubsData {
 			for _, guami := range statusSubsData.GuamiList {
-				if reflect.DeepEqual(guami, request.Guami) {
+				if reflect.DeepEqual(guami, policyAssociationRequest.Guami) {
 					amPolicy.AmfStatusChangeSubscription = &statusSubsData
 				}
 			}
 		}
 	}
+	return &response, locationHeader, nil
 }
 
 // Send AM Policy Update to AMF if policy has changed
@@ -268,21 +329,24 @@ func SendAMPolicyUpdateNotification(ue *pcf_context.UeContext, PolId string, req
 }
 
 // Send AM Policy Update to AMF if policy has been terminated
-func SendAMPolicyTerminationRequestNotification(ue *pcf_context.UeContext, PolId string, request models.TerminationNotification) {
+func SendAMPolicyTerminationRequestNotification(ue *pcf_context.UeContext,
+	PolId string, request models.TerminationNotification) {
 	if ue == nil {
 		logger.AMpolicylog.Warnln("Policy Assocition Termination Request Notification Error[Ue is nil]")
 		return
 	}
 	amPolicyData := ue.AMPolicyData[PolId]
 	if amPolicyData == nil {
-		logger.AMpolicylog.Warnf("Policy Assocition Termination Request Notification Error[Can't find polAssoId[%s] in UE(%s)]", PolId, ue.Supi)
+		logger.AMpolicylog.Warnf(
+			"Policy Assocition Termination Request Notification Error[Can't find polAssoId[%s] in UE(%s)]", PolId, ue.Supi)
 		return
 	}
 	client := util.GetNpcfAMPolicyCallbackClient()
 	uri := amPolicyData.NotificationUri
 	for uri != "" {
 
-		rsp, err := client.DefaultCallbackApi.PolicyAssocitionTerminationRequestNotification(context.Background(), uri, request)
+		rsp, err := client.DefaultCallbackApi.PolicyAssocitionTerminationRequestNotification(
+			context.Background(), uri, request)
 		if err != nil {
 			if rsp != nil && rsp.StatusCode != http.StatusNoContent {
 				logger.AMpolicylog.Warnf("Policy Assocition Termination Request Notification Error[%s]", rsp.Status)

@@ -1,14 +1,15 @@
 package util
 
 import (
+	"os"
+
+	"github.com/google/uuid"
+
 	"free5gc/lib/openapi"
 	"free5gc/lib/openapi/models"
 	"free5gc/src/pcf/context"
 	"free5gc/src/pcf/factory"
 	"free5gc/src/pcf/logger"
-	"os"
-
-	"github.com/google/uuid"
 )
 
 // Init PCF Context from config flie
@@ -22,28 +23,32 @@ func InitpcfContext(context *context.PCFContext) {
 	}
 	sbi := configuration.Sbi
 	context.NrfUri = configuration.NrfUri
-	context.UriScheme = models.UriScheme(sbi.Scheme)
-	context.HttpIPv4Address = "127.0.0.1" // default localhost
-	context.HttpIpv4Port = 29507          // default port
+	context.UriScheme = ""
+	context.RegisterIPv4 = "127.0.0.1" // default localhost
+	context.SBIPort = 29507            // default port
 	if sbi != nil {
+		if sbi.Scheme != "" {
+			context.UriScheme = models.UriScheme(sbi.Scheme)
+		}
 		if sbi.RegisterIPv4 != "" {
-			context.HttpIPv4Address = sbi.RegisterIPv4
+			context.RegisterIPv4 = sbi.RegisterIPv4
 		}
 		if sbi.Port != 0 {
-			context.HttpIpv4Port = sbi.Port
+			context.SBIPort = sbi.Port
 		}
 		if sbi.Scheme == "https" {
 			context.UriScheme = models.UriScheme_HTTPS
 		} else {
 			context.UriScheme = models.UriScheme_HTTP
 		}
+
 		context.BindingIPv4 = os.Getenv(sbi.BindingIPv4)
 		if context.BindingIPv4 != "" {
 			logger.UtilLog.Info("Parsing ServerIPv4 address from ENV Variable.")
 		} else {
 			context.BindingIPv4 = sbi.BindingIPv4
 			if context.BindingIPv4 == "" {
-				logger.UtilLog.Info("Error parsing ServerIPv4 address as string. Using the 0.0.0.0 address as default.")
+				logger.UtilLog.Warn("Error parsing ServerIPv4 address as string. Using the 0.0.0.0 address as default.")
 				context.BindingIPv4 = "0.0.0.0"
 			}
 		}
@@ -53,7 +58,12 @@ func InitpcfContext(context *context.PCFContext) {
 	context.TimeFormat = configuration.TimeFormat
 	context.DefaultBdtRefId = configuration.DefaultBdtRefId
 	for _, service := range context.NfService {
-		context.PcfServiceUris[service.ServiceName] = service.ApiPrefix + "/" + string(service.ServiceName) + "/" + (*service.Versions)[0].ApiVersionInUri
-		context.PcfSuppFeats[service.ServiceName], _ = openapi.NewSupportedFeature(service.SupportedFeatures)
+		var err error
+		context.PcfServiceUris[service.ServiceName] =
+			service.ApiPrefix + "/" + string(service.ServiceName) + "/" + (*service.Versions)[0].ApiVersionInUri
+		context.PcfSuppFeats[service.ServiceName], err = openapi.NewSupportedFeature(service.SupportedFeatures)
+		if err != nil {
+			logger.UtilLog.Errorf("openapi NewSupportedFeature error: %+v", err)
+		}
 	}
 }

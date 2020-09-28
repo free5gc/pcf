@@ -13,7 +13,9 @@ import (
 	"github.com/antihax/optional"
 )
 
-func SendSearchNFInstances(nrfUri string, targetNfType, requestNfType models.NfType, param Nnrf_NFDiscovery.SearchNFInstancesParamOpts) (result models.SearchResult, err error) {
+func SendSearchNFInstances(
+	nrfUri string, targetNfType, requestNfType models.NfType, param Nnrf_NFDiscovery.SearchNFInstancesParamOpts) (
+	result models.SearchResult, err error) {
 
 	// Set client and set url
 	configuration := Nnrf_NFDiscovery.NewConfiguration()
@@ -83,7 +85,8 @@ func SendNFIntancesAMF(nrfUri string, guami models.Guami, serviceName models.Ser
 	return ""
 }
 
-func SearchAvailableAMFs(nrfUri string, serviceName models.ServiceName) (amfInfos []pcf_context.AMFStatusSubscriptionData) {
+func SearchAvailableAMFs(nrfUri string, serviceName models.ServiceName) (
+	amfInfos []pcf_context.AMFStatusSubscriptionData) {
 	localVarOptionals := Nnrf_NFDiscovery.SearchNFInstancesParamOpts{}
 
 	result, err := SendSearchNFInstances(nrfUri, models.NfType_AMF, models.NfType_PCF, localVarOptionals)

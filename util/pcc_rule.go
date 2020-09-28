@@ -36,7 +36,7 @@ func CreateDefalutPccRules(id int32) *models.PccRule {
 			PackFiltId:        "PackFiltId-1",
 		},
 	}
-	return CreatePccRule(id, 10, flowInfo, true)
+	return CreatePccRule(id, 10, flowInfo, "", true)
 }
 
 // Get pcc rule Identity(PccRuleId-%d)
@@ -74,9 +74,10 @@ func GetPackFiltId(id int32) string {
 	return fmt.Sprintf("PackFiltId-%d", id)
 }
 
-// Create Pcc Rule with param id, precedence, flow infomation, cond flag(included or not)
-func CreatePccRule(id, precedence int32, flowInfo []models.FlowInformation, cond bool) *models.PccRule {
+// Create Pcc Rule with param id, precedence, flow infomation, appId, cond flag(included or not)
+func CreatePccRule(id, precedence int32, flowInfo []models.FlowInformation, appId string, cond bool) *models.PccRule {
 	rule := models.PccRule{
+		AppId:      appId,
 		FlowInfos:  flowInfo,
 		PccRuleId:  GetPccRuleId(id),
 		Precedence: precedence,
@@ -149,17 +150,16 @@ func ConvertPacketInfoToFlowInformation(infos []models.PacketFilterInfo) (flowIn
 	return
 }
 
-func GetPccRuleByAfAppId(pccRules map[string]models.PccRule, afAppId string) (result *models.PccRule) {
+func GetPccRuleByAfAppId(pccRules map[string]models.PccRule, afAppId string) *models.PccRule {
 	for _, pccRule := range pccRules {
 		if pccRule.AppId == afAppId {
-			result = &pccRule
-			return
+			return &pccRule
 		}
 	}
-	return
+	return nil
 }
 
-func GetPccRuleByFlowInfos(pccRules map[string]models.PccRule, flowInfos []models.FlowInformation) (result *models.PccRule) {
+func GetPccRuleByFlowInfos(pccRules map[string]models.PccRule, flowInfos []models.FlowInformation) *models.PccRule {
 	found := false
 	set := make(map[string]models.FlowInformation)
 
@@ -176,14 +176,15 @@ func GetPccRuleByFlowInfos(pccRules map[string]models.PccRule, flowInfos []model
 			}
 		}
 		if found {
-			result = &pccRule
-			return
+			return &pccRule
 		}
 	}
-	return
+	return nil
 }
 
-func SetPccRuleRelatedData(decicion *models.SmPolicyDecision, pccRule *models.PccRule, tcData *models.TrafficControlData, qosData *models.QosData, chgData *models.ChargingData, umData *models.UsageMonitoringData) {
+func SetPccRuleRelatedData(decicion *models.SmPolicyDecision, pccRule *models.PccRule,
+	tcData *models.TrafficControlData, qosData *models.QosData, chgData *models.ChargingData,
+	umData *models.UsageMonitoringData) {
 	if tcData != nil {
 		if decicion.TraffContDecs == nil {
 			decicion.TraffContDecs = make(map[string]models.TrafficControlData)

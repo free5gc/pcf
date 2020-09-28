@@ -11,7 +11,8 @@ import (
 	"strings"
 )
 
-func AmfStatusChangeSubscribe(amfInfo pcf_context.AMFStatusSubscriptionData) (problemDetails *models.ProblemDetails, err error) {
+func AmfStatusChangeSubscribe(amfInfo pcf_context.AMFStatusSubscriptionData) (
+	problemDetails *models.ProblemDetails, err error) {
 	logger.Consumerlog.Debugf("PCF Subscribe to AMF status[%+v]", amfInfo.AmfUri)
 	pcfSelf := pcf_context.PCF_Self()
 	client := util.GetNamfClient(amfInfo.AmfUri)
@@ -21,7 +22,8 @@ func AmfStatusChangeSubscribe(amfInfo pcf_context.AMFStatusSubscriptionData) (pr
 		GuamiList:    amfInfo.GuamiList,
 	}
 
-	res, httpResp, localErr := client.SubscriptionsCollectionDocumentApi.AMFStatusChangeSubscribe(context.Background(), subscriptionData)
+	res, httpResp, localErr :=
+		client.SubscriptionsCollectionDocumentApi.AMFStatusChangeSubscribe(context.Background(), subscriptionData)
 	if localErr == nil {
 		locationHeader := httpResp.Header.Get("Location")
 		logger.Consumerlog.Debugf("location header: %+v", locationHeader)
@@ -43,5 +45,5 @@ func AmfStatusChangeSubscribe(amfInfo pcf_context.AMFStatusSubscriptionData) (pr
 	} else {
 		err = openapi.ReportError("%s: server no response", amfInfo.AmfUri)
 	}
-	return
+	return problemDetails, err
 }

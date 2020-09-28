@@ -11,83 +11,162 @@ package ampolicy
 
 import (
 	"free5gc/lib/http_wrapper"
+	"free5gc/lib/openapi"
 	"free5gc/lib/openapi/models"
 	"free5gc/src/pcf/logger"
-	"free5gc/src/pcf/handler/message"
+	"free5gc/src/pcf/producer"
 	"free5gc/src/pcf/util"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
 
-func PoliciesPolAssoIdDelete(c *gin.Context) {
+func HTTPPoliciesPolAssoIdDelete(c *gin.Context) {
 	req := http_wrapper.NewRequest(c.Request, nil)
 	req.Params["polAssoId"], _ = c.Params.Get("polAssoId")
-	channelMsg := message.NewHttpChannelMessage(message.EventAMPolicyDelete, req)
 
-	message.SendMessage(channelMsg)
-	recvMsg := <-channelMsg.HttpChannel
-	HTTPResponse := recvMsg.HTTPResponse
-	c.JSON(HTTPResponse.Status, HTTPResponse.Body)
-}
+	rsp := producer.HandleDeletePoliciesPolAssoId(req)
 
-// PoliciesPolAssoIdGet -
-func PoliciesPolAssoIdGet(c *gin.Context) {
-	req := http_wrapper.NewRequest(c.Request, nil)
-	req.Params["polAssoId"], _ = c.Params.Get("polAssoId")
-	channelMsg := message.NewHttpChannelMessage(message.EventAMPolicyGet, req)
-
-	message.SendMessage(channelMsg)
-	recvMsg := <-channelMsg.HttpChannel
-	HTTPResponse := recvMsg.HTTPResponse
-	c.JSON(HTTPResponse.Status, HTTPResponse.Body)
-
-}
-
-// PoliciesPolAssoIdUpdatePost -
-func PoliciesPolAssoIdUpdatePost(c *gin.Context) {
-	var policyAssociationUpdateRequest models.PolicyAssociationUpdateRequest
-	err := c.ShouldBindJSON(&policyAssociationUpdateRequest)
+	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
 	if err != nil {
-		rsp := util.GetProblemDetail("Malformed request syntax", util.ERROR_REQUEST_PARAMETERS)
-		logger.HandlerLog.Errorln(rsp.Detail)
-		c.JSON(int(rsp.Status), rsp)
+		logger.AMpolicylog.Errorln(err)
+		problemDetails := models.ProblemDetails{
+			Status: http.StatusInternalServerError,
+			Cause:  "SYSTEM_FAILURE",
+			Detail: err.Error(),
+		}
+		c.JSON(http.StatusInternalServerError, problemDetails)
+	} else {
+		c.Data(rsp.Status, "application/json", responseBody)
+	}
+}
+
+// HTTPPoliciesPolAssoIdGet -
+func HTTPPoliciesPolAssoIdGet(c *gin.Context) {
+	req := http_wrapper.NewRequest(c.Request, nil)
+	req.Params["polAssoId"], _ = c.Params.Get("polAssoId")
+
+	rsp := producer.HandleGetPoliciesPolAssoId(req)
+
+	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
+	if err != nil {
+		logger.AMpolicylog.Errorln(err)
+		problemDetails := models.ProblemDetails{
+			Status: http.StatusInternalServerError,
+			Cause:  "SYSTEM_FAILURE",
+			Detail: err.Error(),
+		}
+		c.JSON(http.StatusInternalServerError, problemDetails)
+	} else {
+		c.Data(rsp.Status, "application/json", responseBody)
+	}
+}
+
+// HTTPPoliciesPolAssoIdUpdatePost -
+func HTTPPoliciesPolAssoIdUpdatePost(c *gin.Context) {
+	var policyAssociationUpdateRequest models.PolicyAssociationUpdateRequest
+
+	requestBody, err := c.GetRawData()
+	if err != nil {
+		problemDetail := models.ProblemDetails{
+			Title:  "System failure",
+			Status: http.StatusInternalServerError,
+			Detail: err.Error(),
+			Cause:  "SYSTEM_FAILURE",
+		}
+		logger.AMpolicylog.Errorf("Get Request Body error: %+v", err)
+		c.JSON(http.StatusInternalServerError, problemDetail)
 		return
 	}
+
+	err = openapi.Deserialize(&policyAssociationUpdateRequest, requestBody, "application/json")
+	if err != nil {
+		problemDetail := "[Request Body] " + err.Error()
+		rsp := models.ProblemDetails{
+			Title:  "Malformed request syntax",
+			Status: http.StatusBadRequest,
+			Detail: problemDetail,
+		}
+		logger.AMpolicylog.Errorln(problemDetail)
+		c.JSON(http.StatusBadRequest, rsp)
+		return
+	}
+
 	req := http_wrapper.NewRequest(c.Request, policyAssociationUpdateRequest)
 	req.Params["polAssoId"], _ = c.Params.Get("polAssoId")
-	channelMsg := message.NewHttpChannelMessage(message.EventAMPolicyUpdate, req)
 
-	message.SendMessage(channelMsg)
-	recvMsg := <-channelMsg.HttpChannel
-	HTTPResponse := recvMsg.HTTPResponse
-	c.JSON(HTTPResponse.Status, HTTPResponse.Body)
+	rsp := producer.HandleUpdatePostPoliciesPolAssoId(req)
+
+	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
+	if err != nil {
+		logger.AMpolicylog.Errorln(err)
+		problemDetails := models.ProblemDetails{
+			Status: http.StatusInternalServerError,
+			Cause:  "SYSTEM_FAILURE",
+			Detail: err.Error(),
+		}
+		c.JSON(http.StatusInternalServerError, problemDetails)
+	} else {
+		c.Data(rsp.Status, "application/json", responseBody)
+	}
 }
 
-// PoliciesPost -
-func PoliciesPost(c *gin.Context) {
+// HTTPPoliciesPost -
+func HTTPPoliciesPost(c *gin.Context) {
 	var policyAssociationRequest models.PolicyAssociationRequest
-	err := c.ShouldBindJSON(&policyAssociationRequest)
+
+	requestBody, err := c.GetRawData()
 	if err != nil {
-		rsp := util.GetProblemDetail("Malformed request syntax", util.ERROR_REQUEST_PARAMETERS)
-		logger.HandlerLog.Errorln(rsp.Detail)
-		c.JSON(int(rsp.Status), rsp)
+		problemDetail := models.ProblemDetails{
+			Title:  "System failure",
+			Status: http.StatusInternalServerError,
+			Detail: err.Error(),
+			Cause:  "SYSTEM_FAILURE",
+		}
+		logger.AMpolicylog.Errorf("Get Request Body error: %+v", err)
+		c.JSON(http.StatusInternalServerError, problemDetail)
 		return
 	}
+
+	err = openapi.Deserialize(&policyAssociationRequest, requestBody, "application/json")
+	if err != nil {
+		problemDetail := "[Request Body] " + err.Error()
+		rsp := models.ProblemDetails{
+			Title:  "Malformed request syntax",
+			Status: http.StatusBadRequest,
+			Detail: problemDetail,
+		}
+		logger.AMpolicylog.Errorln(problemDetail)
+		c.JSON(http.StatusBadRequest, rsp)
+		return
+	}
+
 	if policyAssociationRequest.Supi == "" || policyAssociationRequest.NotificationUri == "" {
 		rsp := util.GetProblemDetail("Miss Mandotory IE", util.ERROR_REQUEST_PARAMETERS)
 		logger.HandlerLog.Errorln(rsp.Detail)
 		c.JSON(int(rsp.Status), rsp)
 		return
 	}
-	req := http_wrapper.NewRequest(c.Request, policyAssociationRequest)
-	channelMsg := message.NewHttpChannelMessage(message.EventAMPolicyCreate, req)
 
-	message.SendMessage(channelMsg)
-	recvMsg := <-channelMsg.HttpChannel
-	HTTPResponse := recvMsg.HTTPResponse
-	for key, val := range HTTPResponse.Header {
+	req := http_wrapper.NewRequest(c.Request, policyAssociationRequest)
+	req.Params["polAssoId"], _ = c.Params.Get("polAssoId")
+
+	rsp := producer.HandlePostPolicies(req)
+
+	for key, val := range rsp.Header {
 		c.Header(key, val[0])
 	}
-	c.JSON(HTTPResponse.Status, HTTPResponse.Body)
 
+	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
+	if err != nil {
+		logger.AMpolicylog.Errorln(err)
+		problemDetails := models.ProblemDetails{
+			Status: http.StatusInternalServerError,
+			Cause:  "SYSTEM_FAILURE",
+			Detail: err.Error(),
+		}
+		c.JSON(http.StatusInternalServerError, problemDetails)
+	} else {
+		c.Data(rsp.Status, "application/json", responseBody)
+	}
 }
