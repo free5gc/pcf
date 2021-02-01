@@ -172,6 +172,37 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 		decision.Offline = request.Offline
 	}
 
+	// Spending limit subscription and check to see if PDU session needs to be throttled
+	chfURI := smData.SmPolicySnssaiData["smPolicyDnnData"].SmPolicyDnnData["ChfInfo"].ChfInfo.PrimaryChfAddress
+	chfClient := util.GetNchfClient(chfURI)
+	SpendingLimitContext := models.SpendingLimitContext{
+		supi: ue.Supi,
+		gpsi: ue.Gpsi,
+	}
+	res, httpResp, localErr :=
+		chfClient.SubscriptionsCollectionDocumentApi.Subscribe(context.Background(), SpendingLimitContext)
+	if localErr == nil {
+		locationHeader := httpResp.Header.Get("Location")
+		logger.Consumerlog.Debugf("location header: %+v", locationHeader)
+
+		subscriptionId := locationHeader[strings.LastIndex(locationHeader, "/")+1:]
+		statusInfos := res.statusInfos
+		if statusInfos != nil {
+			logger.SMpolicylog.Tracef("Spending Limit subscription Id %s, status: %s", subscriptionId, statusInfos)
+			decision.QosDecs.GbrUl = "1000 Kbps"
+			decision.QosDecs.GbrDl = "1000 Kbps"
+		}
+	} else if httpResp != nil {
+		if httpResp.Status != localErr.Error() {
+			err = localErr
+			return
+		}
+		problem := localErr.(openapi.GenericOpenAPIError).Model().(models.ProblemDetails)
+		problemDetails = &problem
+	} else {
+		err = openapi.ReportError("%s: server no response", amfInfo.AmfUri)
+	}
+
 	// get flow rules from databases
 	filter := bson.M{"ueId": ue.Supi, "snssai": util.SnssaiModelsToHex(*request.SliceInfo), "dnn": request.Dnn}
 	flowRulesInterface := MongoDBLibrary.RestfulAPIGetMany(flowRuleDataColl, filter)
