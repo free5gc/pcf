@@ -90,6 +90,13 @@ func GetNamfClient(uri string) *Namf_Communication.APIClient {
 	return client
 }
 
+func GetNchfClient(uri string) *Nchf_SpendingLimitControl.APIClient {
+	configuration := Nchf_SpendingLimitControl.NewConfiguration()
+	configuration.SetBasePath(uri)
+	client := Namf_SpendingLimitControl.NewAPIClient(configuration)
+	return client
+}
+
 func GetDefaultDataRate() models.UsageThreshold {
 	var usageThreshold models.UsageThreshold
 	usageThreshold.DownlinkVolume = 1024 * 1024 / 8 // 1 Mbps
