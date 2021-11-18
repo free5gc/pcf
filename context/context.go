@@ -42,6 +42,7 @@ type PCFContext struct {
 	PcfSuppFeats    map[models.ServiceName]openapi.SupportedFeature
 	NrfUri          string
 	DefaultUdrURI   string
+	Locality        string
 	// UePool          map[string]*UeContext
 	UePool sync.Map
 	// Bdt Policy related
