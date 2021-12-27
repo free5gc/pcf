@@ -144,8 +144,13 @@ func HandleCreateBDTPolicyContextRequest(request *http_wrapper.Request) *http_wr
 	// step 1: log
 	logger.Bdtpolicylog.Infof("Handle CreateBDTPolicyContext")
 
-	// step 2: retrieve request
+	// step 2: retrieve request and check mandatory contents
 	requestMsg := request.Body.(models.BdtReqData)
+	if requestMsg.AspId == "" || requestMsg.DesTimeInt == nil || requestMsg.NumOfUes == 0 || requestMsg.VolPerUe == nil {
+		logger.Bdtpolicylog.Errorf("Required BdtReqData not found: AspId[%+v], DesTimeInt[%+v], NumOfUes[%+v], VolPerUe[%+v]",
+			requestMsg.AspId, requestMsg.DesTimeInt, requestMsg.NumOfUes, requestMsg.VolPerUe)
+		return http_wrapper.NewResponse(http.StatusNotFound, nil, nil)
+	}
 
 	// step 3: handle the message
 	header, response, problemDetails := createBDTPolicyContextProcedure(&requestMsg)
@@ -197,7 +202,7 @@ func createBDTPolicyContextProcedure(request *models.BdtReqData) (
 		}
 	}()
 	// TODO: decide BDT Policy from other bdt policy data
-	response.BdtReqData = deepcopy.Copy(&request).(*models.BdtReqData)
+	response.BdtReqData = deepcopy.Copy(request).(*models.BdtReqData)
 	var bdtData *models.BdtData
 	var bdtPolicyData models.BdtPolicyData
 	for _, data := range bdtDatas {
