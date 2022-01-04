@@ -39,6 +39,9 @@ func BuildNFInstance(context *pcf_context.PCFContext) (profile models.NfProfile,
 		// 	},
 		// },
 	}
+	if context.Locality != "" {
+		profile.Locality = context.Locality
+	}
 	return
 }
 

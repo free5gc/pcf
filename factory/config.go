@@ -37,6 +37,7 @@ type Configuration struct {
 	NrfUri          string    `yaml:"nrfUri,omitempty"`
 	ServiceList     []Service `yaml:"serviceList,omitempty"`
 	Mongodb         *Mongodb  `yaml:"mongodb"`
+	Locality        string    `yaml:"locality,omitempty"`
 }
 
 type Service struct {
