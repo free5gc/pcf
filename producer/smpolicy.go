@@ -224,7 +224,7 @@ func HandleDeleteSmPolicyContextRequest(request *http_wrapper.Request) *http_wra
 	logger.SMpolicylog.Infof("Handle DeleteSmPolicyContext")
 
 	// step 2: retrieve request
-	smPolicyID := request.Params["smPolicyID"]
+	smPolicyID := request.Params["smPolicyId"]
 
 	// step 3: handle the message
 	problemDetails := deleteSmPolicyContextProcedure(smPolicyID)
@@ -276,7 +276,7 @@ func HandleGetSmPolicyContextRequest(request *http_wrapper.Request) *http_wrappe
 	logger.SMpolicylog.Infof("Handle GetSmPolicyContext")
 
 	// step 2: retrieve request
-	smPolicyID := request.Params["smPolicyID"]
+	smPolicyID := request.Params["smPolicyId"]
 	// step 3: handle the message
 	response, problemDetails := getSmPolicyContextProcedure(smPolicyID)
 
