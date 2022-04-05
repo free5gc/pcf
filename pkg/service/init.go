@@ -89,12 +89,12 @@ func (pcf *PCF) Initialize(c *cli.Context) error {
 		return err
 	}
 
-	pcf.setLogLevel()
+	pcf.SetLogLevel()
 
 	return nil
 }
 
-func (pcf *PCF) setLogLevel() {
+func (pcf *PCF) SetLogLevel() {
 	if factory.PcfConfig.Logger == nil {
 		logger.InitLog.Warnln("PCF config without log level setting!!!")
 		return
