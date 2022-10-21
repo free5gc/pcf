@@ -35,7 +35,7 @@ func init() {
 	log.SetReportCaller(false)
 
 	log.Formatter = &formatter.Formatter{
-		TimestampFormat: time.RFC3339Nano,
+		TimestampFormat: time.RFC3339NanoNano,
 		TrimMessages:    true,
 		NoFieldsSpace:   true,
 		HideKeys:        true,
