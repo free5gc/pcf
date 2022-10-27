@@ -13,7 +13,8 @@ import (
 )
 
 func AmfStatusChangeSubscribe(amfUri string, guamiList []models.Guami) (
-	problemDetails *models.ProblemDetails, err error) {
+	problemDetails *models.ProblemDetails, err error,
+) {
 	logger.Consumerlog.Debugf("PCF Subscribe to AMF status[%+v]", amfUri)
 	pcfSelf := pcf_context.PCF_Self()
 	client := util.GetNamfClient(amfUri)
@@ -23,8 +24,14 @@ func AmfStatusChangeSubscribe(amfUri string, guamiList []models.Guami) (
 		GuamiList:    guamiList,
 	}
 
-	res, httpResp, localErr :=
-		client.SubscriptionsCollectionDocumentApi.AMFStatusChangeSubscribe(context.Background(), subscriptionData)
+	res, httpResp, localErr := client.SubscriptionsCollectionDocumentApi.AMFStatusChangeSubscribe(
+		context.Background(), subscriptionData)
+	defer func() {
+		if rspCloseErr := httpResp.Body.Close(); rspCloseErr != nil {
+			logger.Consumerlog.Errorf("AMFStatusChangeSubscribe response body cannot close: %+v",
+				rspCloseErr)
+		}
+	}()
 	if localErr == nil {
 		locationHeader := httpResp.Header.Get("Location")
 		logger.Consumerlog.Debugf("location header: %+v", locationHeader)

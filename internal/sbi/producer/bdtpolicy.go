@@ -44,7 +44,8 @@ func HandleGetBDTPolicyContextRequest(request *httpwrapper.Request) *httpwrapper
 }
 
 func getBDTPolicyContextProcedure(bdtPolicyID string) (
-	response *models.BdtPolicy, problemDetails *models.ProblemDetails) {
+	response *models.BdtPolicy, problemDetails *models.ProblemDetails,
+) {
 	logger.Bdtpolicylog.Traceln("Handle BDT Policy GET")
 	// check bdtPolicyID from pcfUeContext
 	if value, ok := pcf_context.PCF_Self().BdtPolicyPool.Load(bdtPolicyID); ok {
@@ -85,7 +86,8 @@ func HandleUpdateBDTPolicyContextProcedure(request *httpwrapper.Request) *httpwr
 }
 
 func updateBDTPolicyContextProcedure(request models.BdtPolicyDataPatch, bdtPolicyID string) (
-	response *models.BdtPolicy, problemDetails *models.ProblemDetails) {
+	response *models.BdtPolicy, problemDetails *models.ProblemDetails,
+) {
 	logger.Bdtpolicylog.Infoln("Handle BDTPolicyUpdate")
 	// check bdtPolicyID from pcfUeContext
 	pcfSelf := pcf_context.PCF_Self()
@@ -167,7 +169,8 @@ func HandleCreateBDTPolicyContextRequest(request *httpwrapper.Request) *httpwrap
 }
 
 func createBDTPolicyContextProcedure(request *models.BdtReqData) (
-	header http.Header, response *models.BdtPolicy, problemDetails *models.ProblemDetails) {
+	header http.Header, response *models.BdtPolicy, problemDetails *models.ProblemDetails,
+) {
 	response = &models.BdtPolicy{}
 	logger.Bdtpolicylog.Traceln("Handle BDT Policy Create")
 

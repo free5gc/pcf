@@ -122,7 +122,8 @@ func (ue *UeContext) NewUeAMPolicyData(assolId string, req models.PolicyAssociat
 
 // returns UeSmPolicyData and insert related info to Ue with smPolId
 func (ue *UeContext) NewUeSmPolicyData(
-	key string, request models.SmPolicyContextData, smData *models.SmPolicyData) *UeSmPolicyData {
+	key string, request models.SmPolicyContextData, smData *models.SmPolicyData,
+) *UeSmPolicyData {
 	if smData == nil {
 		return nil
 	}
@@ -421,7 +422,8 @@ func (ue *UeContext) SMPolicyFindByIpv6(v6 string) *UeSmPolicyData {
 
 // returns SM Policy by IPv4
 func (ue *UeContext) SMPolicyFindByIdentifiersIpv4(
-	v4 string, sNssai *models.Snssai, dnn string, ipDomain string) *UeSmPolicyData {
+	v4 string, sNssai *models.Snssai, dnn string, ipDomain string,
+) *UeSmPolicyData {
 	for _, smPolicy := range ue.SmPolicyData {
 		policyContext := smPolicy.PolicyContext
 		if policyContext.Ipv4Address == v4 {

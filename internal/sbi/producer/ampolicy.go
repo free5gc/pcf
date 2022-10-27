@@ -107,7 +107,8 @@ func HandleUpdatePostPoliciesPolAssoId(request *httpwrapper.Request) *httpwrappe
 }
 
 func UpdatePostPoliciesPolAssoIdProcedure(polAssoId string,
-	policyAssociationUpdateRequest models.PolicyAssociationUpdateRequest) (*models.PolicyUpdate, *models.ProblemDetails) {
+	policyAssociationUpdateRequest models.PolicyAssociationUpdateRequest,
+) (*models.PolicyUpdate, *models.ProblemDetails) {
 	ue := pcf_context.PCF_Self().PCFUeFindByPolicyId(polAssoId)
 	if ue == nil || ue.AMPolicyData[polAssoId] == nil {
 		problemDetails := util.GetProblemDetail("polAssoId not found  in PCF", util.CONTEXT_NOT_FOUND)
@@ -202,7 +203,8 @@ func HandlePostPolicies(request *httpwrapper.Request) *httpwrapper.Response {
 }
 
 func PostPoliciesProcedure(polAssoId string,
-	policyAssociationRequest models.PolicyAssociationRequest) (*models.PolicyAssociation, string, *models.ProblemDetails) {
+	policyAssociationRequest models.PolicyAssociationRequest,
+) (*models.PolicyAssociation, string, *models.ProblemDetails) {
 	var response models.PolicyAssociation
 	pcfSelf := pcf_context.PCF_Self()
 	var ue *pcf_context.UeContext
@@ -362,7 +364,8 @@ func SendAMPolicyUpdateNotification(ue *pcf_context.UeContext, PolId string, req
 
 // Send AM Policy Update to AMF if policy has been terminated
 func SendAMPolicyTerminationRequestNotification(ue *pcf_context.UeContext,
-	PolId string, request models.TerminationNotification) {
+	PolId string, request models.TerminationNotification,
+) {
 	if ue == nil {
 		logger.AMpolicylog.Warnln("Policy Assocition Termination Request Notification Error[Ue is nil]")
 		return

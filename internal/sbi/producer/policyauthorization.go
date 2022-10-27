@@ -57,7 +57,8 @@ func transferMedCompRmToMedComp(medCompRm *models.MediaComponentRm) *models.Medi
 
 // Handle Create/ Modify  Media SubComponent
 func handleMediaSubComponent(smPolicy *pcf_context.UeSmPolicyData, medComp *models.MediaComponent,
-	medSubComp *models.MediaSubComponent, var5qi int32) (*models.PccRule, *models.ProblemDetails) {
+	medSubComp *models.MediaSubComponent, var5qi int32,
+) (*models.PccRule, *models.ProblemDetails) {
 	var flowInfos []models.FlowInformation
 	if tempFlowInfos, err := getFlowInfos(medSubComp); err != nil {
 		problemDetail := util.GetProblemDetail(err.Error(), util.REQUESTED_SERVICE_NOT_AUTHORIZED)
@@ -146,7 +147,8 @@ func HandlePostAppSessionsContext(request *httpwrapper.Request) *httpwrapper.Res
 }
 
 func postAppSessCtxProcedure(appSessCtx *models.AppSessionContext) (*models.AppSessionContext,
-	string, *models.ProblemDetails) {
+	string, *models.ProblemDetails,
+) {
 	ascReqData := appSessCtx.AscReqData
 	pcfSelf := pcf_context.PCF_Self()
 
@@ -440,7 +442,8 @@ func HandleDeleteAppSessionContext(request *httpwrapper.Request) *httpwrapper.Re
 }
 
 func DeleteAppSessionContextProcedure(appSessID string,
-	eventsSubscReqData *models.EventsSubscReqData) *models.ProblemDetails {
+	eventsSubscReqData *models.EventsSubscReqData,
+) *models.ProblemDetails {
 	pcfSelf := pcf_context.PCF_Self()
 	var appSession *pcf_context.AppSessionData
 	if val, ok := pcfSelf.AppSessionPool.Load(appSessID); ok {
@@ -536,7 +539,8 @@ func HandleModAppSessionContext(request *httpwrapper.Request) *httpwrapper.Respo
 }
 
 func ModAppSessionContextProcedure(appSessID string,
-	ascUpdateData models.AppSessionContextUpdateData) (*models.ProblemDetails, *models.AppSessionContext) {
+	ascUpdateData models.AppSessionContextUpdateData,
+) (*models.ProblemDetails, *models.AppSessionContext) {
 	pcfSelf := pcf_context.PCF_Self()
 	var appSession *pcf_context.AppSessionData
 	if val, ok := pcfSelf.AppSessionPool.Load(appSessID); ok {
@@ -710,8 +714,7 @@ func ModAppSessionContextProcedure(appSessID string,
 				continue
 			}
 			if !util.CheckPolicyControlReqTrig(smPolicy.PolicyDecision.PolicyCtrlReqTriggers, trig) {
-				smPolicy.PolicyDecision.PolicyCtrlReqTriggers =
-					append(smPolicy.PolicyDecision.PolicyCtrlReqTriggers, trig)
+				smPolicy.PolicyDecision.PolicyCtrlReqTriggers = append(smPolicy.PolicyDecision.PolicyCtrlReqTriggers, trig)
 				updateSMpolicy = true
 			}
 		}
@@ -916,7 +919,8 @@ func SendAppSessionEventNotification(appSession *pcf_context.AppSessionData, req
 }
 
 func UpdateEventsSubscContextProcedure(appSessID string, eventsSubscReqData models.EventsSubscReqData) (
-	*models.UpdateEventsSubscResponse, string, int, *models.ProblemDetails) {
+	*models.UpdateEventsSubscResponse, string, int, *models.ProblemDetails,
+) {
 	pcfSelf := pcf_context.PCF_Self()
 
 	var appSession *pcf_context.AppSessionData
@@ -972,8 +976,7 @@ func UpdateEventsSubscContextProcedure(appSessID string, eventsSubscReqData mode
 			continue
 		}
 		if !util.CheckPolicyControlReqTrig(smPolicy.PolicyDecision.PolicyCtrlReqTriggers, trig) {
-			smPolicy.PolicyDecision.PolicyCtrlReqTriggers =
-				append(smPolicy.PolicyDecision.PolicyCtrlReqTriggers, trig)
+			smPolicy.PolicyDecision.PolicyCtrlReqTriggers = append(smPolicy.PolicyDecision.PolicyCtrlReqTriggers, trig)
 			updataSmPolicy = true
 		}
 	}
@@ -1091,7 +1094,8 @@ func SendAppSessionTermination(appSession *pcf_context.AppSessionData, request m
 
 // Handle Create/ Modify Background Data Transfer Policy Indication
 func handleBDTPolicyInd(pcfSelf *pcf_context.PCFContext,
-	appSessCtx *models.AppSessionContext) (err error) {
+	appSessCtx *models.AppSessionContext,
+) (err error) {
 	req := appSessCtx.AscReqData
 
 	var requestSuppFeat openapi.SupportedFeature
@@ -1127,7 +1131,7 @@ func handleBDTPolicyInd(pcfSelf *pcf_context.PCFContext,
 			return err1
 		}
 		if startTime.After(time.Now()) {
-			respData.ServAuthInfo = models.ServAuthInfo_NOT_YET_OCURRED
+			respData.ServAuthInfo = models.ServAuthInfo_NOT_YET_OCURRED // nolint
 		} else if stopTime.Before(time.Now()) {
 			respData.ServAuthInfo = models.ServAuthInfo_EXPIRED
 		}
@@ -1139,7 +1143,8 @@ func handleBDTPolicyInd(pcfSelf *pcf_context.PCFContext,
 // provisioning of sponsored connectivity information
 func handleSponsoredConnectivityInformation(smPolicy *pcf_context.UeSmPolicyData, relatedPccRuleIds map[string]string,
 	aspID, sponID string, sponStatus models.SponsoringStatus, umData *models.UsageMonitoringData,
-	updateSMpolicy *bool) error {
+	updateSMpolicy *bool,
+) error {
 	if sponStatus == models.SponsoringStatus_DISABLED {
 		logger.PolicyAuthorizationlog.Debugf("Sponsored Connectivity is disabled by AF")
 		umID := util.GetUmId(aspID, sponID)
@@ -1324,7 +1329,8 @@ func flowDescFromN5toN7(n5Flow string) (n7Flow string, direction models.FlowDire
 }
 
 func updateQosInMedComp(qosData models.QosData, comp *models.MediaComponent) (models.QosData,
-	bool, bool) {
+	bool, bool,
+) {
 	var dlExist bool
 	var ulExist bool
 	updatedQosData := qosData
@@ -1454,7 +1460,8 @@ func updateQosInMedComp(qosData models.QosData, comp *models.MediaComponent) (mo
 }
 
 func updateQosInMedSubComp(qosData *models.QosData, comp *models.MediaComponent,
-	subsComp *models.MediaSubComponent) (updatedQosData models.QosData, ulExist, dlExist bool) {
+	subsComp *models.MediaSubComponent,
+) (updatedQosData models.QosData, ulExist, dlExist bool) {
 	updatedQosData = *qosData
 	if comp.FStatus == models.FlowStatus_REMOVED {
 		updatedQosData.MaxbrDl = ""
@@ -1646,7 +1653,8 @@ func threshRmToThresh(threshrm *models.UsageThresholdRm) *models.UsageThreshold 
 }
 
 func extractUmData(umID string, eventSubs map[models.AfEvent]models.AfNotifMethod,
-	threshold *models.UsageThreshold) (umData *models.UsageMonitoringData, err error) {
+	threshold *models.UsageThreshold,
+) (umData *models.UsageMonitoringData, err error) {
 	if _, umExist := eventSubs[models.AfEvent_USAGE_REPORT]; umExist {
 		if threshold == nil {
 			return nil, fmt.Errorf("UsageThreshold is nil in USAGE REPORT Subscription")
@@ -1659,7 +1667,8 @@ func extractUmData(umID string, eventSubs map[models.AfEvent]models.AfNotifMetho
 }
 
 func modifyRemainBitRate(smPolicy *pcf_context.UeSmPolicyData, qosData *models.QosData,
-	ulExist, dlExist bool) *models.ProblemDetails {
+	ulExist, dlExist bool,
+) *models.ProblemDetails {
 	// if request GBR == 0, qos GBR = MBR
 	// if request GBR > remain GBR, qos GBR = remain GBR
 	if ulExist {
@@ -1702,7 +1711,8 @@ func modifyRemainBitRate(smPolicy *pcf_context.UeSmPolicyData, qosData *models.Q
 }
 
 func provisioningOfTrafficRoutingInfo(smPolicy *pcf_context.UeSmPolicyData, appID string,
-	routeReq *models.AfRoutingRequirement, fStatus models.FlowStatus) *models.PccRule {
+	routeReq *models.AfRoutingRequirement, fStatus models.FlowStatus,
+) *models.PccRule {
 	var tcData *models.TrafficControlData
 
 	// TODO : handle temporal or spatial validity

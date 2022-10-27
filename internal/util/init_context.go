@@ -68,8 +68,8 @@ func InitpcfContext(context *context.PCFContext) {
 	context.DefaultBdtRefId = configuration.DefaultBdtRefId
 	for _, service := range context.NfService {
 		var err error
-		context.PcfServiceUris[service.ServiceName] =
-			service.ApiPrefix + "/" + string(service.ServiceName) + "/" + (*service.Versions)[0].ApiVersionInUri
+		context.PcfServiceUris[service.ServiceName] = service.ApiPrefix +
+			"/" + string(service.ServiceName) + "/" + (*service.Versions)[0].ApiVersionInUri
 		context.PcfSuppFeats[service.ServiceName], err = openapi.NewSupportedFeature(service.SupportedFeatures)
 		if err != nil {
 			logger.UtilLog.Errorf("openapi NewSupportedFeature error: %+v", err)

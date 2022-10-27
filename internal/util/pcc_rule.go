@@ -177,7 +177,8 @@ func GetPccRuleByFlowInfos(pccRules map[string]*models.PccRule, flowInfos []mode
 
 func SetPccRuleRelatedData(decicion *models.SmPolicyDecision, pccRule *models.PccRule,
 	tcData *models.TrafficControlData, qosData *models.QosData, chgData *models.ChargingData,
-	umData *models.UsageMonitoringData) {
+	umData *models.UsageMonitoringData,
+) {
 	if tcData != nil {
 		if decicion.TraffContDecs == nil {
 			decicion.TraffContDecs = make(map[string]*models.TrafficControlData)
