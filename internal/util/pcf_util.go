@@ -18,7 +18,7 @@ import (
 	"github.com/free5gc/pcf/internal/logger"
 )
 
-const TimeFormat = time.RFC3339
+const TimeFormat = time.RFC3339Nano
 
 // Path of HTTP2 key and log file
 const (
@@ -101,12 +101,12 @@ func GetDefaultDataRate() models.UsageThreshold {
 
 func GetDefaultTime() models.TimeWindow {
 	var timeWindow models.TimeWindow
-	timeWindow.StartTime = time.Now().Format(time.RFC3339)
+	timeWindow.StartTime = time.Now().Format(time.RFC3339Nano)
 	lease, err := time.ParseDuration("720h")
 	if err != nil {
 		logger.UtilLog.Errorf("ParseDuration error: %+v", err)
 	}
-	timeWindow.StopTime = time.Now().Add(lease).Format(time.RFC3339)
+	timeWindow.StopTime = time.Now().Add(lease).Format(time.RFC3339Nano)
 	return timeWindow
 }
 
