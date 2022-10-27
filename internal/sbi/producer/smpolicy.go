@@ -44,7 +44,8 @@ func HandleCreateSmPolicyRequest(request *httpwrapper.Request) *httpwrapper.Resp
 }
 
 func createSMPolicyProcedure(request models.SmPolicyContextData) (
-	header http.Header, response *models.SmPolicyDecision, problemDetails *models.ProblemDetails) {
+	header http.Header, response *models.SmPolicyDecision, problemDetails *models.ProblemDetails,
+) {
 	var err error
 	logger.SMpolicylog.Tracef("Handle Create SM Policy Request")
 
@@ -205,8 +206,8 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 	if err != nil {
 		logger.SMpolicylog.Errorf("openapi NewSupportedFeature error: %+v", err)
 	}
-	decision.SuppFeat =
-		pcfSelf.PcfSuppFeats[models.ServiceName_NPCF_SMPOLICYCONTROL].NegotiateWith(requestSuppFeat).String()
+	decision.SuppFeat = pcfSelf.PcfSuppFeats[models.ServiceName_NPCF_SMPOLICYCONTROL].
+		NegotiateWith(requestSuppFeat).String()
 	decision.QosFlowUsage = request.QosFlowUsage
 	// TODO: Trigger about UMC, ADC, NetLoc,...
 	decision.PolicyCtrlReqTriggers = util.PolicyControlReqTrigToArray(0x40780f)
@@ -298,7 +299,8 @@ func HandleGetSmPolicyContextRequest(request *httpwrapper.Request) *httpwrapper.
 }
 
 func getSmPolicyContextProcedure(smPolicyID string) (
-	response *models.SmPolicyControl, problemDetails *models.ProblemDetails) {
+	response *models.SmPolicyControl, problemDetails *models.ProblemDetails,
+) {
 	logger.SMpolicylog.Traceln("Handle GET SM Policy Request")
 
 	ue := pcf_context.PCF_Self().PCFUeFindByPolicyId(smPolicyID)
@@ -343,7 +345,8 @@ func HandleUpdateSmPolicyContextRequest(request *httpwrapper.Request) *httpwrapp
 }
 
 func updateSmPolicyContextProcedure(request models.SmPolicyUpdateContextData, smPolicyID string) (
-	response *models.SmPolicyDecision, problemDetails *models.ProblemDetails) {
+	response *models.SmPolicyDecision, problemDetails *models.ProblemDetails,
+) {
 	logger.SMpolicylog.Traceln("Handle updateSmPolicyContext")
 
 	ue := pcf_context.PCF_Self().PCFUeFindByPolicyId(smPolicyID)
@@ -716,7 +719,8 @@ func updateSmPolicyContextProcedure(request models.SmPolicyUpdateContextData, sm
 
 func sendSmPolicyRelatedAppSessionNotification(smPolicy *pcf_context.UeSmPolicyData,
 	notification models.EventsNotification, usageReports []models.AccuUsageReport,
-	successRules, failRules []models.RuleReport) {
+	successRules, failRules []models.RuleReport,
+) {
 	for appSessionId := range smPolicy.AppSessions {
 		if val, exist := pcf_context.PCF_Self().AppSessionPool.Load(appSessionId); exist {
 			appSession := val.(*pcf_context.AppSessionData)
@@ -781,8 +785,7 @@ func sendSmPolicyRelatedAppSessionNotification(smPolicy *pcf_context.UeSmPolicyD
 							failItem.Flows = append(failItem.Flows, flow)
 						}
 						if failItem.Flows != nil {
-							sessionNotif.FailedResourcAllocReports =
-								append(sessionNotif.FailedResourcAllocReports, failItem)
+							sessionNotif.FailedResourcAllocReports = append(sessionNotif.FailedResourcAllocReports, failItem)
 						} else {
 							continue
 						}
@@ -853,8 +856,7 @@ func sendSmPolicyRelatedAppSessionNotification(smPolicy *pcf_context.UeSmPolicyD
 					case models.AfEvent_USAGE_REPORT:
 						for _, report := range usageReports {
 							for _, pccRuleId := range appSession.RelatedPccRuleIds {
-								if pccRule, exist :=
-									appSession.SmPolicyData.PolicyDecision.PccRules[pccRuleId]; exist {
+								if pccRule, exist := appSession.SmPolicyData.PolicyDecision.PccRules[pccRuleId]; exist {
 									if pccRule.RefUmData != nil && pccRule.RefUmData[0] == report.RefUmIds {
 										sessionNotif.UsgRep = &models.AccumulatedUsage{
 											Duration:       report.TimeUsage,
