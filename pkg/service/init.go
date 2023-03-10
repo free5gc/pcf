@@ -23,7 +23,6 @@ import (
 	"github.com/free5gc/pcf/internal/sbi/bdtpolicy"
 	"github.com/free5gc/pcf/internal/sbi/consumer"
 	"github.com/free5gc/pcf/internal/sbi/httpcallback"
-	"github.com/free5gc/pcf/internal/sbi/notifyevent"
 	"github.com/free5gc/pcf/internal/sbi/oam"
 	"github.com/free5gc/pcf/internal/sbi/policyauthorization"
 	"github.com/free5gc/pcf/internal/sbi/smpolicy"
@@ -154,10 +153,6 @@ func (pcf *PCF) Start() {
 		AllowAllOrigins:  true,
 		MaxAge:           86400,
 	}))
-
-	if err := notifyevent.RegisterNotifyDispatcher(); err != nil {
-		logger.InitLog.Error("Register NotifyDispatcher Error")
-	}
 
 	pemPath := util.PcfDefaultPemPath
 	keyPath := util.PcfDefaultKeyPath

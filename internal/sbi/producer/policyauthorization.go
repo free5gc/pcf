@@ -13,7 +13,6 @@ import (
 	"github.com/free5gc/openapi/models"
 	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
-	"github.com/free5gc/pcf/internal/sbi/notifyevent"
 	"github.com/free5gc/pcf/internal/util"
 	"github.com/free5gc/util/httpwrapper"
 )
@@ -422,7 +421,7 @@ func postAppSessCtxProcedure(appSessCtx *models.AppSessionContext) (*models.AppS
 			ResourceUri:      util.GetResourceUri(models.ServiceName_NPCF_SMPOLICYCONTROL, smPolicyID),
 			SmPolicyDecision: smPolicy.PolicyDecision,
 		}
-		notifyevent.DispatchSendSMPolicyUpdateNotifyEvent(smPolicy.PolicyContext.NotificationUri, &notification)
+		go SendSMPolicyUpdateNotification(smPolicy.PolicyContext.NotificationUri, &notification)
 	}
 	return appSessCtx, locationHeader, nil
 }
@@ -491,7 +490,7 @@ func DeleteAppSessionContextProcedure(appSessID string,
 		ResourceUri:      util.GetResourceUri(models.ServiceName_NPCF_SMPOLICYCONTROL, smPolicyID),
 		SmPolicyDecision: &deletedSmPolicyDec,
 	}
-	notifyevent.DispatchSendSMPolicyUpdateNotifyEvent(smPolicy.PolicyContext.NotificationUri, &notification)
+	go SendSMPolicyUpdateNotification(smPolicy.PolicyContext.NotificationUri, &notification)
 	logger.PolicyAuthorizationlog.Tracef("Send SM Policy[%s] Update Notification", smPolicyID)
 	return nil
 }
@@ -801,7 +800,7 @@ func ModAppSessionContextProcedure(appSessID string,
 			ResourceUri:      util.GetResourceUri(models.ServiceName_NPCF_SMPOLICYCONTROL, smPolicyID),
 			SmPolicyDecision: smPolicy.PolicyDecision,
 		}
-		notifyevent.DispatchSendSMPolicyUpdateNotifyEvent(smPolicy.PolicyContext.NotificationUri, &notification)
+		go SendSMPolicyUpdateNotification(smPolicy.PolicyContext.NotificationUri, &notification)
 		logger.PolicyAuthorizationlog.Tracef("Send SM Policy[%s] Update Notification", smPolicyID)
 	}
 	return nil, appSessCtx
@@ -847,7 +846,7 @@ func DeleteEventsSubscContextProcedure(appSessID string) *models.ProblemDetails 
 			ResourceUri:      util.GetResourceUri(models.ServiceName_NPCF_SMPOLICYCONTROL, smPolicyID),
 			SmPolicyDecision: smPolicy.PolicyDecision,
 		}
-		notifyevent.DispatchSendSMPolicyUpdateNotifyEvent(smPolicy.PolicyContext.NotificationUri, &notification)
+		go SendSMPolicyUpdateNotification(smPolicy.PolicyContext.NotificationUri, &notification)
 		logger.PolicyAuthorizationlog.Tracef("Send SM Policy[%s] Update Notification", smPolicyID)
 	}
 	return nil
@@ -1038,7 +1037,7 @@ func UpdateEventsSubscContextProcedure(appSessID string, eventsSubscReqData mode
 			ResourceUri:      util.GetResourceUri(models.ServiceName_NPCF_SMPOLICYCONTROL, smPolicyID),
 			SmPolicyDecision: smPolicy.PolicyDecision,
 		}
-		notifyevent.DispatchSendSMPolicyUpdateNotifyEvent(smPolicy.PolicyContext.NotificationUri, &notification)
+		go SendSMPolicyUpdateNotification(smPolicy.PolicyContext.NotificationUri, &notification)
 		logger.PolicyAuthorizationlog.Tracef("Send SM Policy[%s] Update Notification", smPolicyID)
 	}
 	if created {
@@ -1772,4 +1771,67 @@ func reverseStringMap(srcMap map[string]string) map[string]string {
 		reverseMap[value] = key
 	}
 	return reverseMap
+}
+
+func SendSMPolicyUpdateNotification(uri string, notif *models.SmPolicyNotification) {
+	if uri == "" {
+		logger.NotifyEventLog.Warnln("SM Policy Update Notification Error[URI is empty]")
+		return
+	}
+	client := util.GetNpcfSMPolicyCallbackClient()
+	logger.NotifyEventLog.Infof("Send SM Policy Update Notification to SMF")
+	_, httpResponse, err := client.DefaultCallbackApi.SmPolicyUpdateNotification(context.Background(), uri, *notif)
+	if err != nil {
+		if httpResponse != nil {
+			logger.NotifyEventLog.Warnf("SM Policy Update Notification Error[%s]", httpResponse.Status)
+		} else {
+			logger.NotifyEventLog.Warnf("SM Policy Update Notification Failed[%s]", err.Error())
+		}
+		return
+	} else if httpResponse == nil {
+		logger.NotifyEventLog.Warnln("SM Policy Update Notification Failed[HTTP Response is nil]")
+		return
+	}
+	defer func() {
+		if resCloseErr := httpResponse.Body.Close(); resCloseErr != nil {
+			logger.NotifyEventLog.Errorf("NFInstancesStoreApi response body cannot close: %+v", resCloseErr)
+		}
+	}()
+	if httpResponse.StatusCode != http.StatusOK && httpResponse.StatusCode != http.StatusNoContent {
+		logger.NotifyEventLog.Warnf("SM Policy Update Notification Failed")
+	} else {
+		logger.NotifyEventLog.Tracef("SM Policy Update Notification Success")
+	}
+}
+
+func SendSMPolicyTerminationNotification(uri string, notif *models.TerminationNotification) {
+	if uri == "" {
+		logger.NotifyEventLog.Warnln("SM Policy Termination Request Notification Error[URI is empty]")
+		return
+	}
+	client := util.GetNpcfSMPolicyCallbackClient()
+	logger.NotifyEventLog.Infof("SM Policy Termination Request Notification to SMF")
+	rsp, err := client.DefaultCallbackApi.SmPolicyControlTerminationRequestNotification(
+		context.Background(), uri, *notif)
+	if err != nil {
+		if rsp != nil {
+			logger.NotifyEventLog.Warnf("SM Policy Termination Request Notification Error[%s]", rsp.Status)
+		} else {
+			logger.NotifyEventLog.Warnf("SM Policy Termination Request Notification Error[%s]", err.Error())
+		}
+		return
+	} else if rsp == nil {
+		logger.NotifyEventLog.Warnln("SM Policy Termination Request Notification Error[HTTP Response is nil]")
+		return
+	}
+	defer func() {
+		if resCloseErr := rsp.Body.Close(); resCloseErr != nil {
+			logger.NotifyEventLog.Errorf("NFInstancesStoreApi response body cannot close: %+v", resCloseErr)
+		}
+	}()
+	if rsp.StatusCode != http.StatusNoContent {
+		logger.NotifyEventLog.Warnf("SM Policy Termination Request Notification  Failed")
+	} else {
+		logger.NotifyEventLog.Tracef("SM Policy Termination Request Notification Success")
+	}
 }
