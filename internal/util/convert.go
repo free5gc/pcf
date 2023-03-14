@@ -2,6 +2,7 @@ package util
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/free5gc/openapi/models"
 )
@@ -47,6 +48,15 @@ var policyTriggerArray = []models.PolicyControlRequestTrigger{
 func SnssaiModelsToHex(snssai models.Snssai) string {
 	sst := fmt.Sprintf("%02x", snssai.Sst)
 	return sst + snssai.Sd
+}
+
+// Convert Snssai form models to key string described in TS29.571
+func SnssaiModelsToTS29571String(snssai models.Snssai) string {
+	sst := fmt.Sprintf("%d", snssai.Sst)
+	if snssai.Sd != "" {
+		return sst + "-" + strings.ToLower(snssai.Sd)
+	}
+	return sst
 }
 
 // Use BitMap to generate requested policy control triggers,
