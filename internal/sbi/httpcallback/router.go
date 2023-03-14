@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/free5gc/pcf/internal/logger"
+	"github.com/free5gc/pcf/pkg/factory"
 	logger_util "github.com/free5gc/util/logger"
 )
 
@@ -33,8 +34,8 @@ func NewRouter() *gin.Engine {
 }
 
 func AddService(engine *gin.Engine) *gin.RouterGroup {
-	group := engine.Group("/npcf-callback/v1")
-	// https://localhost:29507/npcf-callback/v1/route
+	group := engine.Group(factory.PcfCallbackResUriPrefix)
+	// https://localhost:29507/{factory.PcfCallbackResUriPrefix}/route
 	for _, route := range routes {
 		switch route.Method {
 		case "POST":
@@ -58,10 +59,17 @@ var routes = Routes{
 	},
 
 	{
-		"HTTPNudrNotify",
+		"HTTPUdrPolicyDataChangeNotify",
 		strings.ToUpper("Post"),
-		"/nudr-notify/:supi",
-		HTTPNudrNotify,
+		"/nudr-notify/policy-data/:supi",
+		HTTPUdrPolicyDataChangeNotify,
+	},
+
+	{
+		"HTTPUdrInfluenceDataUpdateNotify",
+		strings.ToUpper("Post"),
+		"/nudr-notify/influence-data/:supi/:pduSessionId",
+		HTTPUdrInfluenceDataUpdateNotify,
 	},
 
 	{

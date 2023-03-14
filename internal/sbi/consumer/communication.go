@@ -10,17 +10,18 @@ import (
 	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/internal/util"
+	"github.com/free5gc/pcf/pkg/factory"
 )
 
 func AmfStatusChangeSubscribe(amfUri string, guamiList []models.Guami) (
 	problemDetails *models.ProblemDetails, err error,
 ) {
-	logger.Consumerlog.Debugf("PCF Subscribe to AMF status[%+v]", amfUri)
-	pcfSelf := pcf_context.PCF_Self()
+	logger.ConsumerLog.Debugf("PCF Subscribe to AMF status[%+v]", amfUri)
+	pcfSelf := pcf_context.GetSelf()
 	client := util.GetNamfClient(amfUri)
 
 	subscriptionData := models.SubscriptionData{
-		AmfStatusUri: fmt.Sprintf("%s/npcf-callback/v1/amfstatus", pcfSelf.GetIPv4Uri()),
+		AmfStatusUri: fmt.Sprintf("%s"+factory.PcfCallbackResUriPrefix+"/amfstatus", pcfSelf.GetIPv4Uri()),
 		GuamiList:    guamiList,
 	}
 
@@ -28,13 +29,13 @@ func AmfStatusChangeSubscribe(amfUri string, guamiList []models.Guami) (
 		context.Background(), subscriptionData)
 	defer func() {
 		if rspCloseErr := httpResp.Body.Close(); rspCloseErr != nil {
-			logger.Consumerlog.Errorf("AMFStatusChangeSubscribe response body cannot close: %+v",
+			logger.ConsumerLog.Errorf("AMFStatusChangeSubscribe response body cannot close: %+v",
 				rspCloseErr)
 		}
 	}()
 	if localErr == nil {
 		locationHeader := httpResp.Header.Get("Location")
-		logger.Consumerlog.Debugf("location header: %+v", locationHeader)
+		logger.ConsumerLog.Debugf("location header: %+v", locationHeader)
 
 		subscriptionID := locationHeader[strings.LastIndex(locationHeader, "/")+1:]
 		amfStatusSubsData := pcf_context.AMFStatusSubscriptionData{

@@ -38,7 +38,7 @@ func SendSearchNFInstances(
 	return &result, nil
 }
 
-func SendNFIntancesUDR(nrfUri, id string) string {
+func SendNFInstancesUDR(nrfUri, id string) string {
 	targetNfType := models.NfType_UDR
 	requestNfType := models.NfType_PCF
 	localVarOptionals := Nnrf_NFDiscovery.SearchNFInstancesParamOpts{
@@ -55,7 +55,7 @@ func SendNFIntancesUDR(nrfUri, id string) string {
 
 	result, err := SendSearchNFInstances(nrfUri, targetNfType, requestNfType, localVarOptionals)
 	if err != nil {
-		logger.Consumerlog.Error(err.Error())
+		logger.ConsumerLog.Error(err.Error())
 		return ""
 	}
 	for _, profile := range result.NfInstances {
@@ -66,7 +66,26 @@ func SendNFIntancesUDR(nrfUri, id string) string {
 	return ""
 }
 
-func SendNFIntancesAMF(nrfUri string, guami models.Guami, serviceName models.ServiceName) string {
+func SendNFInstancesBSF(nrfUri string) string {
+	targetNfType := models.NfType_BSF
+	requestNfType := models.NfType_PCF
+	localVarOptionals := Nnrf_NFDiscovery.SearchNFInstancesParamOpts{}
+
+	result, err := SendSearchNFInstances(nrfUri, targetNfType, requestNfType, localVarOptionals)
+	if err != nil {
+		logger.ConsumerLog.Error(err.Error())
+		return ""
+	}
+	for _, profile := range result.NfInstances {
+		if uri := util.SearchNFServiceUri(profile, models.ServiceName_NBSF_MANAGEMENT,
+			models.NfServiceStatus_REGISTERED); uri != "" {
+			return uri
+		}
+	}
+	return ""
+}
+
+func SendNFInstancesAMF(nrfUri string, guami models.Guami, serviceName models.ServiceName) string {
 	targetNfType := models.NfType_AMF
 	requestNfType := models.NfType_PCF
 
@@ -84,7 +103,7 @@ func SendNFIntancesAMF(nrfUri string, guami models.Guami, serviceName models.Ser
 
 	result, err := SendSearchNFInstances(nrfUri, targetNfType, requestNfType, localVarOptionals)
 	if err != nil {
-		logger.Consumerlog.Error(err.Error())
+		logger.ConsumerLog.Error(err.Error())
 		return ""
 	}
 	for _, profile := range result.NfInstances {

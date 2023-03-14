@@ -207,6 +207,7 @@ linters-settings:
   misspell:
     #locale: US
     ignore-words:
+      - ocurred # misspell from TS 29.514's openapi yaml file. The spec is correct
   wsl:
     # If true append is only allowed to be cuddled if appending value is
     # matching variables, fields or types on line above. Default is true.

@@ -77,9 +77,9 @@ type UeSmPolicyData struct {
 	// SmfId                  string
 	// TraceReq *TraceData
 	// RecoveryTime     *time.Time
-	PackFiltIdGenarator int32
-	PccRuleIdGenarator  int32
-	ChargingIdGenarator int32
+	PackFiltIdGenerator int32
+	PccRuleIdGenerator  int32
+	ChargingIdGenerator int32
 	// FlowMapsToPackFiltIds  map[string][]string // use Flow Description(in TS 29214) as key map to pcc rule ids
 	PackFiltMapToPccRuleId map[string]string // use PackFiltId as Key
 	// Related to GBR
@@ -93,7 +93,9 @@ type UeSmPolicyData struct {
 	// related to AppSession
 	AppSessions map[string]bool // related appSessionId
 	// Corresponding UE
-	PcfUe *UeContext
+	PcfUe                  *UeContext
+	InfluenceDataToPccRule map[string]string
+	SubscriptionID         string
 }
 
 // NewUeAMPolicyData returns created UeAMPolicyData data and insert this data to Ue.AMPolicyData with assolId as key
@@ -148,14 +150,15 @@ func (ue *UeContext) NewUeSmPolicyData(
 	// data.SmfId = request.SmfId
 	// data.Var3gppPsDataOffStatus = request.Var3gppPsDataOffStatus
 	data.SmPolicyData = smData
-	data.PackFiltIdGenarator = 1
+	data.PackFiltIdGenerator = 1
 	data.PackFiltMapToPccRuleId = make(map[string]string)
 	data.AppSessions = make(map[string]bool)
 	// data.RefToAmPolicy = amData
-	data.PccRuleIdGenarator = 1
-	data.ChargingIdGenarator = 1
+	data.PccRuleIdGenerator = 1
+	data.ChargingIdGenerator = 1
 	data.PcfUe = ue
 	ue.SmPolicyData[key] = &data
+	data.InfluenceDataToPccRule = make(map[string]string)
 	return &data
 }
 
@@ -258,7 +261,7 @@ func (policy *UeSmPolicyData) RemovePccRule(pccRuleId string, deletedSmPolicyDec
 // Check if the afEvent exists in smPolicy
 func (policy *UeSmPolicyData) CheckRelatedAfEvent(event models.AfEvent) (found bool) {
 	for appSessionId := range policy.AppSessions {
-		if val, ok := PCF_Self().AppSessionPool.Load(appSessionId); ok {
+		if val, ok := GetSelf().AppSessionPool.Load(appSessionId); ok {
 			appSession := val.(*AppSessionData)
 			for afEvent := range appSession.Events {
 				if afEvent == event {

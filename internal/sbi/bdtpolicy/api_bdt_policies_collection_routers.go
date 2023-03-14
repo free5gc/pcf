@@ -36,7 +36,7 @@ func HTTPCreateBDTPolicy(c *gin.Context) {
 			Detail: err.Error(),
 			Cause:  "SYSTEM_FAILURE",
 		}
-		logger.Bdtpolicylog.Errorf("Get Request Body error: %+v", err)
+		logger.BdtPolicyLog.Errorf("Get Request Body error: %+v", err)
 		c.JSON(http.StatusInternalServerError, problemDetail)
 		return
 	}
@@ -50,7 +50,7 @@ func HTTPCreateBDTPolicy(c *gin.Context) {
 			Status: http.StatusBadRequest,
 			Detail: problemDetail,
 		}
-		logger.Bdtpolicylog.Errorln(problemDetail)
+		logger.BdtPolicyLog.Errorln(problemDetail)
 		c.JSON(http.StatusBadRequest, rsp)
 		return
 	}
@@ -63,7 +63,7 @@ func HTTPCreateBDTPolicy(c *gin.Context) {
 	}
 	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
 	if err != nil {
-		logger.Bdtpolicylog.Errorln(err)
+		logger.BdtPolicyLog.Errorln(err)
 		problemDetails := models.ProblemDetails{
 			Status: http.StatusInternalServerError,
 			Cause:  "SYSTEM_FAILURE",

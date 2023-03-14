@@ -3,30 +3,20 @@ package context
 import (
 	"fmt"
 	"math"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/google/uuid"
 
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/pkg/factory"
 	"github.com/free5gc/util/idgenerator"
+	"github.com/free5gc/util/mongoapi"
 )
-
-var pcfCtx *PCFContext
-
-func init() {
-	pcfCtx = new(PCFContext)
-	pcfCtx.Name = "pcf"
-	pcfCtx.UriScheme = models.UriScheme_HTTPS
-	pcfCtx.TimeFormat = "2006-01-02 15:04:05"
-	pcfCtx.DefaultBdtRefId = "BdtPolicyId-"
-	pcfCtx.NfService = make(map[models.ServiceName]models.NfService)
-	pcfCtx.PcfServiceUris = make(map[models.ServiceName]string)
-	pcfCtx.PcfSuppFeats = make(map[models.ServiceName]openapi.SupportedFeature)
-	pcfCtx.BdtPolicyIDGenerator = idgenerator.NewGenerator(1, math.MaxInt64)
-}
 
 type PCFContext struct {
 	NfId            string
@@ -76,27 +66,106 @@ type AppSessionData struct {
 	SmPolicyData *UeSmPolicyData
 }
 
+var pcfContext PCFContext
+
+func InitpcfContext(context *PCFContext) {
+	config := factory.PcfConfig
+	logger.UtilLog.Infof("pcfconfig Info: Version[%s] Description[%s]", config.Info.Version, config.Info.Description)
+	configuration := config.Configuration
+	context.NfId = uuid.New().String()
+	if configuration.PcfName != "" {
+		context.Name = configuration.PcfName
+	}
+
+	mongodb := config.Configuration.Mongodb
+	// Connect to MongoDB
+	if err := mongoapi.SetMongoDB(mongodb.Name, mongodb.Url); err != nil {
+		logger.UtilLog.Errorf("InitpcfContext err: %+v", err)
+		return
+	}
+
+	sbi := configuration.Sbi
+	context.NrfUri = configuration.NrfUri
+	context.UriScheme = ""
+	context.RegisterIPv4 = factory.PcfSbiDefaultIPv4 // default localhost
+	context.SBIPort = factory.PcfSbiDefaultPort      // default port
+	if sbi != nil {
+		if sbi.Scheme != "" {
+			context.UriScheme = models.UriScheme(sbi.Scheme)
+		}
+		if sbi.RegisterIPv4 != "" {
+			context.RegisterIPv4 = sbi.RegisterIPv4
+		}
+		if sbi.Port != 0 {
+			context.SBIPort = sbi.Port
+		}
+		if sbi.Scheme == "https" {
+			context.UriScheme = models.UriScheme_HTTPS
+		} else {
+			context.UriScheme = models.UriScheme_HTTP
+		}
+
+		context.BindingIPv4 = os.Getenv(sbi.BindingIPv4)
+		if context.BindingIPv4 != "" {
+			logger.UtilLog.Info("Parsing ServerIPv4 address from ENV Variable.")
+		} else {
+			context.BindingIPv4 = sbi.BindingIPv4
+			if context.BindingIPv4 == "" {
+				logger.UtilLog.Warn("Error parsing ServerIPv4 address as string. Using the 0.0.0.0 address as default.")
+				context.BindingIPv4 = "0.0.0.0"
+			}
+		}
+	}
+	serviceList := configuration.ServiceList
+	context.InitNFService(serviceList, config.Info.Version)
+	context.TimeFormat = configuration.TimeFormat
+	context.DefaultBdtRefId = configuration.DefaultBdtRefId
+	for _, service := range context.NfService {
+		var err error
+		context.PcfServiceUris[service.ServiceName] = service.ApiPrefix +
+			"/" + string(service.ServiceName) + "/" + (*service.Versions)[0].ApiVersionInUri
+		context.PcfSuppFeats[service.ServiceName], err = openapi.NewSupportedFeature(service.SupportedFeatures)
+		if err != nil {
+			logger.UtilLog.Errorf("openapi NewSupportedFeature error: %+v", err)
+		}
+	}
+	context.Locality = configuration.Locality
+}
+
+func Init() {
+	pcfContext.Name = "pcf"
+	pcfContext.UriScheme = models.UriScheme_HTTPS
+	pcfContext.TimeFormat = "2006-01-02 15:04:05"
+	pcfContext.DefaultBdtRefId = "BdtPolicyId-"
+	pcfContext.NfService = make(map[models.ServiceName]models.NfService)
+	pcfContext.PcfServiceUris = make(map[models.ServiceName]string)
+	pcfContext.PcfSuppFeats = make(map[models.ServiceName]openapi.SupportedFeature)
+	pcfContext.BdtPolicyIDGenerator = idgenerator.NewGenerator(1, math.MaxInt64)
+	InitpcfContext(&pcfContext)
+}
+
 // Create new PCF context
-func PCF_Self() *PCFContext {
-	return pcfCtx
+func GetSelf() *PCFContext {
+	return &pcfContext
 }
 
 func GetTimeformat() string {
-	return pcfCtx.TimeFormat
+	return pcfContext.TimeFormat
 }
 
 func GetUri(name models.ServiceName) string {
-	return pcfCtx.PcfServiceUris[name]
+	return pcfContext.PcfServiceUris[name]
 }
 
 var (
-	PolicyAuthorizationUri = "/npcf-policyauthorization/v1/app-sessions/"
-	SmUri                  = "/npcf-smpolicycontrol/v1"
-	IPv4Address            = "192.168."
-	IPv6Address            = "ffab::"
-	CheckNotifiUri         = "/npcf-callback/v1/nudr-notify/"
-	Ipv4_pool              = make(map[string]string)
-	Ipv6_pool              = make(map[string]string)
+	PolicyAuthorizationUri       = factory.PcfPolicyAuthResUriPrefix + "/app-sessions/"
+	SmUri                        = factory.PcfSMpolicyCtlResUriPrefix
+	IPv4Address                  = "192.168."
+	IPv6Address                  = "ffab::"
+	PolicyDataChangeNotifyUri    = factory.PcfCallbackResUriPrefix + "/nudr-notify/policy-data"
+	InfluenceDataUpdateNotifyUri = factory.PcfCallbackResUriPrefix + "/nudr-notify/influence-data"
+	Ipv4_pool                    = make(map[string]string)
+	Ipv6_pool                    = make(map[string]string)
 )
 
 // BdtPolicy default value

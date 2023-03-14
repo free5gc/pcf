@@ -50,7 +50,7 @@ func HandleOAMGetAmPolicyRequest(request *httpwrapper.Request) *httpwrapper.Resp
 func OAMGetAmPolicyProcedure(supi string) (response *UEAmPolicys, problemDetails *models.ProblemDetails) {
 	logger.OamLog.Infof("Handle OAM Get Am Policy")
 	response = &UEAmPolicys{}
-	pcfSelf := context.PCF_Self()
+	pcfSelf := context.GetSelf()
 
 	if val, exists := pcfSelf.UePool.Load(supi); exists {
 		ue := val.(*context.UeContext)
