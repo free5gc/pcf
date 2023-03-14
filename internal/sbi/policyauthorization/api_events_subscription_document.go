@@ -31,7 +31,7 @@ func HTTPDeleteEventsSubsc(c *gin.Context) {
 
 	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
 	if err != nil {
-		logger.PolicyAuthorizationlog.Errorln(err)
+		logger.PolicyAuthLog.Errorln(err)
 		problemDetails := models.ProblemDetails{
 			Status: http.StatusInternalServerError,
 			Cause:  "SYSTEM_FAILURE",
@@ -55,7 +55,7 @@ func HTTPUpdateEventsSubsc(c *gin.Context) {
 			Detail: err.Error(),
 			Cause:  "SYSTEM_FAILURE",
 		}
-		logger.PolicyAuthorizationlog.Errorf("Get Request Body error: %+v", err)
+		logger.PolicyAuthLog.Errorf("Get Request Body error: %+v", err)
 		c.JSON(http.StatusInternalServerError, problemDetail)
 		return
 	}
@@ -68,14 +68,14 @@ func HTTPUpdateEventsSubsc(c *gin.Context) {
 			Status: http.StatusBadRequest,
 			Detail: problemDetail,
 		}
-		logger.PolicyAuthorizationlog.Errorln(problemDetail)
+		logger.PolicyAuthLog.Errorln(problemDetail)
 		c.JSON(http.StatusBadRequest, rsp)
 		return
 	}
 
 	if eventsSubscReqData.Events == nil || eventsSubscReqData.NotifUri == "" {
 		problemDetail := util.GetProblemDetail("Errorneous/Missing Mandotory IE", util.ERROR_REQUEST_PARAMETERS)
-		logger.PolicyAuthorizationlog.Errorln(problemDetail.Detail)
+		logger.PolicyAuthLog.Errorln(problemDetail.Detail)
 		c.JSON(int(problemDetail.Status), problemDetail)
 		return
 	}
@@ -87,7 +87,7 @@ func HTTPUpdateEventsSubsc(c *gin.Context) {
 
 	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
 	if err != nil {
-		logger.PolicyAuthorizationlog.Errorln(err)
+		logger.PolicyAuthLog.Errorln(err)
 		problemDetails := models.ProblemDetails{
 			Status: http.StatusInternalServerError,
 			Cause:  "SYSTEM_FAILURE",

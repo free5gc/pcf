@@ -17,22 +17,22 @@ import (
 	"path/filepath"
 	"runtime/debug"
 
-	"github.com/asaskevich/govalidator"
 	"github.com/urfave/cli"
 
 	"github.com/free5gc/pcf/internal/logger"
-	"github.com/free5gc/pcf/internal/util"
+	"github.com/free5gc/pcf/pkg/factory"
 	"github.com/free5gc/pcf/pkg/service"
+	logger_util "github.com/free5gc/util/logger"
 	"github.com/free5gc/util/version"
 )
 
-var PCF = &service.PCF{}
+var PCF *service.PcfApp
 
 func main() {
 	defer func() {
 		if p := recover(); p != nil {
 			// Print stack for panic to log. Fatalf() will let program exit.
-			logger.AppLog.Fatalf("panic: %v\n%s", p, string(debug.Stack()))
+			logger.MainLog.Fatalf("panic: %v\n%s", p, string(debug.Stack()))
 		}
 	}()
 
@@ -40,57 +40,68 @@ func main() {
 	app.Name = "pcf"
 	app.Usage = "5G Policy Control Function (PCF)"
 	app.Action = action
-	app.Flags = PCF.GetCliCmd()
+	app.Flags = []cli.Flag{
+		cli.StringFlag{
+			Name:  "config, c",
+			Usage: "Load configuration from `FILE`",
+		},
+		cli.StringSliceFlag{
+			Name:  "log, l",
+			Usage: "Output NF log to `FILE`",
+		},
+	}
 	if err := app.Run(os.Args); err != nil {
 		fmt.Printf("PCF Run Error: %v\n", err)
 	}
 }
 
-func action(c *cli.Context) error {
-	if err := initLogFile(c.String("log"), c.String("log5gc")); err != nil {
-		logger.AppLog.Errorf("%+v", err)
+func action(cliCtx *cli.Context) error {
+	tlsKeyLogPath, err := initLogFile(cliCtx.StringSlice("log"))
+	if err != nil {
 		return err
 	}
 
-	if err := PCF.Initialize(c); err != nil {
-		switch err1 := err.(type) {
-		case govalidator.Errors:
-			errs := err1.Errors()
-			for _, e := range errs {
-				logger.CfgLog.Errorf("%+v", e)
-			}
-		default:
-			logger.CfgLog.Errorf("%+v", err)
-		}
+	logger.MainLog.Infoln(cliCtx.App.Name)
+	logger.MainLog.Infoln("PCF version: ", version.GetVersion())
 
-		logger.CfgLog.Errorf("[-- PLEASE REFER TO SAMPLE CONFIG FILE COMMENTS --]")
-		return fmt.Errorf("Failed to initialize !!")
+	cfg, err := factory.ReadConfig(cliCtx.String("config"))
+	if err != nil {
+		return err
 	}
-	logger.AppLog.Infoln(c.App.Name)
-	logger.AppLog.Infoln("PCF version: ", version.GetVersion())
+	factory.PcfConfig = cfg
 
-	PCF.Start()
+	pcf, err := service.NewApp(cfg)
+	if err != nil {
+		return err
+	}
+	PCF = pcf
+
+	pcf.Start(tlsKeyLogPath)
 
 	return nil
 }
 
-func initLogFile(logNfPath, log5gcPath string) error {
-	PCF.KeyLogPath = util.PcfDefaultKeyLogPath
+func initLogFile(logNfPath []string) (string, error) {
+	logTlsKeyPath := ""
 
-	if err := logger.LogFileHook(logNfPath, log5gcPath); err != nil {
-		return err
-	}
+	for _, path := range logNfPath {
+		if err := logger_util.LogFileHook(logger.Log, path); err != nil {
+			return "", err
+		}
 
-	if logNfPath != "" {
-		nfDir, _ := filepath.Split(logNfPath)
+		if logTlsKeyPath != "" {
+			continue
+		}
+
+		nfDir, _ := filepath.Split(path)
 		tmpDir := filepath.Join(nfDir, "key")
 		if err := os.MkdirAll(tmpDir, 0o775); err != nil {
 			logger.InitLog.Errorf("Make directory %s failed: %+v", tmpDir, err)
-			return err
+			return "", err
 		}
-		_, name := filepath.Split(util.PcfDefaultKeyLogPath)
-		PCF.KeyLogPath = filepath.Join(tmpDir, name)
+		_, name := filepath.Split(factory.PcfDefaultTLSKeyLogPath)
+		logTlsKeyPath = filepath.Join(tmpDir, name)
 	}
 
-	return nil
+	return logTlsKeyPath, nil
 }

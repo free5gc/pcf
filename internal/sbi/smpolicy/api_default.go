@@ -33,7 +33,7 @@ func HTTPSmPoliciesPost(c *gin.Context) {
 			Detail: err.Error(),
 			Cause:  "SYSTEM_FAILURE",
 		}
-		logger.SMpolicylog.Errorf("Get Request Body error: %+v", err)
+		logger.SmPolicyLog.Errorf("Get Request Body error: %+v", err)
 		c.JSON(http.StatusInternalServerError, problemDetail)
 		return
 	}
@@ -47,7 +47,7 @@ func HTTPSmPoliciesPost(c *gin.Context) {
 			Status: http.StatusBadRequest,
 			Detail: problemDetail,
 		}
-		logger.SMpolicylog.Errorln(problemDetail)
+		logger.SmPolicyLog.Errorln(problemDetail)
 		c.JSON(http.StatusBadRequest, rsp)
 		return
 	}
@@ -61,7 +61,7 @@ func HTTPSmPoliciesPost(c *gin.Context) {
 	}
 	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
 	if err != nil {
-		logger.SMpolicylog.Errorln(err)
+		logger.SmPolicyLog.Errorln(err)
 		problemDetails := models.ProblemDetails{
 			Status: http.StatusInternalServerError,
 			Cause:  "SYSTEM_FAILURE",
@@ -82,7 +82,7 @@ func HTTPSmPoliciesSmPolicyIdDeletePost(c *gin.Context) {
 
 	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
 	if err != nil {
-		logger.SMpolicylog.Errorln(err)
+		logger.SmPolicyLog.Errorln(err)
 		problemDetails := models.ProblemDetails{
 			Status: http.StatusInternalServerError,
 			Cause:  "SYSTEM_FAILURE",
@@ -103,7 +103,7 @@ func HTTPSmPoliciesSmPolicyIDGet(c *gin.Context) {
 
 	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
 	if err != nil {
-		logger.SMpolicylog.Errorln(err)
+		logger.SmPolicyLog.Errorln(err)
 		problemDetails := models.ProblemDetails{
 			Status: http.StatusInternalServerError,
 			Cause:  "SYSTEM_FAILURE",
@@ -127,7 +127,7 @@ func HTTPSmPoliciesSmPolicyIdUpdatePost(c *gin.Context) {
 			Detail: err.Error(),
 			Cause:  "SYSTEM_FAILURE",
 		}
-		logger.SMpolicylog.Errorf("Get Request Body error: %+v", err)
+		logger.SmPolicyLog.Errorf("Get Request Body error: %+v", err)
 		c.JSON(http.StatusInternalServerError, problemDetail)
 		return
 	}
@@ -141,7 +141,7 @@ func HTTPSmPoliciesSmPolicyIdUpdatePost(c *gin.Context) {
 			Status: http.StatusBadRequest,
 			Detail: problemDetail,
 		}
-		logger.SMpolicylog.Errorln(problemDetail)
+		logger.SmPolicyLog.Errorln(problemDetail)
 		c.JSON(http.StatusBadRequest, rsp)
 		return
 	}
@@ -153,7 +153,7 @@ func HTTPSmPoliciesSmPolicyIdUpdatePost(c *gin.Context) {
 
 	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
 	if err != nil {
-		logger.SMpolicylog.Errorln(err)
+		logger.SmPolicyLog.Errorln(err)
 		problemDetails := models.ProblemDetails{
 			Status: http.StatusInternalServerError,
 			Cause:  "SYSTEM_FAILURE",

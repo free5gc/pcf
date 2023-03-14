@@ -34,7 +34,7 @@ func HTTPPostAppSessions(c *gin.Context) {
 			Detail: err.Error(),
 			Cause:  "SYSTEM_FAILURE",
 		}
-		logger.PolicyAuthorizationlog.Errorf("Get Request Body error: %+v", err)
+		logger.PolicyAuthLog.Errorf("Get Request Body error: %+v", err)
 		c.JSON(http.StatusInternalServerError, problemDetail)
 		return
 	}
@@ -47,7 +47,7 @@ func HTTPPostAppSessions(c *gin.Context) {
 			Status: http.StatusBadRequest,
 			Detail: problemDetail,
 		}
-		logger.PolicyAuthorizationlog.Errorln(problemDetail)
+		logger.PolicyAuthLog.Errorln(problemDetail)
 		c.JSON(http.StatusBadRequest, rsp)
 		return
 	}
@@ -56,7 +56,7 @@ func HTTPPostAppSessions(c *gin.Context) {
 	if ascReqData == nil || ascReqData.SuppFeat == "" || ascReqData.NotifUri == "" {
 		// Check Mandatory IEs
 		rsp := util.GetProblemDetail("Errorneous/Missing Mandotory IE", util.ERROR_INITIAL_PARAMETERS)
-		logger.PolicyAuthorizationlog.Errorln(rsp.Detail)
+		logger.PolicyAuthLog.Errorln(rsp.Detail)
 		c.JSON(int(rsp.Status), rsp)
 		return
 	}
@@ -69,7 +69,7 @@ func HTTPPostAppSessions(c *gin.Context) {
 	}
 	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
 	if err != nil {
-		logger.PolicyAuthorizationlog.Errorln(err)
+		logger.PolicyAuthLog.Errorln(err)
 		problemDetails := models.ProblemDetails{
 			Status: http.StatusInternalServerError,
 			Cause:  "SYSTEM_FAILURE",

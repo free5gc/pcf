@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/free5gc/openapi/Namf_Communication"
+	"github.com/free5gc/openapi/Nbsf_Management"
 	"github.com/free5gc/openapi/Npcf_AMPolicy"
 	"github.com/free5gc/openapi/Npcf_PolicyAuthorization"
 	"github.com/free5gc/openapi/Npcf_SMPolicyControl"
@@ -18,7 +19,7 @@ import (
 	"github.com/free5gc/pcf/internal/logger"
 )
 
-const TimeFormat = time.RFC3339Nano
+const TimeFormat = time.RFC3339
 
 // Path of HTTP2 key and log file
 const (
@@ -85,6 +86,13 @@ func GetNudrClient(uri string) *Nudr_DataRepository.APIClient {
 	return client
 }
 
+func GetNbsfClient(uri string) *Nbsf_Management.APIClient {
+	configuration := Nbsf_Management.NewConfiguration()
+	configuration.SetBasePath(uri)
+	client := Nbsf_Management.NewAPIClient(configuration)
+	return client
+}
+
 func GetNamfClient(uri string) *Namf_Communication.APIClient {
 	configuration := Namf_Communication.NewConfiguration()
 	configuration.SetBasePath(uri)
@@ -101,12 +109,12 @@ func GetDefaultDataRate() models.UsageThreshold {
 
 func GetDefaultTime() models.TimeWindow {
 	var timeWindow models.TimeWindow
-	timeWindow.StartTime = time.Now().Format(time.RFC3339Nano)
+	timeWindow.StartTime = time.Now().Format(time.RFC3339)
 	lease, err := time.ParseDuration("720h")
 	if err != nil {
 		logger.UtilLog.Errorf("ParseDuration error: %+v", err)
 	}
-	timeWindow.StopTime = time.Now().Add(lease).Format(time.RFC3339Nano)
+	timeWindow.StopTime = time.Now().Add(lease).Format(time.RFC3339)
 	return timeWindow
 }
 

@@ -30,7 +30,7 @@ func HTTPPoliciesPolAssoIdDelete(c *gin.Context) {
 
 	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
 	if err != nil {
-		logger.AMpolicylog.Errorln(err)
+		logger.AmPolicyLog.Errorln(err)
 		problemDetails := models.ProblemDetails{
 			Status: http.StatusInternalServerError,
 			Cause:  "SYSTEM_FAILURE",
@@ -51,7 +51,7 @@ func HTTPPoliciesPolAssoIdGet(c *gin.Context) {
 
 	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
 	if err != nil {
-		logger.AMpolicylog.Errorln(err)
+		logger.AmPolicyLog.Errorln(err)
 		problemDetails := models.ProblemDetails{
 			Status: http.StatusInternalServerError,
 			Cause:  "SYSTEM_FAILURE",
@@ -75,7 +75,7 @@ func HTTPPoliciesPolAssoIdUpdatePost(c *gin.Context) {
 			Detail: err.Error(),
 			Cause:  "SYSTEM_FAILURE",
 		}
-		logger.AMpolicylog.Errorf("Get Request Body error: %+v", err)
+		logger.AmPolicyLog.Errorf("Get Request Body error: %+v", err)
 		c.JSON(http.StatusInternalServerError, problemDetail)
 		return
 	}
@@ -88,7 +88,7 @@ func HTTPPoliciesPolAssoIdUpdatePost(c *gin.Context) {
 			Status: http.StatusBadRequest,
 			Detail: problemDetail,
 		}
-		logger.AMpolicylog.Errorln(problemDetail)
+		logger.AmPolicyLog.Errorln(problemDetail)
 		c.JSON(http.StatusBadRequest, rsp)
 		return
 	}
@@ -100,7 +100,7 @@ func HTTPPoliciesPolAssoIdUpdatePost(c *gin.Context) {
 
 	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
 	if err != nil {
-		logger.AMpolicylog.Errorln(err)
+		logger.AmPolicyLog.Errorln(err)
 		problemDetails := models.ProblemDetails{
 			Status: http.StatusInternalServerError,
 			Cause:  "SYSTEM_FAILURE",
@@ -124,7 +124,7 @@ func HTTPPoliciesPost(c *gin.Context) {
 			Detail: err.Error(),
 			Cause:  "SYSTEM_FAILURE",
 		}
-		logger.AMpolicylog.Errorf("Get Request Body error: %+v", err)
+		logger.AmPolicyLog.Errorf("Get Request Body error: %+v", err)
 		c.JSON(http.StatusInternalServerError, problemDetail)
 		return
 	}
@@ -137,14 +137,14 @@ func HTTPPoliciesPost(c *gin.Context) {
 			Status: http.StatusBadRequest,
 			Detail: problemDetail,
 		}
-		logger.AMpolicylog.Errorln(problemDetail)
+		logger.AmPolicyLog.Errorln(problemDetail)
 		c.JSON(http.StatusBadRequest, rsp)
 		return
 	}
 
 	if policyAssociationRequest.Supi == "" || policyAssociationRequest.NotificationUri == "" {
 		rsp := util.GetProblemDetail("Miss Mandotory IE", util.ERROR_REQUEST_PARAMETERS)
-		logger.HandlerLog.Errorln(rsp.Detail)
+		logger.AmPolicyLog.Errorln(rsp.Detail)
 		c.JSON(int(rsp.Status), rsp)
 		return
 	}
@@ -160,7 +160,7 @@ func HTTPPoliciesPost(c *gin.Context) {
 
 	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
 	if err != nil {
-		logger.AMpolicylog.Errorln(err)
+		logger.AmPolicyLog.Errorln(err)
 		problemDetails := models.ProblemDetails{
 			Status: http.StatusInternalServerError,
 			Cause:  "SYSTEM_FAILURE",

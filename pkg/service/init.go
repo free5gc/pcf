@@ -1,23 +1,20 @@
 package service
 
 import (
-	"bufio"
 	"fmt"
+	"io/ioutil"
 	"os"
-	"os/exec"
 	"os/signal"
 	"runtime/debug"
-	"sync"
 	"syscall"
 
 	"github.com/antihax/optional"
 	"github.com/gin-contrib/cors"
 	"github.com/sirupsen/logrus"
-	"github.com/urfave/cli"
 
 	"github.com/free5gc/openapi/Nnrf_NFDiscovery"
 	"github.com/free5gc/openapi/models"
-	"github.com/free5gc/pcf/internal/context"
+	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/internal/sbi/ampolicy"
 	"github.com/free5gc/pcf/internal/sbi/bdtpolicy"
@@ -33,104 +30,65 @@ import (
 	logger_util "github.com/free5gc/util/logger"
 )
 
-type PCF struct {
-	KeyLogPath string
+type PcfApp struct {
+	cfg    *factory.Config
+	pcfCtx *pcf_context.PCFContext
 }
 
-type (
-	// Commands information.
-	Commands struct {
-		config string
-	}
-)
+func NewApp(cfg *factory.Config) (*PcfApp, error) {
+	pcf := &PcfApp{cfg: cfg}
+	pcf.SetLogEnable(cfg.GetLogEnable())
+	pcf.SetLogLevel(cfg.GetLogLevel())
+	pcf.SetReportCaller(cfg.GetLogReportCaller())
 
-var commands Commands
-
-var cliCmd = []cli.Flag{
-	cli.StringFlag{
-		Name:  "config, c",
-		Usage: "Load configuration from `FILE`",
-	},
-	cli.StringFlag{
-		Name:  "log, l",
-		Usage: "Output NF log to `FILE`",
-	},
-	cli.StringFlag{
-		Name:  "log5gc, lc",
-		Usage: "Output free5gc log to `FILE`",
-	},
+	pcf_context.Init()
+	pcf.pcfCtx = pcf_context.GetSelf()
+	return pcf, nil
 }
 
-func (*PCF) GetCliCmd() (flags []cli.Flag) {
-	return cliCmd
-}
-
-func (pcf *PCF) Initialize(c *cli.Context) error {
-	commands = Commands{
-		config: c.String("config"),
-	}
-
-	if commands.config != "" {
-		if err := factory.InitConfigFactory(commands.config); err != nil {
-			return err
-		}
-	} else {
-		if err := factory.InitConfigFactory(util.PcfDefaultConfigPath); err != nil {
-			return err
-		}
-	}
-
-	if err := factory.CheckConfigVersion(); err != nil {
-		return err
-	}
-
-	if _, err := factory.PcfConfig.Validate(); err != nil {
-		return err
-	}
-
-	pcf.SetLogLevel()
-
-	return nil
-}
-
-func (pcf *PCF) SetLogLevel() {
-	if factory.PcfConfig.Logger == nil {
-		logger.InitLog.Warnln("PCF config without log level setting!!!")
+func (a *PcfApp) SetLogEnable(enable bool) {
+	logger.MainLog.Infof("Log enable is set to [%v]", enable)
+	if enable && logger.Log.Out == os.Stderr {
+		return
+	} else if !enable && logger.Log.Out == ioutil.Discard {
 		return
 	}
 
-	if factory.PcfConfig.Logger.PCF != nil {
-		if factory.PcfConfig.Logger.PCF.DebugLevel != "" {
-			if level, err := logrus.ParseLevel(factory.PcfConfig.Logger.PCF.DebugLevel); err != nil {
-				logger.InitLog.Warnf("PCF Log level [%s] is invalid, set to [info] level",
-					factory.PcfConfig.Logger.PCF.DebugLevel)
-				logger.SetLogLevel(logrus.InfoLevel)
-			} else {
-				logger.InitLog.Infof("PCF Log level is set to [%s] level", level)
-				logger.SetLogLevel(level)
-			}
-		} else {
-			logger.InitLog.Infoln("PCF Log level is default set to [info] level")
-			logger.SetLogLevel(logrus.InfoLevel)
-		}
-		logger.SetReportCaller(factory.PcfConfig.Logger.PCF.ReportCaller)
+	a.cfg.SetLogEnable(enable)
+	if enable {
+		logger.Log.SetOutput(os.Stderr)
+	} else {
+		logger.Log.SetOutput(ioutil.Discard)
 	}
 }
 
-func (pcf *PCF) FilterCli(c *cli.Context) (args []string) {
-	for _, flag := range pcf.GetCliCmd() {
-		name := flag.GetName()
-		value := fmt.Sprint(c.Generic(name))
-		if value == "" {
-			continue
-		}
-
-		args = append(args, "--"+name, value)
+func (a *PcfApp) SetLogLevel(level string) {
+	lvl, err := logrus.ParseLevel(level)
+	if err != nil {
+		logger.MainLog.Warnf("Log level [%s] is invalid", level)
+		return
 	}
-	return args
+
+	logger.MainLog.Infof("Log level is set to [%s]", level)
+	if lvl == logger.Log.GetLevel() {
+		return
+	}
+
+	a.cfg.SetLogLevel(level)
+	logger.Log.SetLevel(lvl)
 }
 
-func (pcf *PCF) Start() {
+func (a *PcfApp) SetReportCaller(reportCaller bool) {
+	logger.MainLog.Infof("Report Caller is set to [%v]", reportCaller)
+	if reportCaller == logger.Log.ReportCaller {
+		return
+	}
+
+	a.cfg.SetLogReportCaller(reportCaller)
+	logger.Log.SetReportCaller(reportCaller)
+}
+
+func (a *PcfApp) Start(tlsKeyLogPath string) {
 	logger.InitLog.Infoln("Server started")
 	router := logger_util.NewGinWithLogrus(logger.GinLog)
 
@@ -154,16 +112,16 @@ func (pcf *PCF) Start() {
 		MaxAge:           86400,
 	}))
 
-	pemPath := util.PcfDefaultPemPath
-	keyPath := util.PcfDefaultKeyPath
+	pemPath := factory.PcfDefaultTLSPemPath
+	keyPath := factory.PcfDefaultTLSKeyPath
 	sbi := factory.PcfConfig.Configuration.Sbi
 	if sbi.Tls != nil {
 		pemPath = sbi.Tls.Pem
 		keyPath = sbi.Tls.Key
 	}
 
-	self := context.PCF_Self()
-	util.InitpcfContext(self)
+	self := a.pcfCtx
+	pcf_context.InitpcfContext(self)
 
 	addr := fmt.Sprintf("%s:%d", self.BindingIPv4, self.SBIPort)
 
@@ -202,11 +160,11 @@ func (pcf *PCF) Start() {
 		}()
 
 		<-signalChannel
-		pcf.Terminate()
+		a.Terminate()
 		os.Exit(0)
 	}()
 
-	server, err := httpwrapper.NewHttp2Server(addr, pcf.KeyLogPath, router)
+	server, err := httpwrapper.NewHttp2Server(addr, tlsKeyLogPath, router)
 	if server == nil {
 		logger.InitLog.Errorf("Initialize HTTP server failed: %+v", err)
 		return
@@ -228,75 +186,7 @@ func (pcf *PCF) Start() {
 	}
 }
 
-func (pcf *PCF) Exec(c *cli.Context) error {
-	logger.InitLog.Traceln("args:", c.String("pcfcfg"))
-	args := pcf.FilterCli(c)
-	logger.InitLog.Traceln("filter: ", args)
-	command := exec.Command("./pcf", args...)
-
-	stdout, err := command.StdoutPipe()
-	if err != nil {
-		logger.InitLog.Fatalln(err)
-	}
-	wg := sync.WaitGroup{}
-	wg.Add(4)
-	go func() {
-		defer func() {
-			if p := recover(); p != nil {
-				// Print stack for panic to log. Fatalf() will let program exit.
-				logger.InitLog.Fatalf("panic: %v\n%s", p, string(debug.Stack()))
-			}
-		}()
-
-		in := bufio.NewScanner(stdout)
-		for in.Scan() {
-			fmt.Println(in.Text())
-		}
-		wg.Done()
-	}()
-
-	stderr, err := command.StderrPipe()
-	if err != nil {
-		logger.InitLog.Fatalln(err)
-	}
-	go func() {
-		defer func() {
-			if p := recover(); p != nil {
-				// Print stack for panic to log. Fatalf() will let program exit.
-				logger.InitLog.Fatalf("panic: %v\n%s", p, string(debug.Stack()))
-			}
-		}()
-
-		in := bufio.NewScanner(stderr)
-		fmt.Println("PCF log start")
-		for in.Scan() {
-			fmt.Println(in.Text())
-		}
-		wg.Done()
-	}()
-
-	go func() {
-		defer func() {
-			if p := recover(); p != nil {
-				// Print stack for panic to log. Fatalf() will let program exit.
-				logger.InitLog.Fatalf("panic: %v\n%s", p, string(debug.Stack()))
-			}
-		}()
-
-		fmt.Println("PCF start")
-		if err = command.Start(); err != nil {
-			fmt.Printf("command.Start() error: %v", err)
-		}
-		fmt.Println("PCF end")
-		wg.Done()
-	}()
-
-	wg.Wait()
-
-	return err
-}
-
-func (pcf *PCF) Terminate() {
+func (a *PcfApp) Terminate() {
 	logger.InitLog.Infof("Terminating PCF...")
 	// deregister with NRF
 	problemDetails, err := consumer.SendDeregisterNFInstance()

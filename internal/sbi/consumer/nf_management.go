@@ -64,7 +64,7 @@ func SendRegisterNFInstance(nrfUri, nfInstanceId string, profile models.NfProfil
 		}
 		defer func() {
 			if resCloseErr := res.Body.Close(); resCloseErr != nil {
-				logger.Consumerlog.Errorf("RegisterNFInstance response body cannot close: %+v", resCloseErr)
+				logger.ConsumerLog.Errorf("RegisterNFInstance response body cannot close: %+v", resCloseErr)
 			}
 		}()
 		status := res.StatusCode
@@ -85,9 +85,9 @@ func SendRegisterNFInstance(nrfUri, nfInstanceId string, profile models.NfProfil
 }
 
 func SendDeregisterNFInstance() (problemDetails *models.ProblemDetails, err error) {
-	logger.Consumerlog.Infof("Send Deregister NFInstance")
+	logger.ConsumerLog.Infof("Send Deregister NFInstance")
 
-	pcfSelf := pcf_context.PCF_Self()
+	pcfSelf := pcf_context.GetSelf()
 	// Set client and set url
 	configuration := Nnrf_NFManagement.NewConfiguration()
 	configuration.SetBasePath(pcfSelf.NrfUri)
@@ -101,7 +101,7 @@ func SendDeregisterNFInstance() (problemDetails *models.ProblemDetails, err erro
 	} else if res != nil {
 		defer func() {
 			if resCloseErr := res.Body.Close(); resCloseErr != nil {
-				logger.Consumerlog.Errorf("DeregisterNFInstance response cannot close: %+v", resCloseErr)
+				logger.ConsumerLog.Errorf("DeregisterNFInstance response cannot close: %+v", resCloseErr)
 			}
 		}()
 		if res.Status != err.Error() {

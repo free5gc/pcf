@@ -2,6 +2,7 @@ package util
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/free5gc/openapi/models"
@@ -20,7 +21,7 @@ var MediaTypeTo5qiMap = map[models.MediaType]int32{
 
 // Create default pcc rule in PCF,
 // TODO: use config file to pass default pcc rule
-func CreateDefalutPccRules(id int32) *models.PccRule {
+func CreateDefaultPccRules(id int32) *models.PccRule {
 	flowInfo := []models.FlowInformation{
 		{
 			FlowDescription:   "permit out ip from any to assigned",
@@ -35,7 +36,7 @@ func CreateDefalutPccRules(id int32) *models.PccRule {
 			PackFiltId:        "PackFiltId-1",
 		},
 	}
-	return CreatePccRule(id, 10, flowInfo, "")
+	return CreatePccRule(id, 255, flowInfo, "")
 }
 
 // Get pcc rule Identity(PccRuleId-%d)
@@ -175,42 +176,109 @@ func GetPccRuleByFlowInfos(pccRules map[string]*models.PccRule, flowInfos []mode
 	return nil
 }
 
-func SetPccRuleRelatedData(decicion *models.SmPolicyDecision, pccRule *models.PccRule,
+func SetPccRuleRelatedByQFI(decision *models.SmPolicyDecision, pccRule *models.PccRule, qfi string) {
+	if decision.QosDecs == nil {
+		return
+	} else if qosFlow := decision.QosDecs[qfi]; qosFlow == nil {
+		return
+	}
+	pccRule.RefQosData = []string{qfi}
+	if decision.PccRules == nil {
+		decision.PccRules = make(map[string]*models.PccRule)
+	}
+	decision.PccRules[pccRule.PccRuleId] = pccRule
+}
+
+func SetPccRuleRelatedData(decision *models.SmPolicyDecision, pccRule *models.PccRule,
 	tcData *models.TrafficControlData, qosData *models.QosData, chgData *models.ChargingData,
 	umData *models.UsageMonitoringData,
 ) {
 	if tcData != nil {
-		if decicion.TraffContDecs == nil {
-			decicion.TraffContDecs = make(map[string]*models.TrafficControlData)
+		if decision.TraffContDecs == nil {
+			decision.TraffContDecs = make(map[string]*models.TrafficControlData)
 		}
-		decicion.TraffContDecs[tcData.TcId] = tcData
+		decision.TraffContDecs[tcData.TcId] = tcData
 		pccRule.RefTcData = []string{tcData.TcId}
 	}
 	if qosData != nil {
-		if decicion.QosDecs == nil {
-			decicion.QosDecs = make(map[string]*models.QosData)
+		if decision.QosDecs == nil {
+			decision.QosDecs = make(map[string]*models.QosData)
 		}
-		decicion.QosDecs[qosData.QosId] = qosData
+		decision.QosDecs[qosData.QosId] = qosData
 		pccRule.RefQosData = []string{qosData.QosId}
 	}
 	if chgData != nil {
-		if decicion.ChgDecs == nil {
-			decicion.ChgDecs = make(map[string]*models.ChargingData)
+		if decision.ChgDecs == nil {
+			decision.ChgDecs = make(map[string]*models.ChargingData)
 		}
-		decicion.ChgDecs[chgData.ChgId] = chgData
+		decision.ChgDecs[chgData.ChgId] = chgData
 		pccRule.RefChgData = []string{chgData.ChgId}
 	}
 	if umData != nil {
-		if decicion.UmDecs == nil {
-			decicion.UmDecs = make(map[string]*models.UsageMonitoringData)
+		if decision.UmDecs == nil {
+			decision.UmDecs = make(map[string]*models.UsageMonitoringData)
 		}
-		decicion.UmDecs[umData.UmId] = umData
+		decision.UmDecs[umData.UmId] = umData
 		pccRule.RefUmData = []string{umData.UmId}
 	}
 	if pccRule != nil {
-		if decicion.PccRules == nil {
-			decicion.PccRules = make(map[string]*models.PccRule)
+		if decision.PccRules == nil {
+			decision.PccRules = make(map[string]*models.PccRule)
 		}
-		decicion.PccRules[pccRule.PccRuleId] = pccRule
+		decision.PccRules[pccRule.PccRuleId] = pccRule
+	}
+}
+
+// SetSmPolicyDecisionByDefault with pcc rule and traffic control data
+func SetSmPolicyDecisionByDefault(decision *models.SmPolicyDecision, id int32) {
+	pccrule := CreateDefaultPccRules(id)
+	decision.PccRules[pccrule.PccRuleId] = pccrule
+}
+
+// Set SMpilicy decision with the PCC rule generated from the trafficInfluData
+func SetSmPolicyDecisionByTrafficInfluData(decision *models.SmPolicyDecision,
+	pccRule *models.PccRule, trafficInfluData models.TrafficInfluData,
+) {
+	tcData := convertToTrafficControlData(&trafficInfluData)
+	tcData.TcId = strings.ReplaceAll(pccRule.PccRuleId, "PccRuleId", "TcId")
+	flowInfos := convertToFlowinfos(&trafficInfluData)
+	pccRule.FlowInfos = flowInfos
+	SetPccRuleRelatedData(decision, pccRule, tcData, nil, nil, nil)
+}
+
+func convertToFlowinfos(trafficInfluData *models.TrafficInfluData) []models.FlowInformation {
+	flowInfos := []models.FlowInformation{}
+	for _, trafficFilters := range trafficInfluData.TrafficFilters {
+		for _, descriptions := range trafficFilters.FlowDescriptions {
+			flowInfomation := models.FlowInformation{
+				FlowDescription: descriptions,
+			}
+			flowInfos = append(flowInfos, flowInfomation)
+		}
+	}
+	return flowInfos
+}
+
+func convertToTrafficControlData(trafficInfluData *models.TrafficInfluData) *models.TrafficControlData {
+	var trafficControlData models.TrafficControlData
+	trafficControlData.RouteToLocs = trafficInfluData.TrafficRoutes
+	if isUpPathChgEventExist(trafficInfluData) {
+		trafficControlData.UpPathChgEvent = setUpPathChgEvent(trafficInfluData)
+	}
+	return &trafficControlData
+}
+
+func isUpPathChgEventExist(trafficInfluData *models.TrafficInfluData) bool {
+	return trafficInfluData.UpPathChgNotifCorreId != "" &&
+		trafficInfluData.UpPathChgNotifUri != "" &&
+		trafficInfluData.DnaiChgType != ""
+}
+
+//  subclause 4.2.6.2.6.2 in 3GPP TS 29.512.
+func setUpPathChgEvent(trafficInfluData *models.TrafficInfluData) *models.UpPathChgEvent {
+	return &models.UpPathChgEvent{
+		NotificationUri: trafficInfluData.UpPathChgNotifUri,
+		NotifCorreId:    trafficInfluData.UpPathChgNotifCorreId,
+		DnaiChgType:     trafficInfluData.DnaiChgType,
 	}
 }

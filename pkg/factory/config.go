@@ -7,59 +7,53 @@ package factory
 import (
 	"fmt"
 	"strconv"
+	"sync"
 
 	"github.com/asaskevich/govalidator"
 
-	logger_util "github.com/free5gc/util/logger"
+	"github.com/free5gc/pcf/internal/logger"
 )
 
 const (
-	PcfExpectedConfigVersion = "1.0.1"
-	PcfSbiDefaultIPv4        = "127.0.0.7"
-	PcfSbiDefaultPort        = 8000
-	PcfTimeFormatLayout      = "2006-01-02 15:04:05"
+	PcfTimeFormatLayout         = "2006-01-02 15:04:05"
+	PcfDefaultTLSKeyLogPath     = "./log/pcfsslkey.log"
+	PcfDefaultTLSPemPath        = "./config/TLS/pcf.pem"
+	PcfDefaultTLSKeyPath        = "./config/TLS/ausf.key"
+	PcfDefaultConfigPath        = "./config/pcfcfg.yaml"
+	PcfSbiDefaultIPv4           = "127.0.0.7"
+	PcfSbiDefaultPort           = 8000
+	PcfSbiDefaultScheme         = "https"
+	PcfDefaultNrfUri            = "https://127.0.0.10:8000"
+	PcfPolicyAuthResUriPrefix   = "/npcf-policyauthorization/v1"
+	PcfAMpolicyCtlResUriPrefix  = "/npcf-am-policy-control/v1"
+	PcfCallbackResUriPrefix     = "/npcf-callback/v1"
+	PcfSMpolicyCtlResUriPrefix  = "/npcf-smpolicycontrol/v1"
+	PcfBdtPolicyCtlResUriPrefix = "/npcf-bdtpolicycontrol/v1"
+	PcfOamResUriPrefix          = "/npcf-oam/v1"
+	PcfUePolicyCtlResUriPrefix  = "/npcf-ue-policy-control/v1/"
 )
 
 type Config struct {
-	Info          *Info               `yaml:"info" valid:"required"`
-	Configuration *Configuration      `yaml:"configuration" valid:"required"`
-	Logger        *logger_util.Logger `yaml:"logger" valid:"required"`
+	Info          *Info          `yaml:"info" valid:"required"`
+	Configuration *Configuration `yaml:"configuration" valid:"required"`
+	Logger        *Logger        `yaml:"logger" valid:"required"`
+	sync.RWMutex
 }
 
 func (c *Config) Validate() (bool, error) {
-	info := c.Info
-	if _, err := info.validate(); err != nil {
-		return false, err
+	if configuration := c.Configuration; configuration != nil {
+		if result, err := configuration.validate(); err != nil {
+			return result, err
+		}
 	}
 
-	Configuration := c.Configuration
-	if _, err := Configuration.validate(); err != nil {
-		return false, err
-	}
-
-	Logger := c.Logger
-	if _, err := Logger.Validate(); err != nil {
-		return false, err
-	}
-
-	if _, err := govalidator.ValidateStruct(c); err != nil {
-		return false, appendInvalid(err)
-	}
-
-	return true, nil
+	result, err := govalidator.ValidateStruct(c)
+	return result, appendInvalid(err)
 }
 
 type Info struct {
-	Version     string `yaml:"version,omitempty" valid:"required"`
-	Description string `yaml:"description,omitempty" valid:"-"`
-}
-
-func (i *Info) validate() (bool, error) {
-	if _, err := govalidator.ValidateStruct(i); err != nil {
-		return false, appendInvalid(err)
-	}
-
-	return true, nil
+	Version     string `yaml:"version,omitempty" valid:"required,in(1.0.2)"`
+	Description string `yaml:"description,omitempty" valid:"type(string)"`
 }
 
 type Configuration struct {
@@ -71,6 +65,12 @@ type Configuration struct {
 	ServiceList     []Service `yaml:"serviceList,omitempty" valid:"required"`
 	Mongodb         *Mongodb  `yaml:"mongodb" valid:"required"`
 	Locality        string    `yaml:"locality,omitempty" valid:"-"`
+}
+
+type Logger struct {
+	Enable       bool   `yaml:"enable" valid:"type(bool)"`
+	Level        string `yaml:"level" valid:"required,in(trace|debug|info|warn|error|fatal|panic)"`
+	ReportCaller bool   `yaml:"reportCaller" valid:"type(bool)"`
 }
 
 func (c *Configuration) validate() (bool, error) {
@@ -214,6 +214,10 @@ func (m *Mongodb) validate() (bool, error) {
 func appendInvalid(err error) error {
 	var errs govalidator.Errors
 
+	if err == nil {
+		return nil
+	}
+
 	es := err.(govalidator.Errors).Errors()
 	for _, e := range es {
 		errs = append(errs, fmt.Errorf("Invalid %w", e))
@@ -223,8 +227,85 @@ func appendInvalid(err error) error {
 }
 
 func (c *Config) GetVersion() string {
-	if c.Info != nil && c.Info.Version != "" {
+	c.RLock()
+	defer c.RUnlock()
+
+	if c.Info.Version != "" {
 		return c.Info.Version
 	}
 	return ""
+}
+
+func (c *Config) SetLogEnable(enable bool) {
+	c.Lock()
+	defer c.Unlock()
+
+	if c.Logger == nil {
+		logger.CfgLog.Warnf("Logger should not be nil")
+		c.Logger = &Logger{
+			Enable: enable,
+			Level:  "info",
+		}
+	} else {
+		c.Logger.Enable = enable
+	}
+}
+
+func (c *Config) SetLogLevel(level string) {
+	c.Lock()
+	defer c.Unlock()
+
+	if c.Logger == nil {
+		logger.CfgLog.Warnf("Logger should not be nil")
+		c.Logger = &Logger{
+			Level: level,
+		}
+	} else {
+		c.Logger.Level = level
+	}
+}
+
+func (c *Config) SetLogReportCaller(reportCaller bool) {
+	c.Lock()
+	defer c.Unlock()
+
+	if c.Logger == nil {
+		logger.CfgLog.Warnf("Logger should not be nil")
+		c.Logger = &Logger{
+			Level:        "info",
+			ReportCaller: reportCaller,
+		}
+	} else {
+		c.Logger.ReportCaller = reportCaller
+	}
+}
+
+func (c *Config) GetLogEnable() bool {
+	c.RLock()
+	defer c.RUnlock()
+	if c.Logger == nil {
+		logger.CfgLog.Warnf("Logger should not be nil")
+		return false
+	}
+	return c.Logger.Enable
+}
+
+func (c *Config) GetLogLevel() string {
+	c.RLock()
+	defer c.RUnlock()
+	if c.Logger == nil {
+		logger.CfgLog.Warnf("Logger should not be nil")
+		return "info"
+	}
+	return c.Logger.Level
+}
+
+func (c *Config) GetLogReportCaller() bool {
+	c.RLock()
+	defer c.RUnlock()
+	if c.Logger == nil {
+		logger.CfgLog.Warnf("Logger should not be nil")
+		return false
+	}
+	return c.Logger.ReportCaller
 }
