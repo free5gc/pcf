@@ -112,8 +112,8 @@ func (a *PcfApp) Start(tlsKeyLogPath string) {
 		MaxAge:           86400,
 	}))
 
-	pemPath := factory.PcfDefaultTLSPemPath
-	keyPath := factory.PcfDefaultTLSKeyPath
+	pemPath := factory.PcfDefaultCertPemPath
+	keyPath := factory.PcfDefaultPrivateKeyPath
 	sbi := factory.PcfConfig.Configuration.Sbi
 	if sbi.Tls != nil {
 		pemPath = sbi.Tls.Pem

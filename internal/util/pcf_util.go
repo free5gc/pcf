@@ -21,14 +21,6 @@ import (
 
 const TimeFormat = time.RFC3339
 
-// Path of HTTP2 key and log file
-const (
-	PcfDefaultKeyLogPath = "./log/pcfsslkey.log"
-	PcfDefaultPemPath    = "./config/TLS/pcf.pem"
-	PcfDefaultKeyPath    = "./config/TLS/pcf.key"
-	PcfDefaultConfigPath = "./config/pcfcfg.yaml"
-)
-
 var (
 	PCF_BASIC_PATH                               = "https://localhost:29507"
 	ERROR_REQUEST_PARAMETERS                     = "ERROR_REQUEST_PARAMETERS"

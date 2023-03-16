@@ -17,8 +17,8 @@ import (
 const (
 	PcfTimeFormatLayout         = "2006-01-02 15:04:05"
 	PcfDefaultTLSKeyLogPath     = "./log/pcfsslkey.log"
-	PcfDefaultTLSPemPath        = "./config/TLS/pcf.pem"
-	PcfDefaultTLSKeyPath        = "./config/TLS/ausf.key"
+	PcfDefaultCertPemPath       = "./cert/pcf.pem"
+	PcfDefaultPrivateKeyPath    = "./cert/pcf.key"
 	PcfDefaultConfigPath        = "./config/pcfcfg.yaml"
 	PcfSbiDefaultIPv4           = "127.0.0.7"
 	PcfSbiDefaultPort           = 8000
