@@ -29,12 +29,12 @@ func CreateDefaultPccRules(id int32) *models.PccRule {
 			PacketFilterUsage: true,
 			PackFiltId:        "PackFiltId-0",
 		},
-		{
-			FlowDescription:   "permit out ip from any to assigned",
-			FlowDirection:     models.FlowDirectionRm_DOWNLINK,
-			PacketFilterUsage: true,
-			PackFiltId:        "PackFiltId-1",
-		},
+		// {
+		// 	FlowDescription:   "permit out ip from any to assigned",
+		// 	FlowDirection:     models.FlowDirectionRm_DOWNLINK,
+		// 	PacketFilterUsage: true,
+		// 	PackFiltId:        "PackFiltId-1",
+		// },
 	}
 	return CreatePccRule(id, 255, flowInfo, "")
 }

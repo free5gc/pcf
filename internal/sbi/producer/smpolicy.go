@@ -16,6 +16,7 @@ import (
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/internal/sbi/consumer"
 	"github.com/free5gc/pcf/internal/util"
+	"github.com/free5gc/util/flowdesc"
 	"github.com/free5gc/util/httpwrapper"
 	"github.com/free5gc/util/mongoapi"
 )
@@ -23,6 +24,7 @@ import (
 const (
 	flowRuleDataColl = "policyData.ues.flowRule"
 	qosFlowDataColl  = "policyData.ues.qosFlow"
+	chargingDataColl = "chargingData"
 )
 
 // SmPoliciesPost -
@@ -227,17 +229,112 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 		logger.SmPolicyLog.Errorf("createSMPolicyProcedure error: %+v", err)
 	}
 
+	filterCharging := bson.M{"ueId": ue.Supi, "default": true}
+	ChargingInterface, err := mongoapi.RestfulAPIGetOne(chargingDataColl, filterCharging)
+	if err != nil {
+		logger.SmPolicyLog.Errorf("Fail to get charging data to mongoDB err: %+v", err)
+	}
+
+	pcc := util.CreateDefaultPccRules(smPolicyData.PccRuleIdGenerator)
+	chgData := &models.ChargingData{
+		ChgId:          util.GetChgId(smPolicyData.ChargingIdGenerator),
+		RatingGroup:    smPolicyData.RatingGroupIdGenerator,
+		ReportingLevel: models.ReportingLevel_RAT_GR_LEVEL,
+		MeteringMethod: models.MeteringMethod_VOLUME,
+	}
+
+	switch ChargingInterface["chargingMethod"].(string) {
+	case "Online":
+		chgData.Online = true
+	case "Offline":
+		chgData.Offline = true
+	}
+	util.SetPccRuleRelatedData(&decision, pcc, nil, nil, chgData, nil)
+
+	chargingBsonM := bson.M{
+		"ratingGroup": chgData.RatingGroup,
+	}
+	if _, err := mongoapi.RestfulAPIPutOne(chargingDataColl, filterCharging, chargingBsonM); err != nil {
+		logger.SmPolicyLog.Errorf("Fail to put charging data to mongoDB err: %+v", err)
+	}
+
+	smPolicyData.PccRuleIdGenerator++
+	smPolicyData.ChargingIdGenerator++
+	smPolicyData.RatingGroupIdGenerator++
+
 	for _, flowRule := range flowRulesInterface {
-		precedence := int32(flowRule["precedence"].(float64))
-		pccRule := util.CreatePccRule(smPolicyData.PccRuleIdGenerator, precedence, []models.FlowInformation{
-			{
-				FlowDescription: flowRule["filter"].(string),
-				FlowDirection:   models.FlowDirectionRm_BIDIRECTIONAL,
-			},
-		}, "")
-		qfi := strconv.Itoa(int(flowRule["qfi"].(float64)))
-		util.SetPccRuleRelatedByQFI(&decision, pccRule, qfi)
-		smPolicyData.PccRuleIdGenerator++
+		// precedence := int32(flowRule["precedence"].(float64))
+		if val, ok := flowRule["filter"].(string); ok {
+			dest := strings.Split(val, " ")
+
+			FlowDespcription := flowdesc.NewIPFilterRule()
+
+			FlowDespcription.Action = flowdesc.Permit
+			FlowDespcription.Dir = flowdesc.Out
+			FlowDespcription.Src = dest[0]
+
+			if len(dest) > 1 {
+				port, _ := strconv.Atoi(dest[1])
+				FlowDespcription.SrcPorts = flowdesc.PortRanges{
+					flowdesc.PortRange{
+						Start: uint16(port),
+						End:   uint16(port),
+					},
+				}
+			}
+
+			FlowDespcriptionStr, err := flowdesc.Encode(FlowDespcription)
+			if err != nil {
+				logger.SmPolicyLog.Errorf("Error occurs when encoding flow despcription: %s\n", err)
+			}
+
+			pccRule := util.CreatePccRule(smPolicyData.PccRuleIdGenerator, 33, []models.FlowInformation{
+				{
+					FlowDescription: FlowDespcriptionStr,
+					FlowDirection:   models.FlowDirectionRm_DOWNLINK,
+				},
+			}, "")
+			// qfi := strconv.Itoa(int(flowRule["qfi"].(float64)))
+			// util.SetPccRuleRelatedByQFI(&decision, pccRule, qfi)
+
+			chgRef := flowRule["dnn"].(string) + flowRule["snssai"].(string) + flowRule["filter"].(string)
+			filterCharging := bson.M{"ueId": ue.Supi, "default": false, "ChgRef": chgRef}
+			ChargingInterface, err := mongoapi.RestfulAPIGetOne(chargingDataColl, filterCharging)
+			if err != nil {
+				logger.SmPolicyLog.Errorf("Fail to get charging data to mongoDB err: %+v", err)
+			}
+
+			chgData := &models.ChargingData{
+				ChgId:          util.GetChgId(smPolicyData.ChargingIdGenerator),
+				RatingGroup:    smPolicyData.RatingGroupIdGenerator,
+				ReportingLevel: models.ReportingLevel_RAT_GR_LEVEL,
+				MeteringMethod: models.MeteringMethod_VOLUME,
+			}
+
+			switch ChargingInterface["chargingMethod"].(string) {
+			case "Online":
+				chgData.Online = true
+			case "Offline":
+				chgData.Offline = true
+			}
+
+			if decision.ChgDecs == nil {
+				decision.ChgDecs = make(map[string]*models.ChargingData)
+			}
+
+			util.SetPccRuleRelatedData(&decision, pccRule, nil, nil, chgData, nil)
+
+			chargingBsonM := bson.M{
+				"ratingGroup": chgData.RatingGroup,
+			}
+			if _, err := mongoapi.RestfulAPIPutOne(chargingDataColl, filterCharging, chargingBsonM); err != nil {
+				logger.SmPolicyLog.Errorf("Fail to put charging data to mongoDB err: %+v", err)
+			}
+
+			smPolicyData.PccRuleIdGenerator++
+			smPolicyData.ChargingIdGenerator++
+			smPolicyData.RatingGroupIdGenerator++
+		}
 	}
 
 	requestSuppFeat, err := openapi.NewSupportedFeature(request.SuppFeat)
