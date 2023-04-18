@@ -24,7 +24,7 @@ import (
 const (
 	flowRuleDataColl = "policyData.ues.flowRule"
 	qosFlowDataColl  = "policyData.ues.qosFlow"
-	chargingDataColl = "chargingData"
+	chargingDataColl = "chargingDatas"
 )
 
 // SmPoliciesPost -
@@ -229,8 +229,8 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 		logger.SmPolicyLog.Errorf("createSMPolicyProcedure error: %+v", err)
 	}
 
-	filterCharging := bson.M{"ueId": ue.Supi, "default": true}
-	ChargingInterface, err := mongoapi.RestfulAPIGetOne(chargingDataColl, filterCharging)
+	filterCharging := bson.M{"ueId": ue.Supi, "chgRef": util.SnssaiModelsToHex(*request.SliceInfo)}
+	chargingInterface, err := mongoapi.RestfulAPIGetOne(chargingDataColl, filterCharging)
 	if err != nil {
 		logger.SmPolicyLog.Errorf("Fail to get charging data to mongoDB err: %+v", err)
 	}
@@ -243,10 +243,12 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 		MeteringMethod: models.MeteringMethod_VOLUME,
 	}
 
-	switch ChargingInterface["chargingMethod"].(string) {
+	switch chargingInterface["chargingMethod"].(string) {
 	case "Online":
 		chgData.Online = true
+		chgData.Offline = false
 	case "Offline":
+		chgData.Online = false
 		chgData.Offline = true
 	}
 	util.SetPccRuleRelatedData(&decision, pcc, nil, nil, chgData, nil)
@@ -297,9 +299,9 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 			// qfi := strconv.Itoa(int(flowRule["qfi"].(float64)))
 			// util.SetPccRuleRelatedByQFI(&decision, pccRule, qfi)
 
-			chgRef := flowRule["dnn"].(string) + flowRule["snssai"].(string) + flowRule["filter"].(string)
-			filterCharging := bson.M{"ueId": ue.Supi, "default": false, "ChgRef": chgRef}
-			ChargingInterface, err := mongoapi.RestfulAPIGetOne(chargingDataColl, filterCharging)
+			chgRef := flowRule["snssai"].(string) + "_" + flowRule["dnn"].(string) + "_" + flowRule["filter"].(string)
+			filterCharging := bson.M{"ueId": ue.Supi, "chgRef": chgRef}
+			chargingInterface, err := mongoapi.RestfulAPIGetOne(chargingDataColl, filterCharging)
 			if err != nil {
 				logger.SmPolicyLog.Errorf("Fail to get charging data to mongoDB err: %+v", err)
 			}
@@ -311,10 +313,12 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 				MeteringMethod: models.MeteringMethod_VOLUME,
 			}
 
-			switch ChargingInterface["chargingMethod"].(string) {
+			switch chargingInterface["chargingMethod"].(string) {
 			case "Online":
 				chgData.Online = true
+				chgData.Offline = false
 			case "Offline":
+				chgData.Online = false
 				chgData.Offline = true
 			}
 
