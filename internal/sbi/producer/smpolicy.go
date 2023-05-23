@@ -24,7 +24,7 @@ import (
 const (
 	flowRuleDataColl = "policyData.ues.flowRule"
 	qosFlowDataColl  = "policyData.ues.qosFlow"
-	chargingDataColl = "chargingDatas"
+	chargingDataColl = "policyData.ues.chargingData"
 )
 
 // SmPoliciesPost -
@@ -229,7 +229,7 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 		logger.SmPolicyLog.Errorf("createSMPolicyProcedure error: %+v", err)
 	}
 
-	filterCharging := bson.M{"ueId": ue.Supi, "chgRef": util.SnssaiModelsToHex(*request.SliceInfo)}
+	filterCharging := bson.M{"ueId": ue.Supi, "snssai": util.SnssaiModelsToHex(*request.SliceInfo), "level": "pdu"}
 	chargingInterface, err := mongoapi.RestfulAPIGetOne(chargingDataColl, filterCharging)
 	if err != nil {
 		logger.SmPolicyLog.Errorf("Fail to get charging data to mongoDB err: %+v", err)
@@ -299,8 +299,7 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 			// qfi := strconv.Itoa(int(flowRule["qfi"].(float64)))
 			// util.SetPccRuleRelatedByQFI(&decision, pccRule, qfi)
 
-			chgRef := flowRule["snssai"].(string) + "_" + flowRule["dnn"].(string) + "_" + flowRule["filter"].(string)
-			filterCharging := bson.M{"ueId": ue.Supi, "chgRef": chgRef}
+			filterCharging := bson.M{"ueId": ue.Supi, "snssai": util.SnssaiModelsToHex(*request.SliceInfo), "dnn": request.Dnn, "filter": val, "level": "flow"}
 			chargingInterface, err := mongoapi.RestfulAPIGetOne(chargingDataColl, filterCharging)
 			if err != nil {
 				logger.SmPolicyLog.Errorf("Fail to get charging data to mongoDB err: %+v", err)
