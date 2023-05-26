@@ -229,11 +229,12 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 		logger.SmPolicyLog.Errorf("createSMPolicyProcedure error: %+v", err)
 	}
 
-	filterCharging := bson.M{"ueId": ue.Supi, "snssai": util.SnssaiModelsToHex(*request.SliceInfo), "level": "pdu"}
+	filterCharging := bson.M{"ueId": ue.Supi, "snssai": util.SnssaiModelsToHex(*request.SliceInfo), "dnn": "", "filter": ""}
 	chargingInterface, err := mongoapi.RestfulAPIGetOne(chargingDataColl, filterCharging)
 	if err != nil {
 		logger.SmPolicyLog.Errorf("Fail to get charging data to mongoDB err: %+v", err)
 	}
+	logger.SmPolicyLog.Errorf("chargingInterface %+v", chargingInterface)
 
 	pcc := util.CreateDefaultPccRules(smPolicyData.PccRuleIdGenerator)
 	chgData := &models.ChargingData{
@@ -299,7 +300,7 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 			// qfi := strconv.Itoa(int(flowRule["qfi"].(float64)))
 			// util.SetPccRuleRelatedByQFI(&decision, pccRule, qfi)
 
-			filterCharging := bson.M{"ueId": ue.Supi, "snssai": util.SnssaiModelsToHex(*request.SliceInfo), "dnn": request.Dnn, "filter": val, "level": "flow"}
+			filterCharging := bson.M{"ueId": ue.Supi, "snssai": util.SnssaiModelsToHex(*request.SliceInfo), "dnn": request.Dnn, "filter": val}
 			chargingInterface, err := mongoapi.RestfulAPIGetOne(chargingDataColl, filterCharging)
 			if err != nil {
 				logger.SmPolicyLog.Errorf("Fail to get charging data to mongoDB err: %+v", err)
