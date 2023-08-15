@@ -177,12 +177,10 @@ func GetPccRuleByFlowInfos(pccRules map[string]*models.PccRule, flowInfos []mode
 }
 
 func SetPccRuleRelatedByQFI(decision *models.SmPolicyDecision, pccRule *models.PccRule, qfi string) {
-	if decision.QosDecs == nil {
-		return
-	} else if qosFlow := decision.QosDecs[qfi]; qosFlow == nil {
+	if decision.QosDecs == nil || decision.QosDecs[qfi] == nil {
 		return
 	}
-	pccRule.RefQosData = []string{qfi}
+	pccRule.RefQosData = append(pccRule.RefQosData, qfi)
 	if decision.PccRules == nil {
 		decision.PccRules = make(map[string]*models.PccRule)
 	}

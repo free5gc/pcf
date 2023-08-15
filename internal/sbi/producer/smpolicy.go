@@ -229,12 +229,12 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 		logger.SmPolicyLog.Errorf("createSMPolicyProcedure error: %+v", err)
 	}
 
-	filterCharging := bson.M{"ueId": ue.Supi, "snssai": util.SnssaiModelsToHex(*request.SliceInfo), "dnn": "", "filter": ""}
+	filterCharging := bson.M{"ueId": ue.Supi, "snssai": util.SnssaiModelsToHex(*request.SliceInfo)}
 	chargingInterface, err := mongoapi.RestfulAPIGetOne(chargingDataColl, filterCharging)
 	if err != nil {
 		logger.SmPolicyLog.Errorf("Fail to get charging data to mongoDB err: %+v", err)
+		logger.SmPolicyLog.Errorf("chargingInterface %+v", chargingInterface)
 	}
-	logger.SmPolicyLog.Errorf("chargingInterface %+v", chargingInterface)
 
 	pcc := util.CreateDefaultPccRules(smPolicyData.PccRuleIdGenerator)
 	chgData := &models.ChargingData{
@@ -297,47 +297,46 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 					FlowDirection:   models.FlowDirectionRm_DOWNLINK,
 				},
 			}, "")
-			// qfi := strconv.Itoa(int(flowRule["qfi"].(float64)))
-			// util.SetPccRuleRelatedByQFI(&decision, pccRule, qfi)
 
 			filterCharging := bson.M{"ueId": ue.Supi, "snssai": util.SnssaiModelsToHex(*request.SliceInfo), "dnn": request.Dnn, "filter": val}
 			chargingInterface, err := mongoapi.RestfulAPIGetOne(chargingDataColl, filterCharging)
 			if err != nil {
 				logger.SmPolicyLog.Errorf("Fail to get charging data to mongoDB err: %+v", err)
+			} else {
+				chgData := &models.ChargingData{
+					ChgId:          util.GetChgId(smPolicyData.ChargingIdGenerator),
+					RatingGroup:    smPolicyData.RatingGroupIdGenerator,
+					ReportingLevel: models.ReportingLevel_RAT_GR_LEVEL,
+					MeteringMethod: models.MeteringMethod_VOLUME,
+				}
+	
+				switch chargingInterface["chargingMethod"].(string) {
+				case "Online":
+					chgData.Online = true
+					chgData.Offline = false
+				case "Offline":
+					chgData.Online = false
+					chgData.Offline = true
+				}
+	
+				if decision.ChgDecs == nil {
+					decision.ChgDecs = make(map[string]*models.ChargingData)
+				}
+	
+				chargingBsonM := bson.M{
+					"ratingGroup": chgData.RatingGroup,
+				}
+				if _, err := mongoapi.RestfulAPIPutOne(chargingDataColl, filterCharging, chargingBsonM); err != nil {
+					logger.SmPolicyLog.Errorf("Fail to put charging data to mongoDB err: %+v", err)
+				} else {
+					util.SetPccRuleRelatedData(&decision, pccRule, nil, nil, chgData, nil)
+					smPolicyData.ChargingIdGenerator++
+					smPolicyData.RatingGroupIdGenerator++
+				}
 			}
-
-			chgData := &models.ChargingData{
-				ChgId:          util.GetChgId(smPolicyData.ChargingIdGenerator),
-				RatingGroup:    smPolicyData.RatingGroupIdGenerator,
-				ReportingLevel: models.ReportingLevel_RAT_GR_LEVEL,
-				MeteringMethod: models.MeteringMethod_VOLUME,
-			}
-
-			switch chargingInterface["chargingMethod"].(string) {
-			case "Online":
-				chgData.Online = true
-				chgData.Offline = false
-			case "Offline":
-				chgData.Online = false
-				chgData.Offline = true
-			}
-
-			if decision.ChgDecs == nil {
-				decision.ChgDecs = make(map[string]*models.ChargingData)
-			}
-
-			util.SetPccRuleRelatedData(&decision, pccRule, nil, nil, chgData, nil)
-
-			chargingBsonM := bson.M{
-				"ratingGroup": chgData.RatingGroup,
-			}
-			if _, err := mongoapi.RestfulAPIPutOne(chargingDataColl, filterCharging, chargingBsonM); err != nil {
-				logger.SmPolicyLog.Errorf("Fail to put charging data to mongoDB err: %+v", err)
-			}
-
+			qfi := strconv.Itoa(int(flowRule["qfi"].(float64)))
+			util.SetPccRuleRelatedByQFI(&decision, pccRule, qfi)
 			smPolicyData.PccRuleIdGenerator++
-			smPolicyData.ChargingIdGenerator++
-			smPolicyData.RatingGroupIdGenerator++
 		}
 	}
 
