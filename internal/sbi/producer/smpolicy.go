@@ -257,7 +257,7 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 	chargingBsonM := bson.M{
 		"ratingGroup": chgData.RatingGroup,
 	}
-	if _, err := mongoapi.RestfulAPIPutOne(chargingDataColl, filterCharging, chargingBsonM); err != nil {
+	if _, err = mongoapi.RestfulAPIPutOne(chargingDataColl, filterCharging, chargingBsonM); err != nil {
 		logger.SmPolicyLog.Errorf("Fail to put charging data to mongoDB err: %+v", err)
 	}
 
@@ -277,16 +277,22 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 			FlowDespcription.Src = dest[0]
 
 			if len(dest) > 1 {
-				port, _ := strconv.Atoi(dest[1])
-				FlowDespcription.SrcPorts = flowdesc.PortRanges{
-					flowdesc.PortRange{
-						Start: uint16(port),
-						End:   uint16(port),
-					},
+				var port int
+				port, err = strconv.Atoi(dest[1])
+				if err != nil {
+					logger.SmPolicyLog.Errorf("Atoi error: %v", err)
+				} else {
+					FlowDespcription.SrcPorts = flowdesc.PortRanges{
+						flowdesc.PortRange{
+							Start: uint16(port),
+							End:   uint16(port),
+						},
+					}
 				}
 			}
 
-			FlowDespcriptionStr, err := flowdesc.Encode(FlowDespcription)
+			var FlowDespcriptionStr string
+			FlowDespcriptionStr, err = flowdesc.Encode(FlowDespcription)
 			if err != nil {
 				logger.SmPolicyLog.Errorf("Error occurs when encoding flow despcription: %s\n", err)
 			}
@@ -298,8 +304,12 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 				},
 			}, "")
 
-			filterCharging := bson.M{"ueId": ue.Supi, "snssai": util.SnssaiModelsToHex(*request.SliceInfo), "dnn": request.Dnn, "filter": val}
-			chargingInterface, err := mongoapi.RestfulAPIGetOne(chargingDataColl, filterCharging)
+			filterCharging := bson.M{
+				"ueId": ue.Supi, "snssai": util.SnssaiModelsToHex(*request.SliceInfo),
+				"dnn": request.Dnn, "filter": val,
+			}
+			var chargingInterface map[string]interface{}
+			chargingInterface, err = mongoapi.RestfulAPIGetOne(chargingDataColl, filterCharging)
 			if err != nil {
 				logger.SmPolicyLog.Errorf("Fail to get charging data to mongoDB err: %+v", err)
 			} else {
@@ -309,7 +319,7 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 					ReportingLevel: models.ReportingLevel_RAT_GR_LEVEL,
 					MeteringMethod: models.MeteringMethod_VOLUME,
 				}
-	
+
 				switch chargingInterface["chargingMethod"].(string) {
 				case "Online":
 					chgData.Online = true
@@ -318,15 +328,15 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 					chgData.Online = false
 					chgData.Offline = true
 				}
-	
+
 				if decision.ChgDecs == nil {
 					decision.ChgDecs = make(map[string]*models.ChargingData)
 				}
-	
+
 				chargingBsonM := bson.M{
 					"ratingGroup": chgData.RatingGroup,
 				}
-				if _, err := mongoapi.RestfulAPIPutOne(chargingDataColl, filterCharging, chargingBsonM); err != nil {
+				if _, err = mongoapi.RestfulAPIPutOne(chargingDataColl, filterCharging, chargingBsonM); err != nil {
 					logger.SmPolicyLog.Errorf("Fail to put charging data to mongoDB err: %+v", err)
 				} else {
 					util.SetPccRuleRelatedData(&decision, pccRule, nil, nil, chgData, nil)
