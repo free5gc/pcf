@@ -239,7 +239,7 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 		logger.SmPolicyLog.Errorf("chargingInterface %+v", chargingInterface)
 		util.SetPccRuleRelatedData(&decision, pcc, nil, nil, nil, nil)
 	} else {
-			chgData := &models.ChargingData{
+		chgData := &models.ChargingData{
 			ChgId:          util.GetChgId(smPolicyData.ChargingIdGenerator),
 			RatingGroup:    smPolicyData.RatingGroupIdGenerator,
 			ReportingLevel: models.ReportingLevel_RAT_GR_LEVEL,
