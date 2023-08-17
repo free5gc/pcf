@@ -238,7 +238,7 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 		logger.SmPolicyLog.Errorf("Fail to get charging data to mongoDB err: %+v", err)
 		logger.SmPolicyLog.Errorf("chargingInterface %+v", chargingInterface)
 		util.SetPccRuleRelatedData(&decision, pcc, nil, nil, nil, nil)
-	} else {
+	} else if chargingInterface != nil {
 		chgData := &models.ChargingData{
 			ChgId:          util.GetChgId(smPolicyData.ChargingIdGenerator),
 			RatingGroup:    smPolicyData.RatingGroupIdGenerator,
