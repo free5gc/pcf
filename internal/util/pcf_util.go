@@ -159,6 +159,7 @@ func GetSMPolicyDnnData(data models.SmPolicyData, snssai *models.Snssai, dnn str
 			return
 		}
 	}
+
 	return
 }
 
