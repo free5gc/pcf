@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/free5gc/openapi/Namf_Communication"
@@ -145,8 +146,11 @@ func GetSMPolicyDnnData(data models.SmPolicyData, snssai *models.Snssai, dnn str
 	if snssai == nil || dnn == "" || data.SmPolicySnssaiData == nil {
 		return
 	}
-	snssaiString := SnssaiModelsToHex(*snssai)
-	if snssaiData, exist := data.SmPolicySnssaiData[snssaiString]; exist {
+	sstSd := SnssaiModelsToHex(*snssai)
+	for cmpSstSd, snssaiData := range data.SmPolicySnssaiData {
+		if !strings.EqualFold(cmpSstSd, sstSd) {
+			continue
+		}
 		if snssaiData.SmPolicyDnnData == nil {
 			return
 		}
@@ -155,6 +159,7 @@ func GetSMPolicyDnnData(data models.SmPolicyData, snssai *models.Snssai, dnn str
 			return
 		}
 	}
+
 	return
 }
 
