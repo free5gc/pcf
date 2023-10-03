@@ -146,9 +146,9 @@ func GetSMPolicyDnnData(data models.SmPolicyData, snssai *models.Snssai, dnn str
 	if snssai == nil || dnn == "" || data.SmPolicySnssaiData == nil {
 		return
 	}
-	sstSd := SnssaiModelsToHex(*snssai)
-	for cmpSstSd, snssaiData := range data.SmPolicySnssaiData {
-		if !strings.EqualFold(cmpSstSd, sstSd) {
+	snssaiStr := SnssaiModelsToHex(*snssai)
+	for key, snssaiData := range data.SmPolicySnssaiData {
+		if !strings.EqualFold(key, snssaiStr) {
 			continue
 		}
 		if snssaiData.SmPolicyDnnData == nil {
@@ -159,7 +159,6 @@ func GetSMPolicyDnnData(data models.SmPolicyData, snssai *models.Snssai, dnn str
 			return
 		}
 	}
-
 	return
 }
 
