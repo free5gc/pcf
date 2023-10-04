@@ -176,7 +176,7 @@ func GetPccRuleByFlowInfos(pccRules map[string]*models.PccRule, flowInfos []mode
 	return nil
 }
 
-func SetPccRuleRelatedByQFI(decision *models.SmPolicyDecision, pccRule *models.PccRule, qfi string) {
+func SetPccRuleRelatedByQosRef(decision *models.SmPolicyDecision, pccRule *models.PccRule, qfi string) {
 	if decision.QosDecs == nil || decision.QosDecs[qfi] == nil {
 		return
 	}

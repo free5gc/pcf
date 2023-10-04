@@ -1,6 +1,7 @@
 package producer
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -50,7 +51,7 @@ func HandleCreateSmPolicyRequest(request *httpwrapper.Request) *httpwrapper.Resp
 
 func newQosDataWithQosFlowMap(qosFlow map[string]interface{}) *models.QosData {
 	qosData := &models.QosData{
-		QosId:  strconv.Itoa(int(qosFlow["qfi"].(float64))),
+		QosId:  strconv.Itoa(int(qosFlow["qosRef"].(float64))),
 		Qnc:    false,
 		Var5qi: int32(qosFlow["5qi"].(float64)),
 	}
@@ -268,6 +269,8 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 	}
 
 	for _, flowRule := range flowRulesInterface {
+		flowRuleJson, _ := json.MarshalIndent(flowRule, "", "  ")
+		logger.SmPolicyLog.Traceln(string(flowRuleJson))
 		precedence := int32(flowRule["precedence"].(float64))
 		if val, ok := flowRule["filter"].(string); ok {
 			dest := strings.Split(val, " ")
@@ -345,8 +348,8 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 					smPolicyData.RatingGroupIdGenerator++
 				}
 			}
-			qfi := strconv.Itoa(int(flowRule["qfi"].(float64)))
-			util.SetPccRuleRelatedByQFI(&decision, pccRule, qfi)
+			qosRef := strconv.Itoa(int(flowRule["qosRef"].(float64)))
+			util.SetPccRuleRelatedByQosRef(&decision, pccRule, qosRef)
 			smPolicyData.PccRuleIdGenerator++
 		}
 	}
