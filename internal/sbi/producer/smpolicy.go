@@ -1,7 +1,6 @@
 package producer
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -268,21 +267,21 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 		smPolicyData.RatingGroupIdGenerator++
 	}
 
-	for _, flowRule := range flowRulesInterface {
-		flowRuleJson, _ := json.MarshalIndent(flowRule, "", "  ")
-		logger.SmPolicyLog.Traceln(string(flowRuleJson))
+	logger.SmPolicyLog.Traceln("FlowRules for ueId:", ue.Supi, "snssai:", util.SnssaiModelsToHex(*request.SliceInfo))
+	for i, flowRule := range flowRulesInterface {
+		logger.SmPolicyLog.Tracef("flowRule %d: %s\n", i, openapi.MarshToJsonString(flowRule))
 		precedence := int32(flowRule["precedence"].(float64))
 		if val, ok := flowRule["filter"].(string); ok {
-			dest := strings.Split(val, " ")
+			tokens := strings.Split(val, " ")
 
 			FlowDespcription := flowdesc.NewIPFilterRule()
 			FlowDespcription.Action = flowdesc.Permit
 			FlowDespcription.Dir = flowdesc.Out
-			FlowDespcription.Src = dest[0]
+			FlowDespcription.Src = tokens[0]
 
-			if len(dest) > 1 {
+			if len(tokens) > 1 {
 				var port int
-				port, err = strconv.Atoi(dest[1])
+				port, err = strconv.Atoi(tokens[1])
 				if err != nil {
 					logger.SmPolicyLog.Errorf("Atoi error: %v", err)
 				} else {
