@@ -278,35 +278,42 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 		if val, ok := flowRule["filter"].(string); ok {
 			tokens := strings.Split(val, " ")
 
-			FlowDespcription := flowdesc.NewIPFilterRule()
-			FlowDespcription.Action = flowdesc.Permit
-			FlowDespcription.Dir = flowdesc.Out
-			FlowDespcription.Src = tokens[0]
+			FlowDescription := flowdesc.NewIPFilterRule()
+			FlowDescription.Action = flowdesc.Permit
+			FlowDescription.Dir = flowdesc.Out
+			FlowDescription.Src = tokens[0]
 
+			var err1, err2 error
+			portLowerBound := 1
+			portUpperBound := 65535
 			if len(tokens) > 1 {
-				var port int
-				port, err = strconv.Atoi(tokens[1])
-				if err != nil {
-					logger.SmPolicyLog.Errorf("Atoi error: %v", err)
-				} else {
-					FlowDespcription.SrcPorts = flowdesc.PortRanges{
-						flowdesc.PortRange{
-							Start: uint16(port),
-							End:   uint16(port),
-						},
-					}
-				}
+				portLowerBound, err1 = strconv.Atoi(strings.Split(tokens[1], "-")[0])
+				portUpperBound, err2 = strconv.Atoi(strings.Split(tokens[1], "-")[1])
 			}
 
-			var FlowDespcriptionStr string
-			FlowDespcriptionStr, err = flowdesc.Encode(FlowDespcription)
+			if err1 != nil || err2 != nil {
+				logger.SmPolicyLog.Warnln("Wrong Port format in IP Filter's setting:", tokens[1], ", set to 1-65535")
+			}
+
+			logger.SmPolicyLog.Infof("IP Filter: permit out ip from %v %v-%v to any",
+				FlowDescription.Src, portLowerBound, portUpperBound)
+
+			FlowDescription.SrcPorts = flowdesc.PortRanges{
+				flowdesc.PortRange{
+					Start: uint16(portLowerBound),
+					End:   uint16(portUpperBound),
+				},
+			}
+
+			var FlowDescriptionStr string
+			FlowDescriptionStr, err = flowdesc.Encode(FlowDescription)
 			if err != nil {
 				logger.SmPolicyLog.Errorf("Error occurs when encoding flow despcription: %s\n", err)
 			}
 
 			pccRule := util.CreatePccRule(smPolicyData.PccRuleIdGenerator, precedence, []models.FlowInformation{
 				{
-					FlowDescription: FlowDespcriptionStr,
+					FlowDescription: FlowDescriptionStr,
 					FlowDirection:   models.FlowDirectionRm_DOWNLINK,
 				},
 			}, "")
