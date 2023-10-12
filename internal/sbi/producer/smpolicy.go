@@ -232,8 +232,11 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 	pcc := util.CreateDefaultPccRules(smPolicyData.PccRuleIdGenerator)
 	smPolicyData.PccRuleIdGenerator++
 
-	filterCharging := bson.M{"ueId": ue.Supi, "snssai": util.SnssaiModelsToHex(*request.SliceInfo),
-		"dnn": "", "filter": ""}
+	filterCharging := bson.M{
+		"ueId":   ue.Supi,
+		"snssai": util.SnssaiModelsToHex(*request.SliceInfo),
+		"dnn":    "", "filter": "",
+	}
 	chargingInterface, err := mongoapi.RestfulAPIGetOne(chargingDataColl, filterCharging)
 	if err != nil {
 		logger.SmPolicyLog.Errorf("Fail to get charging data to mongoDB err: %+v", err)
