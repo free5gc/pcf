@@ -45,6 +45,8 @@ type PCFContext struct {
 
 	// lock
 	DefaultUdrURILock sync.RWMutex
+
+	OAuth2Required bool
 }
 
 type AMFStatusSubscriptionData struct {
