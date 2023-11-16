@@ -12,7 +12,7 @@ import (
 
 func GetTokenCtx(scope, targetNF string) (context.Context, *models.ProblemDetails, error) {
 	if pcf_context.GetSelf().OAuth2Required {
-		logger.ConsumerLog.Infof("GetToekenCtx")
+		logger.ConsumerLog.Debugln("GetToekenCtx")
 		pcfSelf := pcf_context.GetSelf()
 		tok, pd, err := oauth.SendAccTokenReq(pcfSelf.NfId, models.NfType_PCF, scope, targetNF, pcfSelf.NrfUri)
 		if err != nil {

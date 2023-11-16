@@ -274,7 +274,7 @@ func isUpPathChgEventExist(trafficInfluData *models.TrafficInfluData) bool {
 		trafficInfluData.DnaiChgType != ""
 }
 
-//  subclause 4.2.6.2.6.2 in 3GPP TS 29.512.
+// subclause 4.2.6.2.6.2 in 3GPP TS 29.512.
 func setUpPathChgEvent(trafficInfluData *models.TrafficInfluData) *models.UpPathChgEvent {
 	return &models.UpPathChgEvent{
 		NotificationUri: trafficInfluData.UpPathChgNotifUri,
