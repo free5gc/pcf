@@ -282,6 +282,7 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 			FlowDescription.Action = flowdesc.Permit
 			FlowDescription.Dir = flowdesc.Out
 			FlowDescription.Src = tokens[0]
+			FlowDescription.Dst = "assigned" // Hardcode destination (TS 29.212 5.4.2)
 
 			var err1, err2 error
 			portLowerBound := 1
@@ -295,7 +296,7 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 				logger.SmPolicyLog.Warnln("Wrong Port format in IP Filter's setting:", tokens[1], ", set to 1-65535")
 			}
 
-			logger.SmPolicyLog.Infof("IP Filter: permit out ip from %v %v-%v to any",
+			logger.SmPolicyLog.Infof("IP Filter: permit out ip from %v %v-%v to assigned",
 				FlowDescription.Src, portLowerBound, portUpperBound)
 
 			FlowDescription.SrcPorts = flowdesc.PortRanges{
