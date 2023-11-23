@@ -296,14 +296,13 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 				logger.SmPolicyLog.Warnln("Wrong Port format in IP Filter's setting:", tokens[1], ", set to 1-65535")
 			}
 
-			logger.SmPolicyLog.Infof("IP Filter: permit out ip from %v %v-%v to assigned",
-				FlowDescription.Src, portLowerBound, portUpperBound)
-
-			FlowDescription.SrcPorts = flowdesc.PortRanges{
-				flowdesc.PortRange{
-					Start: uint16(portLowerBound),
-					End:   uint16(portUpperBound),
-				},
+			if !(portLowerBound <= 1 && portUpperBound >= 65535) { // Port range need to be assigned
+				FlowDescription.SrcPorts = flowdesc.PortRanges{
+					flowdesc.PortRange{
+						Start: uint16(portLowerBound),
+						End:   uint16(portUpperBound),
+					},
+				}
 			}
 
 			var FlowDescriptionStr string
