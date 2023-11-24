@@ -235,9 +235,12 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 	filterCharging := bson.M{
 		"ueId":   ue.Supi,
 		"snssai": util.SnssaiModelsToHex(*request.SliceInfo),
-		"dnn":    "", "filter": "",
+		"dnn":    "",
+		"filter": "",
 	}
-	chargingInterface, err := mongoapi.RestfulAPIGetOne(chargingDataColl, filterCharging)
+
+	chargingInterface, err := mongoapi.RestfulAPIGetOneWithArg(chargingDataColl, filterCharging, 2)
+
 	if err != nil {
 		logger.SmPolicyLog.Errorf("Fail to get charging data to mongoDB err: %+v", err)
 		logger.SmPolicyLog.Errorf("chargingInterface %+v", chargingInterface)
