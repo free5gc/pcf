@@ -74,6 +74,7 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 	header http.Header, response *models.SmPolicyDecision, problemDetails *models.ProblemDetails,
 ) {
 	var err error
+	queryStrength := 2 // 2: case-insensitive, 3: case-sensitive
 	logger.SmPolicyLog.Tracef("Handle Create SM Policy Request")
 
 	if request.Supi == "" || request.SliceInfo == nil || len(request.SliceInfo.Sd) != 6 {
@@ -209,7 +210,7 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 	}
 
 	filter := bson.M{"ueId": ue.Supi, "snssai": util.SnssaiModelsToHex(*request.SliceInfo), "dnn": request.Dnn}
-	qosFlowInterface, err := mongoapi.RestfulAPIGetMany(qosFlowDataColl, filter)
+	qosFlowInterface, err := mongoapi.RestfulAPIGetManyWithArg(qosFlowDataColl, filter, queryStrength)
 	if err != nil {
 		logger.SmPolicyLog.Errorf("createSMPolicyProcedure error: %+v", err)
 	}
@@ -224,7 +225,7 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 	}
 
 	// get flow rules from databases
-	flowRulesInterface, err := mongoapi.RestfulAPIGetMany(flowRuleDataColl, filter)
+	flowRulesInterface, err := mongoapi.RestfulAPIGetManyWithArg(flowRuleDataColl, filter, queryStrength)
 	if err != nil {
 		logger.SmPolicyLog.Errorf("createSMPolicyProcedure error: %+v", err)
 	}
@@ -239,7 +240,7 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 		"filter": "",
 	}
 
-	chargingInterface, err := mongoapi.RestfulAPIGetOneWithArg(chargingDataColl, filterCharging, 2)
+	chargingInterface, err := mongoapi.RestfulAPIGetOneWithArg(chargingDataColl, filterCharging, queryStrength)
 
 	if err != nil {
 		logger.SmPolicyLog.Errorf("Fail to get charging data to mongoDB err: %+v", err)
@@ -266,7 +267,7 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 		chargingBsonM := bson.M{
 			"ratingGroup": chgData.RatingGroup,
 		}
-		if _, err = mongoapi.RestfulAPIPutOne(chargingDataColl, filterCharging, chargingBsonM); err != nil {
+		if _, err = mongoapi.RestfulAPIPutOneWithArg(chargingDataColl, filterCharging, chargingBsonM, queryStrength); err != nil {
 			logger.SmPolicyLog.Errorf("Fail to put charging data to mongoDB err: %+v", err)
 		}
 
@@ -326,7 +327,7 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 				"dnn": request.Dnn, "filter": val,
 			}
 			var chargingInterface map[string]interface{}
-			chargingInterface, err = mongoapi.RestfulAPIGetOne(chargingDataColl, filterCharging)
+			chargingInterface, err = mongoapi.RestfulAPIGetOneWithArg(chargingDataColl, filterCharging, 2)
 			if err != nil {
 				logger.SmPolicyLog.Errorf("Fail to get charging data to mongoDB err: %+v", err)
 			} else {
@@ -353,7 +354,7 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 				chargingBsonM := bson.M{
 					"ratingGroup": chgData.RatingGroup,
 				}
-				if _, err = mongoapi.RestfulAPIPutOne(chargingDataColl, filterCharging, chargingBsonM); err != nil {
+				if _, err = mongoapi.RestfulAPIPutOneWithArg(chargingDataColl, filterCharging, chargingBsonM, queryStrength); err != nil {
 					logger.SmPolicyLog.Errorf("Fail to put charging data to mongoDB err: %+v", err)
 				} else {
 					util.SetPccRuleRelatedData(&decision, pccRule, nil, nil, chgData, nil)
