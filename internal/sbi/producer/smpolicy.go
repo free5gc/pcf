@@ -267,6 +267,7 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 		chargingBsonM := bson.M{
 			"ratingGroup": chgData.RatingGroup,
 		}
+		logger.SmPolicyLog.Traceln("put ratingGroup to MongoDB")
 		if _, err = mongoapi.RestfulAPIPutOne(chargingDataColl, filterCharging, chargingBsonM, queryStrength); err != nil {
 			logger.SmPolicyLog.Errorf("Fail to put charging data to mongoDB err: %+v", err)
 		}
