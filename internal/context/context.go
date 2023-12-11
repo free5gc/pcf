@@ -31,7 +31,7 @@ type PCFContext struct {
 	PcfServiceUris  map[models.ServiceName]string
 	PcfSuppFeats    map[models.ServiceName]openapi.SupportedFeature
 	NrfUri          string
-	NrfCerPem       string
+	NrfCertPem      string
 	DefaultUdrURI   string
 	Locality        string
 	// UePool          map[string]*UeContext
@@ -89,8 +89,8 @@ func InitpcfContext(context *PCFContext) {
 
 	sbi := configuration.Sbi
 	context.NrfUri = configuration.NrfUri
-	if configuration.NrfCerPem != "" {
-		context.NrfCerPem = configuration.NrfCerPem
+	if configuration.NrfCertPem != "" {
+		context.NrfCertPem = configuration.NrfCertPem
 	}
 	context.UriScheme = ""
 	context.RegisterIPv4 = factory.PcfSbiDefaultIPv4 // default localhost
