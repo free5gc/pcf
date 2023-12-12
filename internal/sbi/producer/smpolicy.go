@@ -247,9 +247,15 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 		logger.SmPolicyLog.Errorf("chargingInterface %+v", chargingInterface)
 		util.SetPccRuleRelatedData(&decision, pcc, nil, nil, nil, nil)
 	} else if chargingInterface != nil {
+		rg, err := pcf_context.GetSelf().RatingGroupIdGenerator.Allocate()
+		if err != nil {
+			logger.SmPolicyLog.Error("rating group allocate error")
+			problemDetails := util.GetProblemDetail("rating group allocate error", util.ERROR_IDGENERATOR)
+			return nil, nil, &problemDetails
+		}
 		chgData := &models.ChargingData{
 			ChgId:          util.GetChgId(smPolicyData.ChargingIdGenerator),
-			RatingGroup:    smPolicyData.RatingGroupIdGenerator,
+			RatingGroup:    int32(rg),
 			ReportingLevel: models.ReportingLevel_RAT_GR_LEVEL,
 			MeteringMethod: models.MeteringMethod_VOLUME,
 		}
@@ -273,7 +279,6 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 		}
 
 		smPolicyData.ChargingIdGenerator++
-		smPolicyData.RatingGroupIdGenerator++
 	}
 
 	logger.SmPolicyLog.Traceln("FlowRules for ueId:", ue.Supi, "snssai:", util.SnssaiModelsToHex(*request.SliceInfo))
@@ -332,9 +337,15 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 			if err != nil {
 				logger.SmPolicyLog.Errorf("Fail to get charging data to mongoDB err: %+v", err)
 			} else {
+				rg, err := pcf_context.GetSelf().RatingGroupIdGenerator.Allocate()
+				if err != nil {
+					logger.SmPolicyLog.Error("rating group allocate error")
+					problemDetails := util.GetProblemDetail("rating group allocate error", util.ERROR_IDGENERATOR)
+					return nil, nil, &problemDetails
+				}
 				chgData := &models.ChargingData{
 					ChgId:          util.GetChgId(smPolicyData.ChargingIdGenerator),
-					RatingGroup:    smPolicyData.RatingGroupIdGenerator,
+					RatingGroup:    int32(rg),
 					ReportingLevel: models.ReportingLevel_RAT_GR_LEVEL,
 					MeteringMethod: models.MeteringMethod_VOLUME,
 				}
@@ -360,7 +371,6 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 				} else {
 					util.SetPccRuleRelatedData(&decision, pccRule, nil, nil, chgData, nil)
 					smPolicyData.ChargingIdGenerator++
-					smPolicyData.RatingGroupIdGenerator++
 				}
 			}
 			qosRef := strconv.Itoa(int(flowRule["qosRef"].(float64)))

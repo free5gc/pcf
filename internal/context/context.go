@@ -49,6 +49,9 @@ type PCFContext struct {
 	// lock
 	DefaultUdrURILock sync.RWMutex
 
+	// Charging
+	RatingGroupIdGenerator *idgenerator.IDGenerator
+
 	OAuth2Required bool
 }
 
@@ -153,6 +156,7 @@ func Init() {
 	pcfContext.PcfServiceUris = make(map[models.ServiceName]string)
 	pcfContext.PcfSuppFeats = make(map[models.ServiceName]openapi.SupportedFeature)
 	pcfContext.BdtPolicyIDGenerator = idgenerator.NewGenerator(1, math.MaxInt64)
+	pcfContext.RatingGroupIdGenerator = idgenerator.NewGenerator(1, math.MaxInt64)
 	InitpcfContext(&pcfContext)
 }
 

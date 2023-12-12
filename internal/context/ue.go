@@ -77,10 +77,9 @@ type UeSmPolicyData struct {
 	// SmfId                  string
 	// TraceReq *TraceData
 	// RecoveryTime     *time.Time
-	PackFiltIdGenerator    int32
-	PccRuleIdGenerator     int32
-	ChargingIdGenerator    int32
-	RatingGroupIdGenerator int32
+	PackFiltIdGenerator int32
+	PccRuleIdGenerator  int32
+	ChargingIdGenerator int32
 
 	// FlowMapsToPackFiltIds  map[string][]string // use Flow Description(in TS 29214) as key map to pcc rule ids
 	PackFiltMapToPccRuleId map[string]string // use PackFiltId as Key
@@ -158,7 +157,7 @@ func (ue *UeContext) NewUeSmPolicyData(
 	// data.RefToAmPolicy = amData
 	data.PccRuleIdGenerator = 1
 	data.ChargingIdGenerator = 1
-	data.RatingGroupIdGenerator = 1
+	// data.RatingGroupIdGenerator = 1
 
 	data.PcfUe = ue
 	ue.SmPolicyData[key] = &data
