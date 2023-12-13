@@ -62,7 +62,7 @@ type Configuration struct {
 	TimeFormat      string    `yaml:"timeFormat,omitempty" valid:"required"`
 	DefaultBdtRefId string    `yaml:"defaultBdtRefId,omitempty" valid:"required, type(string)"`
 	NrfUri          string    `yaml:"nrfUri,omitempty" valid:"required, url"`
-	NrfCertPem      string    `yaml:"nrfCertPem,omitempty" valid:"type(string),minstringlength(1),optional"`
+	NrfCertPem      string    `yaml:"nrfCertPem,omitempty" valid:"optional"`
 	ServiceList     []Service `yaml:"serviceList,omitempty" valid:"required"`
 	Mongodb         *Mongodb  `yaml:"mongodb" valid:"required"`
 	Locality        string    `yaml:"locality,omitempty" valid:"-"`
