@@ -26,7 +26,7 @@ func CreateInfluenceDataSubscription(ue *pcf_context.UeContext, request models.S
 		ApplicationDataInfluenceDataSubsToNotifyPost(context.Background(), trafficInfluSub)
 	if localErr == nil {
 		locationHeader := httpResp.Header.Get("Location")
-		subscriptionID := locationHeader[strings.LastIndex(locationHeader, "/")+1:]
+		subscriptionID = locationHeader[strings.LastIndex(locationHeader, "/")+1:]
 		logger.ConsumerLog.Debugf("Influence Data Subscription ID: %s", subscriptionID)
 		return subscriptionID, nil, nil
 	} else if httpResp != nil {
@@ -38,7 +38,7 @@ func CreateInfluenceDataSubscription(ue *pcf_context.UeContext, request models.S
 		}()
 		if httpResp.Status != localErr.Error() {
 			err = localErr
-			return
+			return subscriptionID, problemDetails, err
 		}
 		problem := localErr.(openapi.GenericOpenAPIError).Model().(models.ProblemDetails)
 		problemDetails = &problem
@@ -85,7 +85,7 @@ func RemoveInfluenceDataSubscription(ue *pcf_context.UeContext, subscriptionID s
 		}()
 		if httpResp.Status != localErr.Error() {
 			err = localErr
-			return
+			return nil, err
 		}
 		problem := localErr.(openapi.GenericOpenAPIError).Model().(models.ProblemDetails)
 		problemDetails = &problem
