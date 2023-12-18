@@ -8,6 +8,7 @@ import (
 
 	"github.com/free5gc/openapi/Nnrf_NFDiscovery"
 	"github.com/free5gc/openapi/models"
+	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/internal/util"
 )
@@ -21,7 +22,7 @@ func SendSearchNFInstances(
 	configuration.SetBasePath(nrfUri)
 	client := Nnrf_NFDiscovery.NewAPIClient(configuration)
 
-	ctx, _, err := GetTokenCtx("nnrf-disc", "NRF")
+	ctx, _, err := pcf_context.GetSelf().GetTokenCtx("nnrf-disc", "NRF")
 	if err != nil {
 		return nil, err
 	}

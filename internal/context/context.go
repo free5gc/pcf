@@ -1,6 +1,7 @@
 package context
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"os"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/models"
+	"github.com/free5gc/openapi/oauth"
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/pkg/factory"
 	"github.com/free5gc/util/idgenerator"
@@ -89,9 +91,7 @@ func InitpcfContext(context *PCFContext) {
 
 	sbi := configuration.Sbi
 	context.NrfUri = configuration.NrfUri
-	if configuration.NrfCertPem != "" {
-		context.NrfCertPem = configuration.NrfCertPem
-	}
+	context.NrfCertPem = configuration.NrfCertPem
 	context.UriScheme = ""
 	context.RegisterIPv4 = factory.PcfSbiDefaultIPv4 // default localhost
 	context.SBIPort = factory.PcfSbiDefaultPort      // default port
@@ -431,4 +431,14 @@ func DeleteIpv6index(Ipv6index int32) {
 
 func (c *PCFContext) NewAmfStatusSubscription(subscriptionID string, subscriptionData AMFStatusSubscriptionData) {
 	c.AMFStatusSubsData.Store(subscriptionID, subscriptionData)
+}
+
+func (c *PCFContext) GetTokenCtx(scope, targetNF string) (
+	context.Context, *models.ProblemDetails, error,
+) {
+	if !c.OAuth2Required {
+		return context.TODO(), nil, nil
+	}
+	return oauth.GetTokenCtx(models.NfType_PCF,
+		c.NfId, c.NrfUri, scope, targetNF)
 }
