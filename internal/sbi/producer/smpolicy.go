@@ -247,8 +247,8 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 		logger.SmPolicyLog.Errorf("chargingInterface %+v", chargingInterface)
 		util.SetPccRuleRelatedData(&decision, pcc, nil, nil, nil, nil)
 	} else if chargingInterface != nil {
-		rg, err := pcf_context.GetSelf().RatingGroupIdGenerator.Allocate()
-		if err != nil {
+		rg, err1 := pcf_context.GetSelf().RatingGroupIdGenerator.Allocate()
+		if err1 != nil {
 			logger.SmPolicyLog.Error("rating group allocate error")
 			problemDetails := util.GetProblemDetail("rating group allocate error", util.ERROR_IDGENERATOR)
 			return nil, nil, &problemDetails
@@ -337,8 +337,8 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 			if err != nil {
 				logger.SmPolicyLog.Errorf("Fail to get charging data to mongoDB err: %+v", err)
 			} else {
-				rg, err := pcf_context.GetSelf().RatingGroupIdGenerator.Allocate()
-				if err != nil {
+				rg, err1 := pcf_context.GetSelf().RatingGroupIdGenerator.Allocate()
+				if err1 != nil {
 					logger.SmPolicyLog.Error("rating group allocate error")
 					problemDetails := util.GetProblemDetail("rating group allocate error", util.ERROR_IDGENERATOR)
 					return nil, nil, &problemDetails
