@@ -1,7 +1,6 @@
 package consumer
 
 import (
-	"context"
 	"strconv"
 	"strings"
 
@@ -20,10 +19,14 @@ func CreateInfluenceDataSubscription(ue *pcf_context.UeContext, request models.S
 		logger.ConsumerLog.Warnf("Can't find corresponding UDR with UE[%s]", ue.Supi)
 		return "", &problemDetail, nil
 	}
+	ctx, pd, err := pcf_context.GetSelf().GetTokenCtx("nnrf-nfm", models.NfType_NRF)
+	if err != nil {
+		return "", pd, err
+	}
 	udrClient := util.GetNudrClient(ue.UdrUri)
 	trafficInfluSub := buildTrafficInfluSub(request)
 	_, httpResp, localErr := udrClient.InfluenceDataSubscriptionsCollectionApi.
-		ApplicationDataInfluenceDataSubsToNotifyPost(context.Background(), trafficInfluSub)
+		ApplicationDataInfluenceDataSubsToNotifyPost(ctx, trafficInfluSub)
 	if localErr == nil {
 		locationHeader := httpResp.Header.Get("Location")
 		subscriptionID = locationHeader[strings.LastIndex(locationHeader, "/")+1:]
@@ -70,9 +73,13 @@ func RemoveInfluenceDataSubscription(ue *pcf_context.UeContext, subscriptionID s
 		logger.ConsumerLog.Warnf("Can't find corresponding UDR with UE[%s]", ue.Supi)
 		return &problemDetail, nil
 	}
+	ctx, pd, err := pcf_context.GetSelf().GetTokenCtx("nnrf-nfm", models.NfType_NRF)
+	if err != nil {
+		return pd, err
+	}
 	udrClient := util.GetNudrClient(ue.UdrUri)
 	httpResp, localErr := udrClient.IndividualInfluenceDataSubscriptionDocumentApi.
-		ApplicationDataInfluenceDataSubsToNotifySubscriptionIdDelete(context.Background(), subscriptionID)
+		ApplicationDataInfluenceDataSubsToNotifySubscriptionIdDelete(ctx, subscriptionID)
 	if localErr == nil {
 		logger.ConsumerLog.Debugf("Nudr_DataRepository Remove Influence Data Subscription Status %s",
 			httpResp.Status)

@@ -1,7 +1,6 @@
 package consumer
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -12,6 +11,7 @@ import (
 	"github.com/free5gc/openapi/models"
 	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
+	"github.com/pkg/errors"
 )
 
 func BuildNFInstance(context *pcf_context.PCFContext) (profile models.NfProfile, err error) {
@@ -51,12 +51,18 @@ func SendRegisterNFInstance(nrfUri, nfInstanceId string, profile models.NfProfil
 	// Set client and set url
 	configuration := Nnrf_NFManagement.NewConfiguration()
 	configuration.SetBasePath(nrfUri)
-	client := Nnrf_NFManagement.NewAPIClient(configuration)
+	apiClient := Nnrf_NFManagement.NewAPIClient(configuration)
+
+	ctx, _, err := pcf_context.GetSelf().GetTokenCtx("nnrf-nfm", "NRF")
+	if err != nil {
+		return "", "",
+			errors.Errorf("SendRegisterNFInstance error: %+v", err)
+	}
 
 	var res *http.Response
 	var nf models.NfProfile
 	for {
-		nf, res, err = client.NFInstanceIDDocumentApi.RegisterNFInstance(context.TODO(), nfInstanceId, profile)
+		nf, res, err = apiClient.NFInstanceIDDocumentApi.RegisterNFInstance(ctx, nfInstanceId, profile)
 		if err != nil || res == nil {
 			// TODO : add log
 			fmt.Println(fmt.Errorf("PCF register to NRF Error[%v]", err.Error()))
@@ -102,7 +108,7 @@ func SendRegisterNFInstance(nrfUri, nfInstanceId string, profile models.NfProfil
 func SendDeregisterNFInstance() (problemDetails *models.ProblemDetails, err error) {
 	logger.ConsumerLog.Infof("Send Deregister NFInstance")
 
-	ctx, pd, err := pcf_context.GetSelf().GetTokenCtx("nnrf-nfm", "NRF")
+	ctx, pd, err := pcf_context.GetSelf().GetTokenCtx("nnrf-nfm", "models.NfType_NRF")
 	if err != nil {
 		return pd, err
 	}

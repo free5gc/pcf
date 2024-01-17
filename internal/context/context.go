@@ -71,7 +71,15 @@ type AppSessionData struct {
 	SmPolicyData *UeSmPolicyData
 }
 
-var pcfContext PCFContext
+type NFContext interface {
+	AuthorizationCheck(token, serviceName string) error
+}
+
+var _ NFContext = &PCFContext{}
+
+//var pcfContext PCFContext
+
+var pcfContext = PCFContext{}
 
 func InitpcfContext(context *PCFContext) {
 	config := factory.PcfConfig
@@ -433,12 +441,22 @@ func (c *PCFContext) NewAmfStatusSubscription(subscriptionID string, subscriptio
 	c.AMFStatusSubsData.Store(subscriptionID, subscriptionData)
 }
 
-func (c *PCFContext) GetTokenCtx(scope, targetNF string) (
+func (c *PCFContext) GetTokenCtx(scope string, targetNF models.NfType) (
 	context.Context, *models.ProblemDetails, error,
 ) {
 	if !c.OAuth2Required {
 		return context.TODO(), nil, nil
 	}
-	return oauth.GetTokenCtx(models.NfType_PCF,
-		c.NfId, c.NrfUri, scope, targetNF)
+	return oauth.GetTokenCtx(models.NfType_PCF, targetNF,
+		c.NfId, c.NrfUri, scope)
+}
+
+func (c *PCFContext) AuthorizationCheck(token, serviceName string) error {
+	if !c.OAuth2Required {
+		logger.UtilLog.Debugf("PCFContext::AuthorizationCheck: OAuth2 not required\n")
+		return nil
+	}
+
+	logger.UtilLog.Debugf("PCFContext::AuthorizationCheck: token[%s] serviceName[%s]\n", token, serviceName)
+	return oauth.VerifyOAuth(token, serviceName, c.NrfCertPem)
 }
