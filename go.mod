@@ -1,8 +1,6 @@
 module github.com/free5gc/pcf
 
-go 1.21
-
-toolchain go1.21.0
+go 1.17
 
 require (
 	github.com/antihax/optional v1.0.0
