@@ -108,13 +108,13 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 		}
 		var response *http.Response
 
-		ctx, pd, err := pcf_context.GetSelf().GetTokenCtx("nnrf-nfm", models.NfType_NRF)
-		if err != nil {
+		ctx, pd, err1 := pcf_context.GetSelf().GetTokenCtx("nnrf-nfm", models.NfType_NRF)
+		if err1 != nil {
 			return nil, nil, pd
 		}
 
-		smData, response, err = client.DefaultApi.PolicyDataUesUeIdSmDataGet(ctx, ue.Supi, &param)
-		if err != nil || response == nil || response.StatusCode != http.StatusOK {
+		smData, response, err1 = client.DefaultApi.PolicyDataUesUeIdSmDataGet(ctx, ue.Supi, &param)
+		if err1 != nil || response == nil || response.StatusCode != http.StatusOK {
 			problemDetail := util.GetProblemDetail("Can't find UE SM Policy Data in UDR", util.USER_UNKNOWN)
 			logger.SmPolicyLog.Warnf("Can't find UE[%s] SM Policy Data in UDR", ue.Supi)
 			return nil, nil, &problemDetail

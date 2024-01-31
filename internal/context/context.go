@@ -77,8 +77,7 @@ type NFContext interface {
 
 var _ NFContext = &PCFContext{}
 
-//var pcfContext PCFContext
-
+// var pcfContext PCFContext
 var pcfContext = PCFContext{}
 
 func InitpcfContext(context *PCFContext) {

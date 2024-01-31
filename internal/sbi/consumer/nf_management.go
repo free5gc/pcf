@@ -6,12 +6,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pkg/errors"
+
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/Nnrf_NFManagement"
 	"github.com/free5gc/openapi/models"
 	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
-	"github.com/pkg/errors"
 )
 
 func BuildNFInstance(context *pcf_context.PCFContext) (profile models.NfProfile, err error) {

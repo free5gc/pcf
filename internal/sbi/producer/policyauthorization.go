@@ -1119,7 +1119,7 @@ func handleBDTPolicyInd(pcfSelf *pcf_context.PCFContext,
 	req := appSessCtx.AscReqData
 
 	var requestSuppFeat openapi.SupportedFeature
-	if tempRequestSuppFeat, err := openapi.NewSupportedFeature(req.SuppFeat); err != nil {
+	if tempRequestSuppFeat, err1 := openapi.NewSupportedFeature(req.SuppFeat); err1 != nil {
 		logger.PolicyAuthLog.Errorf("Sponsored Connectivity is disabled by AF")
 	} else {
 		requestSuppFeat = tempRequestSuppFeat
