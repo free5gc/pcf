@@ -8,6 +8,7 @@ import (
 
 	"github.com/antihax/optional"
 	"go.mongodb.org/mongo-driver/bson"
+	"golang.org/x/net/context"
 
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/Nudr_DataRepository"
@@ -108,7 +109,7 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 		}
 		var response *http.Response
 
-		ctx, pd, err1 := pcf_context.GetSelf().GetTokenCtx("nnrf-nfm", models.NfType_NRF)
+		ctx, pd, err1 := pcf_context.GetSelf().GetTokenCtx("nudr-dr", models.NfType_UDR)
 		if err1 != nil {
 			return nil, nil, pd
 		}
@@ -259,7 +260,7 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 		Supis:            optional.NewInterface([]string{request.Supi}),
 	}
 
-	ctx, pd, err := pcf_context.GetSelf().GetTokenCtx("nnrf-nfm", models.NfType_NRF)
+	ctx, pd, err := pcf_context.GetSelf().GetTokenCtx("nudr-dr", models.NfType_UDR)
 	if err != nil {
 		return nil, nil, pd
 	}
@@ -319,7 +320,7 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 	bsfUri := consumer.SendNFInstancesBSF(pcf_context.GetSelf().NrfUri)
 	if bsfUri != "" {
 		bsfClient := util.GetNbsfClient(bsfUri)
-		_, resp, err = bsfClient.PCFBindingsCollectionApi.CreatePCFBinding(ctx, pcfBinding)
+		_, resp, err = bsfClient.PCFBindingsCollectionApi.CreatePCFBinding(context.Background(), pcfBinding)
 		if err != nil || resp == nil || resp.StatusCode != http.StatusCreated {
 			logger.SmPolicyLog.Warnf("Create PCF binding data in BSF error[%+v]", err)
 			// Uncomment the following to return error response --> PDU SessEstReq will fail

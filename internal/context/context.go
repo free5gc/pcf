@@ -70,15 +70,13 @@ type AppSessionData struct {
 	// related Session
 	SmPolicyData *UeSmPolicyData
 }
+var pcfContext = PCFContext{}
 
 type NFContext interface {
 	AuthorizationCheck(token, serviceName string) error
 }
 
 var _ NFContext = &PCFContext{}
-
-// var pcfContext PCFContext
-var pcfContext = PCFContext{}
 
 func InitpcfContext(context *PCFContext) {
 	config := factory.PcfConfig

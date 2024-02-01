@@ -23,7 +23,7 @@ func AmfStatusChangeSubscribe(amfUri string, guamiList []models.Guami) (
 		AmfStatusUri: fmt.Sprintf("%s"+factory.PcfCallbackResUriPrefix+"/amfstatus", pcfSelf.GetIPv4Uri()),
 		GuamiList:    guamiList,
 	}
-	ctx, pd, err := pcf_context.GetSelf().GetTokenCtx("nnrf-nfm", models.NfType_NRF)
+	ctx, pd, err := pcf_context.GetSelf().GetTokenCtx("namf-comm", models.NfType_AMF)
 	if err != nil {
 		return pd, err
 	}

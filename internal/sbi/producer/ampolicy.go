@@ -234,7 +234,7 @@ func PostPoliciesProcedure(polAssoId string,
 	assolId := fmt.Sprintf("%s-%d", ue.Supi, ue.PolAssociationIDGenerator)
 	amPolicy := ue.AMPolicyData[assolId]
 
-	ctx, pd, err := pcf_context.GetSelf().GetTokenCtx("nnrf-nfm", models.NfType_NRF)
+	ctx, pd, err := pcf_context.GetSelf().GetTokenCtx("nudr-dr", models.NfType_UDR)
 	if err != nil {
 		return nil, "", pd
 	}

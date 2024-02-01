@@ -118,7 +118,7 @@ func updateBDTPolicyContextProcedure(request models.BdtPolicyDataPatch, bdtPolic
 				BdtData: optional.NewInterface(bdtData),
 			}
 			client := util.GetNudrClient(getDefaultUdrUri(pcfSelf))
-			ctx, pd, err := pcf_context.GetSelf().GetTokenCtx("nnrf-nfm", models.NfType_NRF)
+			ctx, pd, err := pcf_context.GetSelf().GetTokenCtx("nudr-dr", models.NfType_UDR)
 			if err != nil {
 				return nil, pd
 			}
@@ -192,8 +192,7 @@ func createBDTPolicyContextProcedure(request *models.BdtReqData) (
 	pcfSelf.SetDefaultUdrURI(udrUri)
 
 	// Query BDT DATA array from UDR
-
-	ctx, pd, err := pcf_context.GetSelf().GetTokenCtx("nnrf-nfm", models.NfType_NRF)
+	ctx, pd, err := pcf_context.GetSelf().GetTokenCtx("nudr-dr", models.NfType_UDR)
 	if err != nil {
 		return nil, nil, pd
 	}
