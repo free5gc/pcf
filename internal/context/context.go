@@ -70,6 +70,7 @@ type AppSessionData struct {
 	// related Session
 	SmPolicyData *UeSmPolicyData
 }
+
 var pcfContext = PCFContext{}
 
 type NFContext interface {
