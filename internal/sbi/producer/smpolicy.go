@@ -1021,7 +1021,7 @@ func SendSMPolicyUpdateNotification(
 		return
 	}
 
-	ctx, _, err := pcf_context.GetSelf().GetTokenCtx("nnrf-nfm", models.NfType_NRF)
+	ctx, _, err := pcf_context.GetSelf().GetTokenCtx("npcf-smpolicycontrol", models.NfType_PCF)
 	if err != nil {
 		return
 	}
@@ -1063,7 +1063,7 @@ func SendSMPolicyTerminationRequestNotification(
 		return
 	}
 
-	ctx, _, err := pcf_context.GetSelf().GetTokenCtx("nnrf-nfm", models.NfType_NRF)
+	ctx, _, err := pcf_context.GetSelf().GetTokenCtx("npcf-smpolicycontrol", models.NfType_PCF)
 	if err != nil {
 		return
 	}

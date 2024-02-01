@@ -22,7 +22,7 @@ func SendSearchNFInstances(
 	configuration.SetBasePath(nrfUri)
 	client := Nnrf_NFDiscovery.NewAPIClient(configuration)
 
-	ctx, _, err := pcf_context.GetSelf().GetTokenCtx("nnrf-nfm", models.NfType_NRF)
+	ctx, _, err := pcf_context.GetSelf().GetTokenCtx("nnrf-disc", models.NfType_NRF)
 	if err != nil {
 		return nil, err
 	}

@@ -331,7 +331,7 @@ func SendAMPolicyUpdateNotification(ue *pcf_context.UeContext, PolId string, req
 		return
 	}
 
-	ctx, _, err := pcf_context.GetSelf().GetTokenCtx("nnrf-nfm", models.NfType_NRF)
+	ctx, _, err := pcf_context.GetSelf().GetTokenCtx("npcf-am-policy-control", models.NfType_PCF)
 	if err != nil {
 		return
 	}
@@ -389,7 +389,7 @@ func SendAMPolicyTerminationRequestNotification(ue *pcf_context.UeContext,
 	client := util.GetNpcfAMPolicyCallbackClient()
 	uri := amPolicyData.NotificationUri
 
-	ctx, _, err := pcf_context.GetSelf().GetTokenCtx("nnrf-nfm", models.NfType_NRF)
+	ctx, _, err := pcf_context.GetSelf().GetTokenCtx("npcf-am-policy-control", models.NfType_PCF)
 	if err != nil {
 		return
 	}

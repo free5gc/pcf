@@ -895,7 +895,7 @@ func SendAppSessionEventNotification(appSession *pcf_context.AppSessionData, req
 	}
 	uri := appSession.EventUri
 
-	ctx, _, err := pcf_context.GetSelf().GetTokenCtx("nnrf-nfm", models.NfType_NRF)
+	ctx, _, err := pcf_context.GetSelf().GetTokenCtx("npcf-policyauthorization", models.NfType_PCF)
 	if err != nil {
 		return
 	}
@@ -1077,7 +1077,7 @@ func SendAppSessionTermination(appSession *pcf_context.AppSessionData, request m
 	}
 	uri := appSession.AppSessionContext.AscReqData.NotifUri
 
-	ctx, _, err := pcf_context.GetSelf().GetTokenCtx("nnrf-nfm", models.NfType_NRF)
+	ctx, _, err := pcf_context.GetSelf().GetTokenCtx("npcf-policyauthorization", models.NfType_PCF)
 	if err != nil {
 		return
 	}
@@ -1130,7 +1130,7 @@ func handleBDTPolicyInd(pcfSelf *pcf_context.PCFContext,
 			requestSuppFeat).String(),
 	}
 
-	ctx, _, err := pcf_context.GetSelf().GetTokenCtx("nnrf-nfm", models.NfType_NRF)
+	ctx, _, err := pcf_context.GetSelf().GetTokenCtx("nudr-dr", models.NfType_UDR)
 	if err != nil {
 		return err
 	}

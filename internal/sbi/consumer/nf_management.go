@@ -54,7 +54,7 @@ func SendRegisterNFInstance(nrfUri, nfInstanceId string, profile models.NfProfil
 	configuration.SetBasePath(nrfUri)
 	apiClient := Nnrf_NFManagement.NewAPIClient(configuration)
 
-	ctx, _, err := pcf_context.GetSelf().GetTokenCtx("nnrf-nfm", "NRF")
+	ctx, _, err := pcf_context.GetSelf().GetTokenCtx("nnrf-nfm", models.NfType_NRF)
 	if err != nil {
 		return "", "",
 			errors.Errorf("SendRegisterNFInstance error: %+v", err)
