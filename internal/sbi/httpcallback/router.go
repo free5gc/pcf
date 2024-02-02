@@ -6,15 +6,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/free5gc/openapi/models"
-	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
-	"github.com/free5gc/pcf/internal/util"
 	"github.com/free5gc/pcf/pkg/factory"
 	logger_util "github.com/free5gc/util/logger"
 )
-
-const serviceName string = string(models.ServiceName_NPCF_SMPOLICYCONTROL)
 
 // Route is the information for every URI.
 type Route struct {
@@ -40,12 +35,6 @@ func NewRouter() *gin.Engine {
 
 func AddService(engine *gin.Engine) *gin.RouterGroup {
 	group := engine.Group(factory.PcfCallbackResUriPrefix)
-	// https://localhost:29507/{factory.PcfCallbackResUriPrefix}/route
-
-	routerAuthorizationCheck := util.NewRouterAuthorizationCheck(serviceName)
-	group.Use(func(c *gin.Context) {
-		routerAuthorizationCheck.Check(c, pcf_context.GetSelf())
-	})
 
 	for _, route := range routes {
 		switch route.Method {
