@@ -8,7 +8,6 @@ import (
 
 	"github.com/antihax/optional"
 	"go.mongodb.org/mongo-driver/bson"
-	"golang.org/x/net/context"
 
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/Nudr_DataRepository"
@@ -316,11 +315,16 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 		PcfIpEndPoints: *policyAuthorizationService.IpEndPoints,
 	}
 
+	ctx, pd, err = pcf_context.GetSelf().GetTokenCtx("nbsf-management", models.NfType_BSF)
+	if err != nil {
+		return nil, nil, pd
+	}
+
 	// TODO: Record BSF URI instead of discovering from NRF every time
 	bsfUri := consumer.SendNFInstancesBSF(pcf_context.GetSelf().NrfUri)
 	if bsfUri != "" {
 		bsfClient := util.GetNbsfClient(bsfUri)
-		_, resp, err = bsfClient.PCFBindingsCollectionApi.CreatePCFBinding(context.Background(), pcfBinding)
+		_, resp, err = bsfClient.PCFBindingsCollectionApi.CreatePCFBinding(ctx, pcfBinding)
 		if err != nil || resp == nil || resp.StatusCode != http.StatusCreated {
 			logger.SmPolicyLog.Warnf("Create PCF binding data in BSF error[%+v]", err)
 			// Uncomment the following to return error response --> PDU SessEstReq will fail
