@@ -35,7 +35,7 @@ func NewRouter() *gin.Engine {
 
 func AddService(engine *gin.Engine) *gin.RouterGroup {
 	group := engine.Group(factory.PcfCallbackResUriPrefix)
-	// https://localhost:29507/{factory.PcfCallbackResUriPrefix}/route
+
 	for _, route := range routes {
 		switch route.Method {
 		case "POST":

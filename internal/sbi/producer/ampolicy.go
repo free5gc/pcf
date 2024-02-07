@@ -1,7 +1,6 @@
 package producer
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"reflect"
@@ -235,10 +234,15 @@ func PostPoliciesProcedure(polAssoId string,
 	assolId := fmt.Sprintf("%s-%d", ue.Supi, ue.PolAssociationIDGenerator)
 	amPolicy := ue.AMPolicyData[assolId]
 
+	ctx, pd, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
+	if err != nil {
+		return nil, "", pd
+	}
+
 	if amPolicy == nil || amPolicy.AmPolicyData == nil {
 		client := util.GetNudrClient(udrUri)
 		var response *http.Response
-		amData, response, err := client.DefaultApi.PolicyDataUesUeIdAmDataGet(context.Background(), ue.Supi)
+		amData, response, err := client.DefaultApi.PolicyDataUesUeIdAmDataGet(ctx, ue.Supi)
 		if err != nil || response == nil || response.StatusCode != http.StatusOK {
 			problemDetail := util.GetProblemDetail("Can't find UE AM Policy Data in UDR", util.USER_UNKNOWN)
 			logger.AmPolicyLog.Errorf("Can't find UE[%s] AM Policy Data in UDR", ue.Supi)
@@ -326,10 +330,16 @@ func SendAMPolicyUpdateNotification(ue *pcf_context.UeContext, PolId string, req
 		logger.AmPolicyLog.Warnf("Policy Update Notification Error[Can't find polAssoId[%s] in UE(%s)]", PolId, ue.Supi)
 		return
 	}
+
+	ctx, _, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NPCF_AM_POLICY_CONTROL, models.NfType_PCF)
+	if err != nil {
+		return
+	}
+
 	client := util.GetNpcfAMPolicyCallbackClient()
 	uri := amPolicyData.NotificationUri
 	for uri != "" {
-		rsp, err := client.DefaultCallbackApi.PolicyUpdateNotification(context.Background(), uri, request)
+		rsp, err := client.DefaultCallbackApi.PolicyUpdateNotification(ctx, uri, request)
 		if err != nil {
 			if rsp != nil && rsp.StatusCode != http.StatusNoContent {
 				logger.AmPolicyLog.Warnf("Policy Update Notification Error[%s]", rsp.Status)
@@ -378,9 +388,15 @@ func SendAMPolicyTerminationRequestNotification(ue *pcf_context.UeContext,
 	}
 	client := util.GetNpcfAMPolicyCallbackClient()
 	uri := amPolicyData.NotificationUri
+
+	ctx, _, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NPCF_AM_POLICY_CONTROL, models.NfType_PCF)
+	if err != nil {
+		return
+	}
+
 	for uri != "" {
 		rsp, err := client.DefaultCallbackApi.PolicyAssocitionTerminationRequestNotification(
-			context.Background(), uri, request)
+			ctx, uri, request)
 		if err != nil {
 			if rsp != nil && rsp.StatusCode != http.StatusNoContent {
 				logger.AmPolicyLog.Warnf("Policy Assocition Termination Request Notification Error[%s]", rsp.Status)

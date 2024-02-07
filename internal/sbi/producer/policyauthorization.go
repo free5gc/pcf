@@ -1,7 +1,6 @@
 package producer
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -895,12 +894,18 @@ func SendAppSessionEventNotification(appSession *pcf_context.AppSessionData, req
 		return
 	}
 	uri := appSession.EventUri
+
 	if uri != "" {
+		ctx, _, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NPCF_POLICYAUTHORIZATION, models.NfType_PCF)
+		if err != nil {
+			return
+		}
+
 		request.EvSubsUri = fmt.Sprintf("%s/events-subscription",
 			util.GetResourceUri(models.ServiceName_NPCF_POLICYAUTHORIZATION, appSession.AppSessionId))
 		client := util.GetNpcfPolicyAuthorizationCallbackClient()
 		httpResponse, err := client.PolicyAuthorizationEventNotificationApi.PolicyAuthorizationEventNotification(
-			context.Background(), uri, request)
+			ctx, uri, request)
 		if err != nil {
 			if httpResponse != nil {
 				logger.PolicyAuthLog.Warnf("Send App Session Event Notification Error[%s]", httpResponse.Status)
@@ -1071,11 +1076,17 @@ func SendAppSessionTermination(appSession *pcf_context.AppSessionData, request m
 		return
 	}
 	uri := appSession.AppSessionContext.AscReqData.NotifUri
+
 	if uri != "" {
+		ctx, _, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NPCF_POLICYAUTHORIZATION, models.NfType_PCF)
+		if err != nil {
+			return
+		}
+
 		request.ResUri = util.GetResourceUri(models.ServiceName_NPCF_POLICYAUTHORIZATION, appSession.AppSessionId)
 		client := util.GetNpcfPolicyAuthorizationCallbackClient()
 		httpResponse, err := client.PolicyAuthorizationTerminateRequestApi.PolicyAuthorizationTerminateRequest(
-			context.Background(), uri, request)
+			ctx, uri, request)
 		if err != nil {
 			if httpResponse != nil {
 				logger.PolicyAuthLog.Warnf("Send App Session Termination Error[%s]", httpResponse.Status)
@@ -1108,7 +1119,7 @@ func handleBDTPolicyInd(pcfSelf *pcf_context.PCFContext,
 	req := appSessCtx.AscReqData
 
 	var requestSuppFeat openapi.SupportedFeature
-	if tempRequestSuppFeat, err := openapi.NewSupportedFeature(req.SuppFeat); err != nil {
+	if tempRequestSuppFeat, err1 := openapi.NewSupportedFeature(req.SuppFeat); err1 != nil {
 		logger.PolicyAuthLog.Errorf("Sponsored Connectivity is disabled by AF")
 	} else {
 		requestSuppFeat = tempRequestSuppFeat
@@ -1118,8 +1129,14 @@ func handleBDTPolicyInd(pcfSelf *pcf_context.PCFContext,
 		SuppFeat: pcfSelf.PcfSuppFeats[models.ServiceName_NPCF_POLICYAUTHORIZATION].NegotiateWith(
 			requestSuppFeat).String(),
 	}
+
+	ctx, _, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
+	if err != nil {
+		return err
+	}
+
 	client := util.GetNudrClient(getDefaultUdrUri(pcfSelf))
-	bdtData, resp, err1 := client.DefaultApi.PolicyDataBdtDataBdtReferenceIdGet(context.Background(), req.BdtRefId)
+	bdtData, resp, err1 := client.DefaultApi.PolicyDataBdtDataBdtReferenceIdGet(ctx, req.BdtRefId)
 	if err1 != nil {
 		return fmt.Errorf("UDR Get BdtData error[%s]", err1.Error())
 	} else if resp == nil || resp.StatusCode != http.StatusOK {

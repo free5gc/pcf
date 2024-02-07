@@ -1,7 +1,6 @@
 package producer
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 
@@ -119,7 +118,11 @@ func updateBDTPolicyContextProcedure(request models.BdtPolicyDataPatch, bdtPolic
 				BdtData: optional.NewInterface(bdtData),
 			}
 			client := util.GetNudrClient(getDefaultUdrUri(pcfSelf))
-			rsp, err := client.DefaultApi.PolicyDataBdtDataBdtReferenceIdPut(context.Background(), bdtData.BdtRefId, &param)
+			ctx, pd, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
+			if err != nil {
+				return nil, pd
+			}
+			rsp, err := client.DefaultApi.PolicyDataBdtDataBdtReferenceIdPut(ctx, bdtData.BdtRefId, &param)
 			if err != nil {
 				logger.BdtPolicyLog.Warnf("UDR Put BdtDate error[%s]", err.Error())
 			}
@@ -189,8 +192,13 @@ func createBDTPolicyContextProcedure(request *models.BdtReqData) (
 	pcfSelf.SetDefaultUdrURI(udrUri)
 
 	// Query BDT DATA array from UDR
+	ctx, pd, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
+	if err != nil {
+		return nil, nil, pd
+	}
+
 	client := util.GetNudrClient(udrUri)
-	bdtDatas, httpResponse, err := client.DefaultApi.PolicyDataBdtDataGet(context.Background())
+	bdtDatas, httpResponse, err := client.DefaultApi.PolicyDataBdtDataGet(ctx)
 	if err != nil || httpResponse == nil || httpResponse.StatusCode != http.StatusOK {
 		problemDetails = &models.ProblemDetails{
 			Status: http.StatusServiceUnavailable,
@@ -254,7 +262,7 @@ func createBDTPolicyContextProcedure(request *models.BdtReqData) (
 	}
 
 	var updateRsp *http.Response
-	if rsp, rspErr := client.DefaultApi.PolicyDataBdtDataBdtReferenceIdPut(context.Background(),
+	if rsp, rspErr := client.DefaultApi.PolicyDataBdtDataBdtReferenceIdPut(ctx,
 		bdtPolicyData.BdtRefId, &param); rspErr != nil {
 		logger.BdtPolicyLog.Warnf("UDR Put BdtDate error[%s]", rspErr.Error())
 	} else {

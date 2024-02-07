@@ -1,7 +1,6 @@
 package producer
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -108,8 +107,14 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 			Dnn:    optional.NewString(request.Dnn),
 		}
 		var response *http.Response
-		smData, response, err = client.DefaultApi.PolicyDataUesUeIdSmDataGet(context.Background(), ue.Supi, &param)
-		if err != nil || response == nil || response.StatusCode != http.StatusOK {
+
+		ctx, pd, err1 := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
+		if err1 != nil {
+			return nil, nil, pd
+		}
+
+		smData, response, err1 = client.DefaultApi.PolicyDataUesUeIdSmDataGet(ctx, ue.Supi, &param)
+		if err1 != nil || response == nil || response.StatusCode != http.StatusOK {
 			problemDetail := util.GetProblemDetail("Can't find UE SM Policy Data in UDR", util.USER_UNKNOWN)
 			logger.SmPolicyLog.Warnf("Can't find UE[%s] SM Policy Data in UDR", ue.Supi)
 			return nil, nil, &problemDetail
@@ -254,10 +259,15 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 		Supis:            optional.NewInterface([]string{request.Supi}),
 	}
 
+	ctx, pd, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
+	if err != nil {
+		return nil, nil, pd
+	}
+
 	udrClient := util.GetNudrClient(udrUri)
 	var resp *http.Response
 	trafficInfluDatas, resp, err := udrClient.InfluenceDataApi.
-		ApplicationDataInfluenceDataGet(context.Background(), &reqParam)
+		ApplicationDataInfluenceDataGet(ctx, &reqParam)
 	if err != nil || resp == nil || resp.StatusCode != http.StatusOK {
 		logger.SmPolicyLog.Warnf("Error response from UDR Application Data Influence Data Get")
 	}
@@ -309,7 +319,13 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 	bsfUri := consumer.SendNFInstancesBSF(pcf_context.GetSelf().NrfUri)
 	if bsfUri != "" {
 		bsfClient := util.GetNbsfClient(bsfUri)
-		_, resp, err = bsfClient.PCFBindingsCollectionApi.CreatePCFBinding(context.Background(), pcfBinding)
+
+		ctx, pd, err = pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NBSF_MANAGEMENT, models.NfType_BSF)
+		if err != nil {
+			return nil, nil, pd
+		}
+
+		_, resp, err = bsfClient.PCFBindingsCollectionApi.CreatePCFBinding(ctx, pcfBinding)
 		if err != nil || resp == nil || resp.StatusCode != http.StatusCreated {
 			logger.SmPolicyLog.Warnf("Create PCF binding data in BSF error[%+v]", err)
 			// Uncomment the following to return error response --> PDU SessEstReq will fail
@@ -1010,9 +1026,15 @@ func SendSMPolicyUpdateNotification(
 		logger.SmPolicyLog.Warnln("SM Policy Update Notification Error[uri is empty]")
 		return
 	}
+
+	ctx, _, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NPCF_SMPOLICYCONTROL, models.NfType_PCF)
+	if err != nil {
+		return
+	}
+
 	client := util.GetNpcfSMPolicyCallbackClient()
 	logger.SmPolicyLog.Infof("Send SM Policy Update Notification to SMF")
-	_, httpResponse, err := client.DefaultCallbackApi.SmPolicyUpdateNotification(context.Background(), uri, *request)
+	_, httpResponse, err := client.DefaultCallbackApi.SmPolicyUpdateNotification(ctx, uri, *request)
 	defer func() {
 		if httpResponse != nil {
 			if err = httpResponse.Body.Close(); err != nil {
@@ -1046,9 +1068,15 @@ func SendSMPolicyTerminationRequestNotification(
 		logger.SmPolicyLog.Warnln("SM Policy Termination Request Notification Error[uri is empty]")
 		return
 	}
+
+	ctx, _, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NPCF_SMPOLICYCONTROL, models.NfType_PCF)
+	if err != nil {
+		return
+	}
+
 	client := util.GetNpcfSMPolicyCallbackClient()
 	rsp, err := client.DefaultCallbackApi.
-		SmPolicyControlTerminationRequestNotification(context.Background(), uri, *request)
+		SmPolicyControlTerminationRequestNotification(ctx, uri, *request)
 	defer func() {
 		if rsp != nil {
 			if err = rsp.Body.Close(); err != nil {
