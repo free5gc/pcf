@@ -54,7 +54,7 @@ func SendRegisterNFInstance(nrfUri, nfInstanceId string, profile models.NfProfil
 	configuration.SetBasePath(nrfUri)
 	apiClient := Nnrf_NFManagement.NewAPIClient(configuration)
 
-	ctx, _, err := pcf_context.GetSelf().GetTokenCtx("nnrf-nfm", models.NfType_NRF)
+	ctx, _, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NNRF_NFM, models.NfType_NRF)
 	if err != nil {
 		return "", "",
 			errors.Errorf("SendRegisterNFInstance error: %+v", err)
@@ -109,7 +109,7 @@ func SendRegisterNFInstance(nrfUri, nfInstanceId string, profile models.NfProfil
 func SendDeregisterNFInstance() (problemDetails *models.ProblemDetails, err error) {
 	logger.ConsumerLog.Infof("Send Deregister NFInstance")
 
-	ctx, pd, err := pcf_context.GetSelf().GetTokenCtx("nnrf-nfm", models.NfType_NRF)
+	ctx, pd, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NNRF_NFM, models.NfType_NRF)
 	if err != nil {
 		return pd, err
 	}

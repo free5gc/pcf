@@ -108,7 +108,7 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 		}
 		var response *http.Response
 
-		ctx, pd, err1 := pcf_context.GetSelf().GetTokenCtx("nudr-dr", models.NfType_UDR)
+		ctx, pd, err1 := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
 		if err1 != nil {
 			return nil, nil, pd
 		}
@@ -259,7 +259,7 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 		Supis:            optional.NewInterface([]string{request.Supi}),
 	}
 
-	ctx, pd, err := pcf_context.GetSelf().GetTokenCtx("nudr-dr", models.NfType_UDR)
+	ctx, pd, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
 	if err != nil {
 		return nil, nil, pd
 	}
@@ -320,7 +320,7 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 	if bsfUri != "" {
 		bsfClient := util.GetNbsfClient(bsfUri)
 
-		ctx, pd, err = pcf_context.GetSelf().GetTokenCtx("nbsf-management", models.NfType_BSF)
+		ctx, pd, err = pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NBSF_MANAGEMENT, models.NfType_BSF)
 		if err != nil {
 			return nil, nil, pd
 		}
@@ -1027,7 +1027,7 @@ func SendSMPolicyUpdateNotification(
 		return
 	}
 
-	ctx, _, err := pcf_context.GetSelf().GetTokenCtx("npcf-smpolicycontrol", models.NfType_PCF)
+	ctx, _, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NPCF_SMPOLICYCONTROL, models.NfType_PCF)
 	if err != nil {
 		return
 	}
@@ -1069,7 +1069,7 @@ func SendSMPolicyTerminationRequestNotification(
 		return
 	}
 
-	ctx, _, err := pcf_context.GetSelf().GetTokenCtx("npcf-smpolicycontrol", models.NfType_PCF)
+	ctx, _, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NPCF_SMPOLICYCONTROL, models.NfType_PCF)
 	if err != nil {
 		return
 	}

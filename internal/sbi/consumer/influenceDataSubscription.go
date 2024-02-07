@@ -19,7 +19,7 @@ func CreateInfluenceDataSubscription(ue *pcf_context.UeContext, request models.S
 		logger.ConsumerLog.Warnf("Can't find corresponding UDR with UE[%s]", ue.Supi)
 		return "", &problemDetail, nil
 	}
-	ctx, pd, err := pcf_context.GetSelf().GetTokenCtx("nudr-dr", models.NfType_UDR)
+	ctx, pd, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
 	if err != nil {
 		return "", pd, err
 	}
@@ -73,7 +73,7 @@ func RemoveInfluenceDataSubscription(ue *pcf_context.UeContext, subscriptionID s
 		logger.ConsumerLog.Warnf("Can't find corresponding UDR with UE[%s]", ue.Supi)
 		return &problemDetail, nil
 	}
-	ctx, pd, err := pcf_context.GetSelf().GetTokenCtx("nudr-dr", models.NfType_UDR)
+	ctx, pd, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
 	if err != nil {
 		return pd, err
 	}

@@ -5,15 +5,16 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/free5gc/openapi/models"
 	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
 )
 
 type RouterAuthorizationCheck struct {
-	serviceName string
+	serviceName models.ServiceName
 }
 
-func NewRouterAuthorizationCheck(serviceName string) *RouterAuthorizationCheck {
+func NewRouterAuthorizationCheck(serviceName models.ServiceName) *RouterAuthorizationCheck {
 	return &RouterAuthorizationCheck{
 		serviceName: serviceName,
 	}

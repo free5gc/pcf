@@ -895,12 +895,12 @@ func SendAppSessionEventNotification(appSession *pcf_context.AppSessionData, req
 	}
 	uri := appSession.EventUri
 
-	ctx, _, err := pcf_context.GetSelf().GetTokenCtx("npcf-policyauthorization", models.NfType_PCF)
-	if err != nil {
-		return
-	}
-
 	if uri != "" {
+		ctx, _, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NPCF_POLICYAUTHORIZATION, models.NfType_PCF)
+		if err != nil {
+			return
+		}
+
 		request.EvSubsUri = fmt.Sprintf("%s/events-subscription",
 			util.GetResourceUri(models.ServiceName_NPCF_POLICYAUTHORIZATION, appSession.AppSessionId))
 		client := util.GetNpcfPolicyAuthorizationCallbackClient()
@@ -1077,12 +1077,12 @@ func SendAppSessionTermination(appSession *pcf_context.AppSessionData, request m
 	}
 	uri := appSession.AppSessionContext.AscReqData.NotifUri
 
-	ctx, _, err := pcf_context.GetSelf().GetTokenCtx("npcf-policyauthorization", models.NfType_PCF)
-	if err != nil {
-		return
-	}
-
 	if uri != "" {
+		ctx, _, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NPCF_POLICYAUTHORIZATION, models.NfType_PCF)
+		if err != nil {
+			return
+		}
+
 		request.ResUri = util.GetResourceUri(models.ServiceName_NPCF_POLICYAUTHORIZATION, appSession.AppSessionId)
 		client := util.GetNpcfPolicyAuthorizationCallbackClient()
 		httpResponse, err := client.PolicyAuthorizationTerminateRequestApi.PolicyAuthorizationTerminateRequest(
@@ -1130,7 +1130,7 @@ func handleBDTPolicyInd(pcfSelf *pcf_context.PCFContext,
 			requestSuppFeat).String(),
 	}
 
-	ctx, _, err := pcf_context.GetSelf().GetTokenCtx("nudr-dr", models.NfType_UDR)
+	ctx, _, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
 	if err != nil {
 		return err
 	}

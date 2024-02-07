@@ -7,6 +7,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
+
+	"github.com/free5gc/openapi/models"
 )
 
 const (
@@ -20,7 +22,7 @@ func newMockPCFContext() *mockPCFContext {
 	return &mockPCFContext{}
 }
 
-func (m *mockPCFContext) AuthorizationCheck(token string, serviceName string) error {
+func (m *mockPCFContext) AuthorizationCheck(token string, serviceName models.ServiceName) error {
 	if token == Valid {
 		return nil
 	}

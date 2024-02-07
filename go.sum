@@ -62,8 +62,8 @@ github.com/envoyproxy/go-control-plane v0.9.4/go.mod h1:6rpuAdCZL397s3pYoYcLgu1m
 github.com/envoyproxy/protoc-gen-validate v0.1.0/go.mod h1:iSmxcyjqTsJpI2R4NaDN7+kN2VEUnK/pcBlmesArF7c=
 github.com/evanphx/json-patch v0.5.2 h1:xVCHIVMUu1wtM/VkR9jVZ45N3FhZfYMMYGorLCR8P3k=
 github.com/evanphx/json-patch v0.5.2/go.mod h1:ZWS5hhDbVDyob71nXKNL0+PWn6ToqBHMikGIFbs31qQ=
-github.com/free5gc/openapi v1.0.7-0.20240117084712-52ad99299693 h1:gFyYBsErQAkx4OVHXYqjO0efO9gPWydQavQcjU0CkHY=
-github.com/free5gc/openapi v1.0.7-0.20240117084712-52ad99299693/go.mod h1:qv9KqEucoZSeENPRFGxfTe+33ZWYyiYFx1Rj+H0DoWA=
+github.com/free5gc/openapi v1.0.7-0.20240207073137-2f335d104547 h1:IU+sM9hYMEBc9k+buhe4ZlI4DrcjsXoxfevCV6DMDR4=
+github.com/free5gc/openapi v1.0.7-0.20240207073137-2f335d104547/go.mod h1:qv9KqEucoZSeENPRFGxfTe+33ZWYyiYFx1Rj+H0DoWA=
 github.com/free5gc/util v1.0.5-0.20231001095115-433858e5be94 h1:tNylIqH/m5Kq+3KuC+jjXGl06Y6EmM8yq61ZUgNrPBY=
 github.com/free5gc/util v1.0.5-0.20231001095115-433858e5be94/go.mod h1:aMszJZbCkcg5xaGgzya+55jz+OPMsJqPLq5Z3fWDFPE=
 github.com/gabriel-vasile/mimetype v1.4.2 h1:w5qFW6JKBz9Y393Y4q372O9A7cUSequkh1Q7OhCmWKU=
@@ -330,8 +330,8 @@ golang.org/x/sync v0.0.0-20190423024810-112230192c58/go.mod h1:RxMgew5VJxzue5/jJ
 golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
 golang.org/x/sync v0.0.0-20200317015054-43a5402ce75a/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
 golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
-golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4 h1:uVc8UZUe6tr40fFVnUP5Oj+veunVezqYl9z7DYw9xzw=
-golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
+golang.org/x/sync v0.1.0 h1:wsuoTGHzEhffawBOhz5CYhcrV4IdKZbEyZjBMuTp12o=
+golang.org/x/sync v0.1.0/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
 golang.org/x/sys v0.0.0-20180830151530-49385e6e1522/go.mod h1:STP8DvDyc/dI5b8T5hshtkjS+E42TnysNCUPdjciGhY=
 golang.org/x/sys v0.0.0-20190215142949-d0b11bdaac8a/go.mod h1:STP8DvDyc/dI5b8T5hshtkjS+E42TnysNCUPdjciGhY=
 golang.org/x/sys v0.0.0-20190312061237-fead79001313/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=

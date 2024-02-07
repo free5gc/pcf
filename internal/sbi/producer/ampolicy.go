@@ -234,7 +234,7 @@ func PostPoliciesProcedure(polAssoId string,
 	assolId := fmt.Sprintf("%s-%d", ue.Supi, ue.PolAssociationIDGenerator)
 	amPolicy := ue.AMPolicyData[assolId]
 
-	ctx, pd, err := pcf_context.GetSelf().GetTokenCtx("nudr-dr", models.NfType_UDR)
+	ctx, pd, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
 	if err != nil {
 		return nil, "", pd
 	}
@@ -331,7 +331,7 @@ func SendAMPolicyUpdateNotification(ue *pcf_context.UeContext, PolId string, req
 		return
 	}
 
-	ctx, _, err := pcf_context.GetSelf().GetTokenCtx("npcf-am-policy-control", models.NfType_PCF)
+	ctx, _, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NPCF_AM_POLICY_CONTROL, models.NfType_PCF)
 	if err != nil {
 		return
 	}
@@ -389,7 +389,7 @@ func SendAMPolicyTerminationRequestNotification(ue *pcf_context.UeContext,
 	client := util.GetNpcfAMPolicyCallbackClient()
 	uri := amPolicyData.NotificationUri
 
-	ctx, _, err := pcf_context.GetSelf().GetTokenCtx("npcf-am-policy-control", models.NfType_PCF)
+	ctx, _, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NPCF_AM_POLICY_CONTROL, models.NfType_PCF)
 	if err != nil {
 		return
 	}
