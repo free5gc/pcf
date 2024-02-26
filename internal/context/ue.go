@@ -157,7 +157,6 @@ func (ue *UeContext) NewUeSmPolicyData(
 	// data.RefToAmPolicy = amData
 	data.PccRuleIdGenerator = 1
 	data.ChargingIdGenerator = 1
-	// data.RatingGroupIdGenerator = 1
 
 	data.PcfUe = ue
 	ue.SmPolicyData[key] = &data
