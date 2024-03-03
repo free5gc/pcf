@@ -92,7 +92,7 @@ func RemoveInfluenceDataSubscription(ue *pcf_context.UeContext, subscriptionID s
 		}()
 		if httpResp.Status != localErr.Error() {
 			err = localErr
-			return nil, err
+			return problemDetails, err
 		}
 		problem := localErr.(openapi.GenericOpenAPIError).Model().(models.ProblemDetails)
 		problemDetails = &problem
