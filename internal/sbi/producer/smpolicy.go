@@ -247,12 +247,22 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 		logger.SmPolicyLog.Errorf("chargingInterface %+v", chargingInterface)
 		util.SetPccRuleRelatedData(&decision, pcc, nil, nil, nil, nil)
 	} else if chargingInterface != nil {
-		rg, err1 := pcf_context.GetSelf().RatingGroupIdGenerator.Allocate()
-		if err1 != nil {
-			logger.SmPolicyLog.Error("rating group allocate error")
-			problemDetails := util.GetProblemDetail("rating group allocate error", util.ERROR_IDGENERATOR)
-			return nil, nil, &problemDetails
+		var rg int64
+
+		if ratingGroup, ok := chargingInterface["ratingGroup"].(int32); ok {
+			rg = int64(ratingGroup)
+			logger.SmPolicyLog.Tracef("Use DB Origin RG:[%+v] for SUPI:[%+v]", rg, ue.Supi)
+		} else {
+			var err1 error
+
+			rg, err1 = pcf_context.GetSelf().RatingGroupIdGenerator.Allocate()
+			if err1 != nil {
+				logger.SmPolicyLog.Error("rating group allocate error")
+				problemDetails := util.GetProblemDetail("rating group allocate error", util.ERROR_IDGENERATOR)
+				return nil, nil, &problemDetails
+			}
 		}
+
 		chgData := &models.ChargingData{
 			ChgId:          util.GetChgId(smPolicyData.ChargingIdGenerator),
 			RatingGroup:    int32(rg),
@@ -329,20 +339,31 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 			}, "")
 
 			filterCharging := bson.M{
-				"ueId": ue.Supi, "snssai": util.SnssaiModelsToHex(*request.SliceInfo),
-				"dnn": request.Dnn, "filter": val,
+				"ueId":   ue.Supi,
+				"snssai": util.SnssaiModelsToHex(*request.SliceInfo),
+				"dnn":    request.Dnn,
+				"filter": val,
 			}
 			var chargingInterface map[string]interface{}
 			chargingInterface, err = mongoapi.RestfulAPIGetOne(chargingDataColl, filterCharging, 2)
 			if err != nil {
 				logger.SmPolicyLog.Errorf("Fail to get charging data to mongoDB err: %+v", err)
 			} else {
-				rg, err1 := pcf_context.GetSelf().RatingGroupIdGenerator.Allocate()
-				if err1 != nil {
-					logger.SmPolicyLog.Error("rating group allocate error")
-					problemDetails := util.GetProblemDetail("rating group allocate error", util.ERROR_IDGENERATOR)
-					return nil, nil, &problemDetails
+				var rg int64
+
+				if ratingGroup, ok1 := chargingInterface["ratingGroup"].(int32); ok1 {
+					rg = int64(ratingGroup)
+					logger.SmPolicyLog.Tracef("Use DB Origin RG:[%+v] for SUPI:[%+v]", rg, ue.Supi)
+				} else {
+					var err1 error
+					rg, err1 = pcf_context.GetSelf().RatingGroupIdGenerator.Allocate()
+					if err1 != nil {
+						logger.SmPolicyLog.Error("rating group allocate error")
+						problemDetails := util.GetProblemDetail("rating group allocate error", util.ERROR_IDGENERATOR)
+						return nil, nil, &problemDetails
+					}
 				}
+
 				chgData := &models.ChargingData{
 					ChgId:          util.GetChgId(smPolicyData.ChargingIdGenerator),
 					RatingGroup:    int32(rg),
