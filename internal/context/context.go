@@ -51,8 +51,17 @@ type PCFContext struct {
 
 	// Charging
 	RatingGroupIdGenerator *idgenerator.IDGenerator
+	RatingGroupIdMap       sync.Map // map RatingGroupMapKey to RatingGroupId which is already allocate
 
 	OAuth2Required bool
+}
+
+// Used for RatingGroupIdMap's key
+type RatingGroupMapKey struct {
+	UeId   string
+	Snssai string
+	Dnn    string
+	Filter string
 }
 
 type AMFStatusSubscriptionData struct {

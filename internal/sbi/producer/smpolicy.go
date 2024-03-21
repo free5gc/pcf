@@ -240,6 +240,11 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 		"filter": "",
 	}
 
+	chargingIdKey := pcf_context.RatingGroupMapKey{
+		UeId:   ue.Supi,
+		Snssai: util.SnssaiModelsToHex(*request.SliceInfo),
+	}
+
 	chargingInterface, err := mongoapi.RestfulAPIGetOne(chargingDataColl, filterCharging, queryStrength)
 
 	if err != nil {
@@ -249,8 +254,8 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 	} else if chargingInterface != nil {
 		var rg int64
 
-		if ratingGroup, ok := chargingInterface["ratingGroup"].(int32); ok {
-			rg = int64(ratingGroup)
+		if ratingGroup, ok := pcf_context.GetSelf().RatingGroupIdMap.Load(chargingIdKey); ok {
+			rg = ratingGroup.(int64)
 			logger.SmPolicyLog.Tracef("Use DB Origin RG:[%+v] for SUPI:[%+v]", rg, ue.Supi)
 		} else {
 			var err1 error
@@ -261,6 +266,7 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 				problemDetails := util.GetProblemDetail("rating group allocate error", util.ERROR_IDGENERATOR)
 				return nil, nil, &problemDetails
 			}
+			pcf_context.GetSelf().RatingGroupIdMap.Store(chargingIdKey, rg)
 		}
 
 		chgData := &models.ChargingData{
@@ -344,6 +350,13 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 				"dnn":    request.Dnn,
 				"filter": val,
 			}
+			chargingIdKey := pcf_context.RatingGroupMapKey{
+				UeId:   ue.Supi,
+				Snssai: util.SnssaiModelsToHex(*request.SliceInfo),
+				Dnn:    request.Dnn,
+				Filter: val,
+			}
+
 			var chargingInterface map[string]interface{}
 			chargingInterface, err = mongoapi.RestfulAPIGetOne(chargingDataColl, filterCharging, 2)
 			if err != nil {
@@ -351,8 +364,8 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 			} else {
 				var rg int64
 
-				if ratingGroup, ok1 := chargingInterface["ratingGroup"].(int32); ok1 {
-					rg = int64(ratingGroup)
+				if ratingGroup, ok1 := pcf_context.GetSelf().RatingGroupIdMap.Load(chargingIdKey); ok1 {
+					rg = ratingGroup.(int64)
 					logger.SmPolicyLog.Tracef("Use DB Origin RG:[%+v] for SUPI:[%+v]", rg, ue.Supi)
 				} else {
 					var err1 error
@@ -362,6 +375,7 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 						problemDetails := util.GetProblemDetail("rating group allocate error", util.ERROR_IDGENERATOR)
 						return nil, nil, &problemDetails
 					}
+					pcf_context.GetSelf().RatingGroupIdMap.Store(chargingIdKey, rg)
 				}
 
 				chgData := &models.ChargingData{
