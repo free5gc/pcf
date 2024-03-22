@@ -560,6 +560,7 @@ func deleteSmPolicyContextProcedure(smPolicyID string) *models.ProblemDetails {
 			logger.SmPolicyLog.Errorf("Fail to delete charging data, ratingGroup: %+v, err: %+v", ratingGroup, err)
 		}
 	}
+	delete(ue.RatingGroupData, smPolicyID)
 	return nil
 }
 
