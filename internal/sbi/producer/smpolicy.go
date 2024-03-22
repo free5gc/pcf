@@ -272,7 +272,7 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 
 		chargingInterface["ratingGroup"] = chgData.RatingGroup
 		logger.SmPolicyLog.Traceln("put ratingGroup to MongoDB")
-		if err = mongoapi.RestfulAPIPostMany(chargingDataColl, nil, []interface{}{chargingInterface}); err != nil {
+		if _, err = mongoapi.RestfulAPIPutOne(chargingDataColl, chargingInterface, chargingInterface); err != nil {
 			logger.SmPolicyLog.Errorf("Fail to put charging data to mongoDB err: %+v", err)
 		}
 		if ue.RatingGroupData == nil {
@@ -368,7 +368,7 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 				}
 
 				chargingInterface["ratingGroup"] = chgData.RatingGroup
-				if err = mongoapi.RestfulAPIPostMany(chargingDataColl, nil, []interface{}{chargingInterface}); err != nil {
+				if _, err = mongoapi.RestfulAPIPutOne(chargingDataColl, chargingInterface, chargingInterface); err != nil {
 					logger.SmPolicyLog.Errorf("Fail to put charging data to mongoDB err: %+v", err)
 				} else {
 					util.SetPccRuleRelatedData(&decision, pccRule, nil, nil, chgData, nil)
@@ -555,7 +555,7 @@ func deleteSmPolicyContextProcedure(smPolicyID string) *models.ProblemDetails {
 		filterCharging := bson.M{
 			"ratingGroup": ratingGroup,
 		}
-		err := mongoapi.RestfulAPIDeleteOne(chargingDataColl, filterCharging)
+		err := mongoapi.RestfulAPIDeleteMany(chargingDataColl, filterCharging)
 		if err != nil {
 			logger.SmPolicyLog.Errorf("Fail to delete charging data, ratingGroup: %+v, err: %+v", ratingGroup, err)
 		}
