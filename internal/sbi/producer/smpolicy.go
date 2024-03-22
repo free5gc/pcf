@@ -270,13 +270,15 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 		}
 		util.SetPccRuleRelatedData(&decision, pcc, nil, nil, chgData, nil)
 
-		chargingBsonM := bson.M{
-			"ratingGroup": chgData.RatingGroup,
-		}
+		chargingInterface["ratingGroup"] = chgData.RatingGroup
 		logger.SmPolicyLog.Traceln("put ratingGroup to MongoDB")
-		if _, err = mongoapi.RestfulAPIPutOne(chargingDataColl, filterCharging, chargingBsonM, queryStrength); err != nil {
+		if err = mongoapi.RestfulAPIPostMany(chargingDataColl, nil, []interface{}{chargingInterface}); err != nil {
 			logger.SmPolicyLog.Errorf("Fail to put charging data to mongoDB err: %+v", err)
 		}
+		if ue.RatingGroupData == nil {
+			ue.RatingGroupData = make(map[string][]int32)
+		}
+		ue.RatingGroupData[smPolicyID] = append(ue.RatingGroupData[smPolicyID], chgData.RatingGroup)
 
 		smPolicyData.ChargingIdGenerator++
 	}
@@ -329,8 +331,10 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 			}, "")
 
 			filterCharging := bson.M{
-				"ueId": ue.Supi, "snssai": util.SnssaiModelsToHex(*request.SliceInfo),
-				"dnn": request.Dnn, "filter": val,
+				"ueId":   ue.Supi,
+				"snssai": util.SnssaiModelsToHex(*request.SliceInfo),
+				"dnn":    request.Dnn,
+				"filter": val,
 			}
 			var chargingInterface map[string]interface{}
 			chargingInterface, err = mongoapi.RestfulAPIGetOne(chargingDataColl, filterCharging, 2)
@@ -363,15 +367,17 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 					decision.ChgDecs = make(map[string]*models.ChargingData)
 				}
 
-				chargingBsonM := bson.M{
-					"ratingGroup": chgData.RatingGroup,
-				}
-				if _, err = mongoapi.RestfulAPIPutOne(chargingDataColl, filterCharging, chargingBsonM, queryStrength); err != nil {
+				chargingInterface["ratingGroup"] = chgData.RatingGroup
+				if err = mongoapi.RestfulAPIPostMany(chargingDataColl, nil, []interface{}{chargingInterface}); err != nil {
 					logger.SmPolicyLog.Errorf("Fail to put charging data to mongoDB err: %+v", err)
 				} else {
 					util.SetPccRuleRelatedData(&decision, pccRule, nil, nil, chgData, nil)
 					smPolicyData.ChargingIdGenerator++
 				}
+				if ue.RatingGroupData == nil {
+					ue.RatingGroupData = make(map[string][]int32)
+				}
+				ue.RatingGroupData[smPolicyID] = append(ue.RatingGroupData[smPolicyID], chgData.RatingGroup)
 			}
 			qosRef := strconv.Itoa(int(flowRule["qosRef"].(float64)))
 			util.SetPccRuleRelatedByQosRef(&decision, pccRule, qosRef)
@@ -540,6 +546,18 @@ func deleteSmPolicyContextProcedure(smPolicyID string) *models.ProblemDetails {
 			SendAppSessionTermination(appSession, terminationInfo)
 			pcfSelf.AppSessionPool.Delete(appSessionID)
 			logger.SmPolicyLog.Tracef("SMPolicy[%s] DELETE Related AppSession[%s]", smPolicyID, appSessionID)
+		}
+	}
+
+	for _, ratingGroup := range ue.RatingGroupData[smPolicyID] {
+		pcfSelf.RatingGroupIdGenerator.FreeID(int64(ratingGroup))
+
+		filterCharging := bson.M{
+			"ratingGroup": ratingGroup,
+		}
+		err := mongoapi.RestfulAPIDeleteOne(chargingDataColl, filterCharging)
+		if err != nil {
+			logger.SmPolicyLog.Errorf("Fail to delete charging data, ratingGroup: %+v, err: %+v", ratingGroup, err)
 		}
 	}
 	return nil

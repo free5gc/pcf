@@ -36,6 +36,9 @@ type UeContext struct {
 	AppSessionIdStore           *AppSessionIdStore
 	PolicyDataSubscriptionStore *models.PolicyDataSubscription
 	PolicyDataChangeStore       *models.PolicyDataChangeNotification
+
+	// ChargingRatingGroup
+	RatingGroupData map[string][]int32 // use smPolicyId(ue.Supi-pduSessionId) as key
 }
 
 type UeAMPolicyData struct {
