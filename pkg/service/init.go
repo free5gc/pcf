@@ -1,12 +1,14 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
 	"os/signal"
 	"runtime/debug"
 	"syscall"
+	// "sync"
 
 	"github.com/antihax/optional"
 	"github.com/gin-contrib/cors"
@@ -33,6 +35,10 @@ import (
 type PcfApp struct {
 	cfg    *factory.Config
 	pcfCtx *pcf_context.PCFContext
+	ctx    context.Context
+	cancel context.CancelFunc
+
+	consumer  *consumer.Consumer
 }
 
 func NewApp(cfg *factory.Config) (*PcfApp, error) {
@@ -43,7 +49,30 @@ func NewApp(cfg *factory.Config) (*PcfApp, error) {
 
 	pcf_context.Init()
 	pcf.pcfCtx = pcf_context.GetSelf()
+
+	//consumer
+	consumer, err := consumer.NewConsumer(pcf)
+	if err != nil {
+		return pcf, err
+	}
+	pcf.consumer = consumer
 	return pcf, nil
+}
+
+func (a *PcfApp) Config() *factory.Config {
+	return a.cfg
+}
+
+func (a *PcfApp) Context() *pcf_context.PCFContext {
+	return a.pcfCtx
+}
+
+func (a *PcfApp) CancelContext() context.Context {
+	return a.ctx
+}
+
+func (a *PcfApp) Consumer() *consumer.Consumer {
+	return a.consumer
 }
 
 func (a *PcfApp) SetLogEnable(enable bool) {
