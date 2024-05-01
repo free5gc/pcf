@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"time"
 	"sync"
+	"time"
 
 	"github.com/antihax/optional"
 	"github.com/pkg/errors"
@@ -18,15 +18,15 @@ import (
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/internal/util"
 )
-type nnrfService struct{
+
+type nnrfService struct {
 	consumer *Consumer
 
 	nfMngmntMu sync.RWMutex
-	nfDiscMu   sync.RWMutex 
+	nfDiscMu   sync.RWMutex
 
 	nfMngmntClients map[string]*Nnrf_NFManagement.APIClient
 	nfDiscClients   map[string]*Nnrf_NFDiscovery.APIClient
-
 }
 
 func (s *nnrfService) getNFManagementClient(uri string) *Nnrf_NFManagement.APIClient {
@@ -51,7 +51,7 @@ func (s *nnrfService) getNFManagementClient(uri string) *Nnrf_NFManagement.APICl
 	return client
 }
 
-func (s *nnrfService) getNFDiscClient(uri string) *Nnrf_NFDiscovery.APIClient{
+func (s *nnrfService) getNFDiscClient(uri string) *Nnrf_NFDiscovery.APIClient {
 	if uri == "" {
 		return nil
 	}
@@ -174,7 +174,8 @@ func (s *nnrfService) SendNFInstancesAMF(nrfUri string, guami models.Guami, serv
 	}
 	return ""
 }
-//management
+
+// management
 func (s *nnrfService) BuildNFInstance(context *pcf_context.PCFContext) (profile models.NfProfile, err error) {
 	profile.NfInstanceId = context.NfId
 	profile.NfType = models.NfType_PCF
