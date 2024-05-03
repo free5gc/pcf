@@ -1,4 +1,4 @@
-package producer
+package processor
 
 import (
 	"fmt"
@@ -14,7 +14,6 @@ import (
 	"github.com/free5gc/openapi/models"
 	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
-	"github.com/free5gc/pcf/internal/sbi/consumer"
 	"github.com/free5gc/pcf/internal/util"
 	"github.com/free5gc/util/flowdesc"
 	"github.com/free5gc/util/httpwrapper"
@@ -28,14 +27,14 @@ const (
 )
 
 // SmPoliciesPost -
-func HandleCreateSmPolicyRequest(request *httpwrapper.Request) *httpwrapper.Response {
+func (p *Processor) HandleCreateSmPolicyRequest(request *httpwrapper.Request) *httpwrapper.Response {
 	// step 1: log
 	logger.SmPolicyLog.Infof("Handle CreateSmPolicy")
 	// step 2: retrieve request
 	requestDataType := request.Body.(models.SmPolicyContextData)
 
 	// step 3: handle the message
-	header, response, problemDetails := createSMPolicyProcedure(requestDataType)
+	header, response, problemDetails := p.createSMPolicyProcedure(requestDataType)
 
 	// step 4: process the return value from step 3
 	if response != nil {
@@ -70,7 +69,7 @@ func newQosDataWithQosFlowMap(qosFlow map[string]interface{}) *models.QosData {
 	return qosData
 }
 
-func createSMPolicyProcedure(request models.SmPolicyContextData) (
+func (p *Processor) createSMPolicyProcedure(request models.SmPolicyContextData) (
 	header http.Header, response *models.SmPolicyDecision, problemDetails *models.ProblemDetails,
 ) {
 	var err error
@@ -94,7 +93,7 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 		logger.SmPolicyLog.Warnf("Supi[%s] is not supported in PCF", request.Supi)
 		return nil, nil, &problemDetail
 	}
-	udrUri := getUdrUri(ue)
+	udrUri := p.getUdrUri(ue)
 	if udrUri == "" {
 		problemDetail := util.GetProblemDetail("Can't find corresponding UDR with UE", util.USER_UNKNOWN)
 		logger.SmPolicyLog.Warnf("Can't find corresponding UDR with UE[%s]", ue.Supi)
@@ -441,7 +440,7 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 	}
 
 	// Subscribe to Traffic Influence Data in UDR
-	subscriptionID, problemDetail, err := consumer.CreateInfluenceDataSubscription(ue, request)
+	subscriptionID, problemDetail, err := p.consumer.CreateInfluenceDataSubscription(ue, request)
 	if problemDetail != nil {
 		logger.SmPolicyLog.Errorf("Subscribe UDR Influence Data Failed Problem[%+v]", problemDetail)
 	} else if err != nil {
@@ -464,7 +463,7 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 	}
 
 	// TODO: Record BSF URI instead of discovering from NRF every time
-	bsfUri := consumer.SendNFInstancesBSF(pcf_context.GetSelf().NrfUri)
+	bsfUri := p.consumer.SendNFInstancesBSF(pcf_context.GetSelf().NrfUri)
 	if bsfUri != "" {
 		bsfClient := util.GetNbsfClient(bsfUri)
 
@@ -496,7 +495,7 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 }
 
 // SmPoliciessmPolicyIDDeletePost -
-func HandleDeleteSmPolicyContextRequest(request *httpwrapper.Request) *httpwrapper.Response {
+func (p *Processor) HandleDeleteSmPolicyContextRequest(request *httpwrapper.Request) *httpwrapper.Response {
 	// step 1: log
 	logger.SmPolicyLog.Infof("Handle DeleteSmPolicyContext")
 
@@ -504,7 +503,7 @@ func HandleDeleteSmPolicyContextRequest(request *httpwrapper.Request) *httpwrapp
 	smPolicyID := request.Params["smPolicyId"]
 
 	// step 3: handle the message
-	problemDetails := deleteSmPolicyContextProcedure(smPolicyID)
+	problemDetails := p.deleteSmPolicyContextProcedure(smPolicyID)
 
 	// step 4: process the return value from step 3
 	if problemDetails != nil {
@@ -515,7 +514,7 @@ func HandleDeleteSmPolicyContextRequest(request *httpwrapper.Request) *httpwrapp
 	}
 }
 
-func deleteSmPolicyContextProcedure(smPolicyID string) *models.ProblemDetails {
+func (p *Processor) deleteSmPolicyContextProcedure(smPolicyID string) *models.ProblemDetails {
 	logger.AmPolicyLog.Traceln("Handle SM Policy Delete")
 
 	ue := pcf_context.GetSelf().PCFUeFindByPolicyId(smPolicyID)
@@ -528,7 +527,7 @@ func deleteSmPolicyContextProcedure(smPolicyID string) *models.ProblemDetails {
 	pcfSelf := pcf_context.GetSelf()
 	smPolicy := ue.SmPolicyData[smPolicyID]
 
-	problemDetail, err := consumer.RemoveInfluenceDataSubscription(ue, smPolicy.SubscriptionID)
+	problemDetail, err := p.consumer.RemoveInfluenceDataSubscription(ue, smPolicy.SubscriptionID)
 	if problemDetail != nil {
 		logger.SmPolicyLog.Errorf("Remove UDR Influence Data Subscription Failed Problem[%+v]", problemDetail)
 	} else if err != nil {

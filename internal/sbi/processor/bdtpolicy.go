@@ -1,4 +1,4 @@
-package producer
+package processor
 
 import (
 	"fmt"
@@ -13,7 +13,6 @@ import (
 	"github.com/free5gc/openapi/models"
 	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
-	"github.com/free5gc/pcf/internal/sbi/consumer"
 	"github.com/free5gc/pcf/internal/util"
 	"github.com/free5gc/util/httpwrapper"
 )
@@ -59,7 +58,7 @@ func getBDTPolicyContextProcedure(bdtPolicyID string) (
 }
 
 // UpdateBDTPolicy - Update an Individual BDT policy (choose policy data)
-func HandleUpdateBDTPolicyContextProcedure(request *httpwrapper.Request) *httpwrapper.Response {
+func (p *Processor) HandleUpdateBDTPolicyContextProcedure(request *httpwrapper.Request) *httpwrapper.Response {
 	// step 1: log
 	logger.BdtPolicyLog.Infof("Handle UpdateBDTPolicyContext")
 
@@ -68,7 +67,7 @@ func HandleUpdateBDTPolicyContextProcedure(request *httpwrapper.Request) *httpwr
 	bdtPolicyID := request.Params["bdtPolicyId"]
 
 	// step 3: handle the message
-	response, problemDetails := updateBDTPolicyContextProcedure(requestDataType, bdtPolicyID)
+	response, problemDetails := p.updateBDTPolicyContextProcedure(requestDataType, bdtPolicyID)
 
 	// step 4: process the return value from step 3
 	if response != nil {
@@ -84,7 +83,7 @@ func HandleUpdateBDTPolicyContextProcedure(request *httpwrapper.Request) *httpwr
 	return httpwrapper.NewResponse(http.StatusForbidden, nil, problemDetails)
 }
 
-func updateBDTPolicyContextProcedure(request models.BdtPolicyDataPatch, bdtPolicyID string) (
+func (p *Processor) updateBDTPolicyContextProcedure(request models.BdtPolicyDataPatch, bdtPolicyID string) (
 	response *models.BdtPolicy, problemDetails *models.ProblemDetails,
 ) {
 	logger.BdtPolicyLog.Infoln("Handle BDTPolicyUpdate")
@@ -117,7 +116,7 @@ func updateBDTPolicyContextProcedure(request models.BdtPolicyDataPatch, bdtPolic
 			param := Nudr_DataRepository.PolicyDataBdtDataBdtReferenceIdPutParamOpts{
 				BdtData: optional.NewInterface(bdtData),
 			}
-			client := util.GetNudrClient(getDefaultUdrUri(pcfSelf))
+			client := util.GetNudrClient(p.getDefaultUdrUri(pcfSelf))
 			ctx, pd, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
 			if err != nil {
 				return nil, pd
@@ -145,7 +144,7 @@ func updateBDTPolicyContextProcedure(request models.BdtPolicyDataPatch, bdtPolic
 }
 
 // CreateBDTPolicy - Create a new Individual BDT policy
-func HandleCreateBDTPolicyContextRequest(request *httpwrapper.Request) *httpwrapper.Response {
+func (p *Processor) HandleCreateBDTPolicyContextRequest(request *httpwrapper.Request) *httpwrapper.Response {
 	// step 1: log
 	logger.BdtPolicyLog.Infof("Handle CreateBDTPolicyContext")
 
@@ -158,7 +157,7 @@ func HandleCreateBDTPolicyContextRequest(request *httpwrapper.Request) *httpwrap
 	}
 
 	// step 3: handle the message
-	header, response, problemDetails := createBDTPolicyContextProcedure(&requestMsg)
+	header, response, problemDetails := p.createBDTPolicyContextProcedure(&requestMsg)
 
 	// step 4: process the return value from step 3
 	if response != nil {
@@ -171,14 +170,14 @@ func HandleCreateBDTPolicyContextRequest(request *httpwrapper.Request) *httpwrap
 	}
 }
 
-func createBDTPolicyContextProcedure(request *models.BdtReqData) (
+func (p *Processor) createBDTPolicyContextProcedure(request *models.BdtReqData) (
 	header http.Header, response *models.BdtPolicy, problemDetails *models.ProblemDetails,
 ) {
 	response = &models.BdtPolicy{}
 	logger.BdtPolicyLog.Traceln("Handle BDT Policy Create")
 
 	pcfSelf := pcf_context.GetSelf()
-	udrUri := getDefaultUdrUri(pcfSelf)
+	udrUri := p.getDefaultUdrUri(pcfSelf)
 	if udrUri == "" {
 		// Can't find any UDR support this Ue
 		problemDetails = &models.ProblemDetails{
@@ -282,7 +281,7 @@ func createBDTPolicyContextProcedure(request *models.BdtReqData) (
 	return header, response, problemDetails
 }
 
-func getDefaultUdrUri(context *pcf_context.PCFContext) string {
+func (p *Processor) getDefaultUdrUri(context *pcf_context.PCFContext) string {
 	context.DefaultUdrURILock.RLock()
 	defer context.DefaultUdrURILock.RUnlock()
 	if context.DefaultUdrURI != "" {
@@ -291,7 +290,7 @@ func getDefaultUdrUri(context *pcf_context.PCFContext) string {
 	param := Nnrf_NFDiscovery.SearchNFInstancesParamOpts{
 		ServiceNames: optional.NewInterface([]models.ServiceName{models.ServiceName_NUDR_DR}),
 	}
-	resp, err := consumer.SendSearchNFInstances(context.NrfUri, models.NfType_UDR, models.NfType_PCF, param)
+	resp, err := p.consumer.SendSearchNFInstances(context.NrfUri, models.NfType_UDR, models.NfType_PCF, param)
 	if err != nil {
 		return ""
 	}

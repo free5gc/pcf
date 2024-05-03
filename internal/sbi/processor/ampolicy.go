@@ -1,4 +1,4 @@
-package producer
+package processor
 
 import (
 	"fmt"
@@ -11,7 +11,6 @@ import (
 	"github.com/free5gc/openapi/models"
 	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
-	"github.com/free5gc/pcf/internal/sbi/consumer"
 	"github.com/free5gc/pcf/internal/util"
 	"github.com/free5gc/util/httpwrapper"
 )
@@ -179,13 +178,13 @@ func UpdatePostPoliciesPolAssoIdProcedure(polAssoId string,
 }
 
 // Create AM Policy
-func HandlePostPolicies(request *httpwrapper.Request) *httpwrapper.Response {
+func (p *Processor) HandlePostPolicies(request *httpwrapper.Request) *httpwrapper.Response {
 	logger.AmPolicyLog.Infof("Handle AM Policy Create Request")
 
 	polAssoId := request.Params["polAssoId"]
 	policyAssociationRequest := request.Body.(models.PolicyAssociationRequest)
 
-	response, locationHeader, problemDetails := PostPoliciesProcedure(polAssoId, policyAssociationRequest)
+	response, locationHeader, problemDetails := p.PostPoliciesProcedure(polAssoId, policyAssociationRequest)
 	headers := http.Header{
 		"Location": {locationHeader},
 	}
@@ -201,7 +200,7 @@ func HandlePostPolicies(request *httpwrapper.Request) *httpwrapper.Response {
 	return httpwrapper.NewResponse(int(problemDetails.Status), nil, problemDetails)
 }
 
-func PostPoliciesProcedure(polAssoId string,
+func (p *Processor) PostPoliciesProcedure(polAssoId string,
 	policyAssociationRequest models.PolicyAssociationRequest,
 ) (*models.PolicyAssociation, string, *models.ProblemDetails) {
 	var response models.PolicyAssociation
@@ -220,7 +219,7 @@ func PostPoliciesProcedure(polAssoId string,
 			ue = newUe
 		}
 	}
-	udrUri := getUdrUri(ue)
+	udrUri := p.getUdrUri(ue)
 	if udrUri == "" {
 		// Can't find any UDR support this Ue
 		pcfSelf.UePool.Delete(ue.Supi)
@@ -301,9 +300,9 @@ func PostPoliciesProcedure(polAssoId string,
 
 		if needSubscribe {
 			logger.AmPolicyLog.Debugf("Subscribe AMF status change[GUAMI: %+v]", *policyAssociationRequest.Guami)
-			amfUri := consumer.SendNFInstancesAMF(pcfSelf.NrfUri, *policyAssociationRequest.Guami, models.ServiceName_NAMF_COMM)
+			amfUri := p.consumer.SendNFInstancesAMF(pcfSelf.NrfUri, *policyAssociationRequest.Guami, models.ServiceName_NAMF_COMM)
 			if amfUri != "" {
-				problemDetails, err := consumer.AmfStatusChangeSubscribe(amfUri, []models.Guami{*policyAssociationRequest.Guami})
+				problemDetails, err := p.consumer.AmfStatusChangeSubscribe(amfUri, []models.Guami{*policyAssociationRequest.Guami})
 				if err != nil {
 					logger.AmPolicyLog.Errorf("Subscribe AMF status change error[%+v]", err)
 				} else if problemDetails != nil {
@@ -430,9 +429,9 @@ func SendAMPolicyTerminationRequestNotification(ue *pcf_context.UeContext,
 }
 
 // returns UDR Uri of Ue, if ue.UdrUri dose not exist, query NRF to get supported Udr Uri
-func getUdrUri(ue *pcf_context.UeContext) string {
+func (p *Processor) getUdrUri(ue *pcf_context.UeContext) string {
 	if ue.UdrUri != "" {
 		return ue.UdrUri
 	}
-	return consumer.SendNFInstancesUDR(pcf_context.GetSelf().NrfUri, ue.Supi)
+	return p.consumer.SendNFInstancesUDR(pcf_context.GetSelf().NrfUri, ue.Supi)
 }
