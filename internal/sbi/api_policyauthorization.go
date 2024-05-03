@@ -22,8 +22,8 @@ import (
 	"github.com/free5gc/util/httpwrapper"
 )
 
-func (s *Server) getPolicyAuthorizationEndpoints() []Endpoint {
-	return []Endpoint{
+func (s *Server) getPolicyAuthorizationRoutes() []Route {
+	return []Route{
 		{
 			Method:  http.MethodPost,
 			Pattern: "/app-sessions",

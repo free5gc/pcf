@@ -21,8 +21,8 @@ import (
 	"github.com/free5gc/util/httpwrapper"
 )
 
-func (s *Server) getSmPolicyEndpoints() []Endpoint {
-	return []Endpoint{
+func (s *Server) getSmPolicyRoutes() []Route {
+	return []Route{
 		{
 			Method:  http.MethodPost,
 			Pattern: "/sm-policies",

@@ -43,8 +43,8 @@ func (s *Server) HTTPOAMGetAmPolicy(c *gin.Context) {
 	}
 }
 
-func (s *Server) getOamEndpoints() []Endpoint {
-	return []Endpoint{
+func (s *Server) getOamRoutes() []Route {
+	return []Route{
 		{
 			Method:  http.MethodGet,
 			Pattern: "/am-policy/:supi",

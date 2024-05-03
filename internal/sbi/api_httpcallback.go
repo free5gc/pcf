@@ -12,8 +12,8 @@ import (
 	"github.com/free5gc/util/httpwrapper"
 )
 
-func (s *Server) getHttpCallBackEndpoints() []Endpoint {
-	return []Endpoint{
+func (s *Server) getHttpCallBackRoutes() []Route {
+	return []Route{
 		{
 			Method:  http.MethodPost,
 			Pattern: "/nudr-notify/policy-data/:supi",

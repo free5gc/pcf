@@ -15,8 +15,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func (s *Server) getUePolicyEndpoints() []Endpoint {
-	return []Endpoint{
+func (s *Server) getUePolicyRoutes() []Route {
+	return []Route{
 		{
 			Method:  http.MethodDelete,
 			Pattern: "/policies/{polAssoId}",

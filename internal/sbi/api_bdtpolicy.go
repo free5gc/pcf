@@ -24,8 +24,8 @@ import (
 	"github.com/free5gc/util/httpwrapper"
 )
 
-func (s *Server) getBdtPolicyEndPoints() []Endpoint {
-	return []Endpoint{
+func (s *Server) getBdtPolicyRoutes() []Route {
+	return []Route{
 		{
 			Method:  http.MethodPost,
 			Pattern: "/bdtpolicies",

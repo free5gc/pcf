@@ -19,7 +19,7 @@ import (
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/internal/sbi/consumer"
 
-	// "github.com/free5gc/pcf/internal/sbi/processor"
+	"github.com/free5gc/pcf/internal/sbi/processor"
 	"github.com/free5gc/pcf/pkg/factory"
 	"github.com/free5gc/util/httpwrapper"
 )
@@ -28,25 +28,25 @@ const (
 	CorsConfigMaxAge = 86400
 )
 
-type Endpoint struct {
+type Route struct {
 	Method  string
 	Pattern string
 	APIFunc gin.HandlerFunc
 }
 
-func applyEndpoints(group *gin.RouterGroup, endpoints []Endpoint) {
-	for _, endpoint := range endpoints {
-		switch endpoint.Method {
+func applyRoutes(group *gin.RouterGroup, routes []Route) {
+	for _, route := range routes {
+		switch route.Method {
 		case "GET":
-			group.GET(endpoint.Pattern, endpoint.APIFunc)
+			group.GET(route.Pattern, route.APIFunc)
 		case "POST":
-			group.POST(endpoint.Pattern, endpoint.APIFunc)
+			group.POST(route.Pattern, route.APIFunc)
 		case "PUT":
-			group.PUT(endpoint.Pattern, endpoint.APIFunc)
+			group.PUT(route.Pattern, route.APIFunc)
 		case "PATCH":
-			group.PATCH(endpoint.Pattern, endpoint.APIFunc)
+			group.PATCH(route.Pattern, route.APIFunc)
 		case "DELETE":
-			group.DELETE(endpoint.Pattern, endpoint.APIFunc)
+			group.DELETE(route.Pattern, route.APIFunc)
 		}
 	}
 }
@@ -72,33 +72,33 @@ func NewServer(pcf pcf, tlsKeyLogPath string) (*Server, error) {
 		pcf: pcf,
 	}
 
-	smPolicyEndpoints := s.getSmPolicyEndpoints()
+	smPolicyRoutes := s.getSmPolicyRoutes()
 	smPolicyGroup := s.router.Group(factory.PcfSMpolicyCtlResUriPrefix)
-	applyEndpoints(smPolicyGroup, smPolicyEndpoints)
+	applyRoutes(smPolicyGroup, smPolicyRoutes)
 
-	amPolicyEndpoints := s.getAmPolicyEndpoints()
+	amPolicyRoutes := s.getAmPolicyRoutes()
 	amPolicyGroup := s.router.Group(factory.PcfAMpolicyCtlResUriPrefix)
-	applyEndpoints(amPolicyGroup, amPolicyEndpoints)
+	applyRoutes(amPolicyGroup, amPolicyRoutes)
 
-	bdtPolicyEndpoints := s.getBdtPolicyEndPoints()
+	bdtPolicyRoutes := s.getBdtPolicyRoutes()
 	bdtPolicyGroup := s.router.Group(factory.PcfBdtPolicyCtlResUriPrefix)
-	applyEndpoints(bdtPolicyGroup, bdtPolicyEndpoints)
+	applyRoutes(bdtPolicyGroup, bdtPolicyRoutes)
 
-	httpcallbackEndpoints := s.getHttpCallBackEndpoints()
+	httpcallbackRoutes := s.getHttpCallBackRoutes()
 	httpcallbackGroup := s.router.Group(factory.PcfCallbackResUriPrefix)
-	applyEndpoints(httpcallbackGroup, httpcallbackEndpoints)
+	applyRoutes(httpcallbackGroup, httpcallbackRoutes)
 
-	oamEndpoints := s.getOamEndpoints()
+	oamRoutes := s.getOamRoutes()
 	oamGroup := s.router.Group(factory.PcfOamResUriPrefix)
-	applyEndpoints(oamGroup, oamEndpoints)
+	applyRoutes(oamGroup, oamRoutes)
 
-	policyAuthorizationEndpoints := s.getPolicyAuthorizationEndpoints()
+	policyAuthorizationRoutes := s.getPolicyAuthorizationRoutes()
 	policyAuthorizationGroup := s.router.Group(factory.PcfPolicyAuthResUriPrefix)
-	applyEndpoints(policyAuthorizationGroup, policyAuthorizationEndpoints)
+	applyRoutes(policyAuthorizationGroup, policyAuthorizationRoutes)
 
-	uePolicyEndpoints := s.getUePolicyEndpoints()
+	uePolicyRoutes := s.getUePolicyRoutes()
 	uePolicyGroup := s.router.Group(factory.PcfUePolicyCtlResUriPrefix)
-	applyEndpoints(uePolicyGroup, uePolicyEndpoints)
+	applyRoutes(uePolicyGroup, uePolicyRoutes)
 
 	s.router.Use(cors.New(cors.Config{
 		AllowMethods: []string{"GET", "POST", "OPTIONS", "PUT", "PATCH", "DELETE"},

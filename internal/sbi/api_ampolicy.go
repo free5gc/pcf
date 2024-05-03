@@ -163,8 +163,8 @@ func (s *Server) HTTPPoliciesPost(c *gin.Context) {
 	}
 }
 
-func (s *Server) getAmPolicyEndpoints() []Endpoint {
-	return []Endpoint{
+func (s *Server) getAmPolicyRoutes() []Route {
+	return []Route{
 
 		{
 			Method:  http.MethodGet,
