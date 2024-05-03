@@ -8,7 +8,7 @@ import (
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/pcf/internal/logger"
-	"github.com/free5gc/pcf/internal/sbi/producer"
+	"github.com/free5gc/pcf/internal/sbi/processor"
 	"github.com/free5gc/util/httpwrapper"
 )
 
@@ -27,7 +27,7 @@ func (s *Server) HTTPOAMGetAmPolicy(c *gin.Context) {
 	req := httpwrapper.NewRequest(c.Request, nil)
 	req.Params["supi"] = c.Params.ByName("supi")
 
-	rsp := producer.HandleOAMGetAmPolicyRequest(req)
+	rsp := processor.HandleOAMGetAmPolicyRequest(req)
 
 	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
 	if err != nil {

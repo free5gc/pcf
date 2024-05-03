@@ -17,7 +17,7 @@ import (
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/pcf/internal/logger"
-	"github.com/free5gc/pcf/internal/sbi/producer"
+	"github.com/free5gc/pcf/internal/sbi/processor"
 	"github.com/free5gc/pcf/internal/util"
 	"github.com/free5gc/util/httpwrapper"
 )
@@ -98,7 +98,7 @@ func (s *Server) HTTPPostAppSessions(c *gin.Context) {
 	}
 
 	req := httpwrapper.NewRequest(c.Request, appSessionContext)
-	rsp := producer.HandlePostAppSessionsContext(req)
+	rsp := s.processor.HandlePostAppSessionsContext(req)
 
 	for key, val := range rsp.Header {
 		c.Header(key, val[0])
@@ -123,7 +123,7 @@ func (s *Server) HTTPDeleteEventsSubsc(c *gin.Context) {
 	req := httpwrapper.NewRequest(c.Request, nil)
 	req.Params["appSessionId"], _ = c.Params.Get("appSessionId")
 
-	rsp := producer.HandleDeleteEventsSubscContext(req)
+	rsp := processor.HandleDeleteEventsSubscContext(req)
 
 	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
 	if err != nil {
@@ -179,7 +179,7 @@ func (s *Server) HTTPUpdateEventsSubsc(c *gin.Context) {
 	req := httpwrapper.NewRequest(c.Request, eventsSubscReqData)
 	req.Params["appSessionId"], _ = c.Params.Get("appSessionId")
 
-	rsp := producer.HandleUpdateEventsSubscContext(req)
+	rsp := processor.HandleUpdateEventsSubscContext(req)
 
 	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
 	if err != nil {
@@ -232,7 +232,7 @@ func (s *Server) HTTPDeleteAppSession(c *gin.Context) {
 	req := httpwrapper.NewRequest(c.Request, eventsSubscReqData)
 	req.Params["appSessionId"], _ = c.Params.Get("appSessionId")
 
-	rsp := producer.HandleDeleteAppSessionContext(req)
+	rsp := processor.HandleDeleteAppSessionContext(req)
 
 	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
 	if err != nil {
@@ -253,7 +253,7 @@ func (s *Server) HTTPGetAppSession(c *gin.Context) {
 	req := httpwrapper.NewRequest(c.Request, nil)
 	req.Params["appSessionId"], _ = c.Params.Get("appSessionId")
 
-	rsp := producer.HandleGetAppSessionContext(req)
+	rsp := processor.HandleGetAppSessionContext(req)
 
 	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
 	if err != nil {
@@ -302,7 +302,7 @@ func (s *Server) HTTPModAppSession(c *gin.Context) {
 	req := httpwrapper.NewRequest(c.Request, appSessionContextUpdateData)
 	req.Params["appSessionId"], _ = c.Params.Get("appSessionId")
 
-	rsp := producer.HandleModAppSessionContext(req)
+	rsp := s.processor.HandleModAppSessionContext(req)
 
 	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
 	if err != nil {

@@ -17,7 +17,7 @@ import (
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/pcf/internal/logger"
-	"github.com/free5gc/pcf/internal/sbi/producer"
+	"github.com/free5gc/pcf/internal/sbi/processor"
 	"github.com/free5gc/util/httpwrapper"
 )
 
@@ -78,7 +78,7 @@ func (s *Server) HTTPSmPoliciesPost(c *gin.Context) {
 	}
 
 	req := httpwrapper.NewRequest(c.Request, smPolicyContextData)
-	rsp := producer.HandleCreateSmPolicyRequest(req)
+	rsp := s.processor.HandleCreateSmPolicyRequest(req)
 
 	// step 5: response
 	for key, val := range rsp.Header { // header response is optional
@@ -103,7 +103,7 @@ func (s *Server) HTTPSmPoliciesSmPolicyIdDeletePost(c *gin.Context) {
 	req := httpwrapper.NewRequest(c.Request, nil)
 	req.Params["smPolicyId"] = c.Params.ByName("smPolicyId")
 
-	rsp := producer.HandleDeleteSmPolicyContextRequest(req)
+	rsp := s.processor.HandleDeleteSmPolicyContextRequest(req)
 
 	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
 	if err != nil {
@@ -124,7 +124,7 @@ func (s *Server) HTTPSmPoliciesSmPolicyIDGet(c *gin.Context) {
 	req := httpwrapper.NewRequest(c.Request, nil)
 	req.Params["smPolicyId"] = c.Params.ByName("smPolicyId")
 
-	rsp := producer.HandleGetSmPolicyContextRequest(req)
+	rsp := processor.HandleGetSmPolicyContextRequest(req)
 
 	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
 	if err != nil {
@@ -174,7 +174,7 @@ func (s *Server) HTTPSmPoliciesSmPolicyIdUpdatePost(c *gin.Context) {
 	req := httpwrapper.NewRequest(c.Request, smPolicyUpdateContextData)
 	req.Params["smPolicyId"] = c.Params.ByName("smPolicyId")
 
-	rsp := producer.HandleUpdateSmPolicyContextRequest(req)
+	rsp := processor.HandleUpdateSmPolicyContextRequest(req)
 
 	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
 	if err != nil {

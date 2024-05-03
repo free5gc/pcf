@@ -8,7 +8,7 @@ import (
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/pcf/internal/logger"
-	"github.com/free5gc/pcf/internal/sbi/producer"
+	"github.com/free5gc/pcf/internal/sbi/processor"
 	"github.com/free5gc/pcf/internal/util"
 	"github.com/free5gc/util/httpwrapper"
 )
@@ -17,7 +17,7 @@ func (s *Server) HTTPPoliciesPolAssoIdDelete(c *gin.Context) {
 	req := httpwrapper.NewRequest(c.Request, nil)
 	req.Params["polAssoId"], _ = c.Params.Get("polAssoId")
 
-	rsp := producer.HandleDeletePoliciesPolAssoId(req)
+	rsp := processor.HandleDeletePoliciesPolAssoId(req)
 
 	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
 	if err != nil {
@@ -38,7 +38,7 @@ func (s *Server) HTTPPoliciesPolAssoIdGet(c *gin.Context) {
 	req := httpwrapper.NewRequest(c.Request, nil)
 	req.Params["polAssoId"], _ = c.Params.Get("polAssoId")
 
-	rsp := producer.HandleGetPoliciesPolAssoId(req)
+	rsp := processor.HandleGetPoliciesPolAssoId(req)
 
 	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
 	if err != nil {
@@ -87,7 +87,7 @@ func (s *Server) HTTPPoliciesPolAssoIdUpdatePost(c *gin.Context) {
 	req := httpwrapper.NewRequest(c.Request, policyAssociationUpdateRequest)
 	req.Params["polAssoId"], _ = c.Params.Get("polAssoId")
 
-	rsp := producer.HandleUpdatePostPoliciesPolAssoId(req)
+	rsp := processor.HandleUpdatePostPoliciesPolAssoId(req)
 
 	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
 	if err != nil {
@@ -143,7 +143,7 @@ func (s *Server) HTTPPoliciesPost(c *gin.Context) {
 	req := httpwrapper.NewRequest(c.Request, policyAssociationRequest)
 	req.Params["polAssoId"], _ = c.Params.Get("polAssoId")
 
-	rsp := producer.HandlePostPolicies(req)
+	rsp := s.processor.HandlePostPolicies(req)
 
 	for key, val := range rsp.Header {
 		c.Header(key, val[0])

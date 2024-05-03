@@ -55,7 +55,7 @@ type pcf interface {
 	Config() *factory.Config
 	Context() *pcf_context.PCFContext
 	CancelContext() context.Context
-	// Processor() *processor.Processor
+	Processor() *processor.Processor
 	Consumer() *consumer.Consumer
 }
 
@@ -64,7 +64,7 @@ type Server struct {
 
 	httpServer *http.Server
 	router     *gin.Engine
-	// processor  *processor.Processor
+	processor  *processor.Processor
 }
 
 func NewServer(pcf pcf, tlsKeyLogPath string) (*Server, error) {

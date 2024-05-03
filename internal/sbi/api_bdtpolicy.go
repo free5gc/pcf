@@ -20,7 +20,7 @@ import (
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/pcf/internal/logger"
-	"github.com/free5gc/pcf/internal/sbi/producer"
+	"github.com/free5gc/pcf/internal/sbi/processor"
 	"github.com/free5gc/util/httpwrapper"
 )
 
@@ -77,7 +77,7 @@ func (s *Server) HTTPCreateBDTPolicy(c *gin.Context) {
 	}
 
 	req := httpwrapper.NewRequest(c.Request, bdtReqData)
-	rsp := producer.HandleCreateBDTPolicyContextRequest(req)
+	rsp := s.processor.HandleCreateBDTPolicyContextRequest(req)
 	// step 5: response
 	for key, val := range rsp.Header { // header response is optional
 		c.Header(key, val[0])
@@ -102,7 +102,7 @@ func (s *Server) HTTPGetBDTPolicy(c *gin.Context) {
 	req := httpwrapper.NewRequest(c.Request, nil)
 	req.Params["bdtPolicyId"] = c.Params.ByName("bdtPolicyId")
 
-	rsp := producer.HandleGetBDTPolicyContextRequest(req)
+	rsp := processor.HandleGetBDTPolicyContextRequest(req)
 
 	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
 	if err != nil {
@@ -152,7 +152,7 @@ func (s *Server) HTTPUpdateBDTPolicy(c *gin.Context) {
 	req := httpwrapper.NewRequest(c.Request, bdtPolicyDataPatch)
 	req.Params["bdtPolicyId"] = c.Params.ByName("bdtPolicyId")
 
-	rsp := producer.HandleUpdateBDTPolicyContextProcedure(req)
+	rsp := s.processor.HandleUpdateBDTPolicyContextProcedure(req)
 
 	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
 	if err != nil {

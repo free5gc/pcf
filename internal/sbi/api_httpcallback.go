@@ -8,7 +8,7 @@ import (
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/pcf/internal/logger"
-	"github.com/free5gc/pcf/internal/sbi/producer"
+	"github.com/free5gc/pcf/internal/sbi/processor"
 	"github.com/free5gc/util/httpwrapper"
 )
 
@@ -64,7 +64,7 @@ func (s *Server) HTTPAmfStatusChangeNotify(c *gin.Context) {
 
 	req := httpwrapper.NewRequest(c.Request, amfStatusChangeNotification)
 
-	rsp := producer.HandleAmfStatusChangeNotify(req)
+	rsp := processor.HandleAmfStatusChangeNotify(req)
 
 	if rsp.Status == http.StatusNoContent {
 		c.Status(rsp.Status)
@@ -118,7 +118,7 @@ func (s *Server) HTTPUdrPolicyDataChangeNotify(c *gin.Context) {
 	req := httpwrapper.NewRequest(c.Request, policyDataChangeNotification)
 	req.Params["supi"] = c.Params.ByName("supi")
 
-	rsp := producer.HandlePolicyDataChangeNotify(req)
+	rsp := processor.HandlePolicyDataChangeNotify(req)
 
 	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
 	if err != nil {
@@ -168,7 +168,7 @@ func (s *Server) HTTPUdrInfluenceDataUpdateNotify(c *gin.Context) {
 	req.Params["supi"] = c.Params.ByName("supi")
 	req.Params["pduSessionId"] = c.Params.ByName("pduSessionId")
 
-	rsp := producer.HandleInfluenceDataUpdateNotify(req)
+	rsp := processor.HandleInfluenceDataUpdateNotify(req)
 
 	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
 	if err != nil {
