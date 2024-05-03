@@ -1,4 +1,4 @@
-package oam
+package sbi
 
 import (
 	"net/http"
@@ -12,7 +12,7 @@ import (
 	"github.com/free5gc/util/httpwrapper"
 )
 
-func setCorsHeader(c *gin.Context) {
+func (s *Server) setCorsHeader(c *gin.Context) {
 	c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 	c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 	c.Writer.Header().Set(
@@ -21,8 +21,8 @@ func setCorsHeader(c *gin.Context) {
 	c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, PATCH, DELETE")
 }
 
-func HTTPOAMGetAmPolicy(c *gin.Context) {
-	setCorsHeader(c)
+func (s *Server) HTTPOAMGetAmPolicy(c *gin.Context) {
+	s.setCorsHeader(c)
 
 	req := httpwrapper.NewRequest(c.Request, nil)
 	req.Params["supi"] = c.Params.ByName("supi")
@@ -40,5 +40,15 @@ func HTTPOAMGetAmPolicy(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, problemDetails)
 	} else {
 		c.Data(rsp.Status, "application/json", responseBody)
+	}
+}
+
+func (s *Server) getOamEndpoints() []Endpoint {
+	return []Endpoint{
+		{
+			Method:  http.MethodGet,
+			Pattern: "/am-policy/:supi",
+			APIFunc: s.HTTPOAMGetAmPolicy,
+		},
 	}
 }
