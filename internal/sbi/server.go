@@ -18,10 +18,10 @@ import (
 	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/internal/sbi/consumer"
-
 	"github.com/free5gc/pcf/internal/sbi/processor"
 	"github.com/free5gc/pcf/pkg/factory"
 	"github.com/free5gc/util/httpwrapper"
+	logger_util "github.com/free5gc/util/logger"
 )
 
 const (
@@ -69,7 +69,8 @@ type Server struct {
 
 func NewServer(pcf pcf, tlsKeyLogPath string) (*Server, error) {
 	s := &Server{
-		pcf: pcf,
+		pcf:    pcf,
+		router: logger_util.NewGinWithLogrus(logger.GinLog),
 	}
 
 	smPolicyRoutes := s.getSmPolicyRoutes()
@@ -126,8 +127,15 @@ func NewServer(pcf pcf, tlsKeyLogPath string) (*Server, error) {
 }
 
 func (s *Server) Run(traceCtx context.Context, wg *sync.WaitGroup) error {
+	var err error
+	_, s.Context().NfId, err = s.Consumer().SendRegisterNFInstance(context.Background())
+	if err != nil {
+		logger.InitLog.Errorf("CHF register to NRF Error[%s]", err.Error())
+	}
+
 	wg.Add(1)
 	go s.startServer(wg)
+
 	return nil
 }
 

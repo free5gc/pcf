@@ -1,6 +1,7 @@
 package consumer
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -206,26 +207,25 @@ func (s *nnrfService) BuildNFInstance(context *pcf_context.PCFContext) (profile 
 	}
 	return
 }
-
-func (s *nnrfService) SendRegisterNFInstance(nrfUri, nfInstanceId string, profile models.NfProfile) (
+func (s *nnrfService) SendRegisterNFInstance(ctx context.Context) (
 	resouceNrfUri string, retrieveNfInstanceID string, err error,
 ) {
 	// Set client and set url
-	client := s.getNFManagementClient(nrfUri)
+	pcfContext := s.consumer.Context()
 
-	ctx, _, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NNRF_NFM, models.NfType_NRF)
+	client := s.getNFManagementClient(pcfContext.NrfUri)
+	nfProfile, err := s.BuildNFInstance(pcfContext)
 	if err != nil {
 		return "", "",
-			errors.Errorf("SendRegisterNFInstance error: %+v", err)
+			errors.Wrap(err, "RegisterNFInstance buildNfProfile()")
 	}
 
-	var res *http.Response
 	var nf models.NfProfile
+	var res *http.Response
 	for {
-		nf, res, err = client.NFInstanceIDDocumentApi.RegisterNFInstance(ctx, nfInstanceId, profile)
+		nf, res, err = client.NFInstanceIDDocumentApi.RegisterNFInstance(context.TODO(), pcfContext.NfId, nfProfile)
 		if err != nil || res == nil {
-			// TODO : add log
-			fmt.Println(fmt.Errorf("PCF register to NRF Error[%v]", err.Error()))
+			logger.ConsumerLog.Errorf("CHF register to NRF Error[%v]", err)
 			time.Sleep(2 * time.Second)
 			continue
 		}
@@ -253,12 +253,13 @@ func (s *nnrfService) SendRegisterNFInstance(nrfUri, nfInstanceId string, profil
 				}
 			}
 			pcf_context.GetSelf().OAuth2Required = oauth2
-
 			if oauth2 && pcf_context.GetSelf().NrfCertPem == "" {
 				logger.CfgLog.Error("OAuth2 enable but no nrfCertPem provided in config.")
 			}
+
 			break
 		} else {
+			fmt.Println(fmt.Errorf("handler returned wrong status code %d", status))
 			fmt.Println("NRF return wrong status code", status)
 		}
 	}
