@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"reflect"
 
+	"github.com/gin-gonic/gin"
 	"github.com/mohae/deepcopy"
 
 	"github.com/free5gc/openapi"
@@ -12,49 +13,43 @@ import (
 	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/internal/util"
-	"github.com/free5gc/util/httpwrapper"
 )
 
-func HandleDeletePoliciesPolAssoId(request *httpwrapper.Request) *httpwrapper.Response {
+func (p *Processor) HandleDeletePoliciesPolAssoId(
+	c *gin.Context,
+	polAssoId string) {
+
 	logger.AmPolicyLog.Infof("Handle AM Policy Association Delete")
 
-	polAssoId := request.Params["polAssoId"]
-
-	problemDetails := DeletePoliciesPolAssoIdProcedure(polAssoId)
-	if problemDetails == nil {
-		return httpwrapper.NewResponse(http.StatusNoContent, nil, nil)
-	} else {
-		return httpwrapper.NewResponse(int(problemDetails.Status), nil, problemDetails)
-	}
-}
-
-func DeletePoliciesPolAssoIdProcedure(polAssoId string) *models.ProblemDetails {
 	ue := pcf_context.GetSelf().PCFUeFindByPolicyId(polAssoId)
 	if ue == nil || ue.AMPolicyData[polAssoId] == nil {
 		problemDetails := util.GetProblemDetail("polAssoId not found  in PCF", util.CONTEXT_NOT_FOUND)
-		return &problemDetails
+		c.JSON(int(problemDetails.Status), problemDetails)
 	}
+
 	delete(ue.AMPolicyData, polAssoId)
-	return nil
+	c.JSON(http.StatusNoContent, nil)
 }
 
 // PoliciesPolAssoIdGet -
-func HandleGetPoliciesPolAssoId(request *httpwrapper.Request) *httpwrapper.Response {
-	logger.AmPolicyLog.Infof("Handle AM Policy Association Get")
+func (p *Processor) HandleGetPoliciesPolAssoId(
+	c *gin.Context,
+	polAssoId string) {
 
-	polAssoId := request.Params["polAssoId"]
+	logger.AmPolicyLog.Infof("Handle AM Policy Association Get")
 
 	response, problemDetails := GetPoliciesPolAssoIdProcedure(polAssoId)
 	if response != nil {
-		return httpwrapper.NewResponse(http.StatusOK, nil, response)
+		c.JSON(http.StatusOK, response)
 	} else if problemDetails != nil {
-		return httpwrapper.NewResponse(int(problemDetails.Status), nil, problemDetails)
+		c.JSON(int(problemDetails.Status), problemDetails)
 	}
+
 	problemDetails = &models.ProblemDetails{
 		Status: http.StatusForbidden,
 		Cause:  "UNSPECIFIED",
 	}
-	return httpwrapper.NewResponse(int(problemDetails.Status), nil, problemDetails)
+	c.JSON(int(problemDetails.Status), problemDetails)
 }
 
 func GetPoliciesPolAssoIdProcedure(polAssoId string) (*models.PolicyAssociation, *models.ProblemDetails) {
@@ -85,23 +80,25 @@ func GetPoliciesPolAssoIdProcedure(polAssoId string) (*models.PolicyAssociation,
 	return &rsp, nil
 }
 
-func HandleUpdatePostPoliciesPolAssoId(request *httpwrapper.Request) *httpwrapper.Response {
-	logger.AmPolicyLog.Infof("Handle AM Policy Association Update")
+func (p *Processor) HandleUpdatePostPoliciesPolAssoId(
+	c *gin.Context,
+	polAssoId string,
+	policyAssociationUpdateRequest models.PolicyAssociationUpdateRequest) {
 
-	polAssoId := request.Params["polAssoId"]
-	policyAssociationUpdateRequest := request.Body.(models.PolicyAssociationUpdateRequest)
+	logger.AmPolicyLog.Infof("Handle AM Policy Association Update")
 
 	response, problemDetails := UpdatePostPoliciesPolAssoIdProcedure(polAssoId, policyAssociationUpdateRequest)
 	if response != nil {
-		return httpwrapper.NewResponse(http.StatusOK, nil, response)
+		c.JSON(http.StatusOK, response)
 	} else if problemDetails != nil {
-		return httpwrapper.NewResponse(int(problemDetails.Status), nil, problemDetails)
+		c.JSON(int(problemDetails.Status), problemDetails)
 	}
+
 	problemDetails = &models.ProblemDetails{
 		Status: http.StatusForbidden,
 		Cause:  "UNSPECIFIED",
 	}
-	return httpwrapper.NewResponse(int(problemDetails.Status), nil, problemDetails)
+	c.JSON(int(problemDetails.Status), problemDetails)
 }
 
 func UpdatePostPoliciesPolAssoIdProcedure(polAssoId string,
@@ -178,26 +175,29 @@ func UpdatePostPoliciesPolAssoIdProcedure(polAssoId string,
 }
 
 // Create AM Policy
-func (p *Processor) HandlePostPolicies(request *httpwrapper.Request) *httpwrapper.Response {
+func (p *Processor) HandlePostPolicies(
+	c *gin.Context,
+	polAssoId string,
+	policyAssociationRequest models.PolicyAssociationRequest,
+) {
+
 	logger.AmPolicyLog.Infof("Handle AM Policy Create Request")
 
-	polAssoId := request.Params["polAssoId"]
-	policyAssociationRequest := request.Body.(models.PolicyAssociationRequest)
-
 	response, locationHeader, problemDetails := p.PostPoliciesProcedure(polAssoId, policyAssociationRequest)
-	headers := http.Header{
-		"Location": {locationHeader},
-	}
 	if response != nil {
-		return httpwrapper.NewResponse(http.StatusCreated, headers, response)
+		// TODO: set gin header
+		c.Header("Location", locationHeader)
+		c.JSON(http.StatusCreated, response)
 	} else if problemDetails != nil {
-		return httpwrapper.NewResponse(int(problemDetails.Status), nil, problemDetails)
+		c.JSON(int(problemDetails.Status), problemDetails)
 	}
+
 	problemDetails = &models.ProblemDetails{
 		Status: http.StatusForbidden,
 		Cause:  "UNSPECIFIED",
 	}
-	return httpwrapper.NewResponse(int(problemDetails.Status), nil, problemDetails)
+	c.JSON(int(problemDetails.Status), problemDetails)
+
 }
 
 func (p *Processor) PostPoliciesProcedure(polAssoId string,

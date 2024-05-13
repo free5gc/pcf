@@ -8,50 +8,38 @@ import (
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/pcf/internal/logger"
-	"github.com/free5gc/pcf/internal/sbi/processor"
 	"github.com/free5gc/pcf/internal/util"
-	"github.com/free5gc/util/httpwrapper"
 )
 
 func (s *Server) HTTPPoliciesPolAssoIdDelete(c *gin.Context) {
-	req := httpwrapper.NewRequest(c.Request, nil)
-	req.Params["polAssoId"], _ = c.Params.Get("polAssoId")
+	polAssoId := c.Param("polAssoId")
 
-	rsp := processor.HandleDeletePoliciesPolAssoId(req)
-
-	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
-	if err != nil {
-		logger.AmPolicyLog.Errorln(err)
-		problemDetails := models.ProblemDetails{
-			Status: http.StatusInternalServerError,
-			Cause:  "SYSTEM_FAILURE",
-			Detail: err.Error(),
+	if polAssoId == "" {
+		problemDetails := &models.ProblemDetails{
+			Title:  util.ERROR_INITIAL_PARAMETERS,
+			Status: http.StatusBadRequest,
 		}
-		c.JSON(http.StatusInternalServerError, problemDetails)
-	} else {
-		c.Data(rsp.Status, "application/json", responseBody)
+		c.JSON(http.StatusBadRequest, problemDetails)
+		return
 	}
+
+	s.Processor().HandleDeletePoliciesPolAssoId(c, polAssoId)
 }
 
 // HTTPPoliciesPolAssoIdGet -
 func (s *Server) HTTPPoliciesPolAssoIdGet(c *gin.Context) {
-	req := httpwrapper.NewRequest(c.Request, nil)
-	req.Params["polAssoId"], _ = c.Params.Get("polAssoId")
+	polAssoId := c.Param("polAssoId")
 
-	rsp := processor.HandleGetPoliciesPolAssoId(req)
-
-	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
-	if err != nil {
-		logger.AmPolicyLog.Errorln(err)
-		problemDetails := models.ProblemDetails{
-			Status: http.StatusInternalServerError,
-			Cause:  "SYSTEM_FAILURE",
-			Detail: err.Error(),
+	if polAssoId == "" {
+		problemDetails := &models.ProblemDetails{
+			Title:  util.ERROR_INITIAL_PARAMETERS,
+			Status: http.StatusBadRequest,
 		}
-		c.JSON(http.StatusInternalServerError, problemDetails)
-	} else {
-		c.Data(rsp.Status, "application/json", responseBody)
+		c.JSON(http.StatusBadRequest, problemDetails)
+		return
 	}
+
+	s.Processor().HandleGetPoliciesPolAssoId(c, polAssoId)
 }
 
 // HTTPPoliciesPolAssoIdUpdatePost -
@@ -84,23 +72,19 @@ func (s *Server) HTTPPoliciesPolAssoIdUpdatePost(c *gin.Context) {
 		return
 	}
 
-	req := httpwrapper.NewRequest(c.Request, policyAssociationUpdateRequest)
-	req.Params["polAssoId"], _ = c.Params.Get("polAssoId")
+	polAssoId := c.Param("polAssoId")
 
-	rsp := processor.HandleUpdatePostPoliciesPolAssoId(req)
-
-	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
-	if err != nil {
-		logger.AmPolicyLog.Errorln(err)
-		problemDetails := models.ProblemDetails{
-			Status: http.StatusInternalServerError,
-			Cause:  "SYSTEM_FAILURE",
-			Detail: err.Error(),
+	if polAssoId == "" {
+		problemDetails := &models.ProblemDetails{
+			Title:  util.ERROR_INITIAL_PARAMETERS,
+			Status: http.StatusBadRequest,
 		}
-		c.JSON(http.StatusInternalServerError, problemDetails)
-	} else {
-		c.Data(rsp.Status, "application/json", responseBody)
+		c.JSON(http.StatusBadRequest, problemDetails)
+		return
 	}
+
+	s.Processor().HandleUpdatePostPoliciesPolAssoId(c, polAssoId, policyAssociationUpdateRequest)
+
 }
 
 // HTTPPoliciesPost -
@@ -140,27 +124,40 @@ func (s *Server) HTTPPoliciesPost(c *gin.Context) {
 		return
 	}
 
-	req := httpwrapper.NewRequest(c.Request, policyAssociationRequest)
-	req.Params["polAssoId"], _ = c.Params.Get("polAssoId")
+	polAssoId := c.Param("polAssoId")
 
-	rsp := s.processor.HandlePostPolicies(req)
-
-	for key, val := range rsp.Header {
-		c.Header(key, val[0])
-	}
-
-	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
-	if err != nil {
-		logger.AmPolicyLog.Errorln(err)
-		problemDetails := models.ProblemDetails{
-			Status: http.StatusInternalServerError,
-			Cause:  "SYSTEM_FAILURE",
-			Detail: err.Error(),
+	if polAssoId == "" {
+		problemDetails := &models.ProblemDetails{
+			Title:  util.ERROR_INITIAL_PARAMETERS,
+			Status: http.StatusBadRequest,
 		}
-		c.JSON(http.StatusInternalServerError, problemDetails)
-	} else {
-		c.Data(rsp.Status, "application/json", responseBody)
+		c.JSON(http.StatusBadRequest, problemDetails)
+		return
 	}
+
+	s.Processor().HandlePostPolicies(c, polAssoId, policyAssociationRequest)
+
+	// req := httpwrapper.NewRequest(c.Request, policyAssociationRequest)
+	// req.Params["polAssoId"], _ = c.Params.Get("polAssoId")
+
+	// rsp := s.processor.HandlePostPolicies(req)
+
+	// for key, val := range rsp.Header {
+	// 	c.Header(key, val[0])
+	// }
+
+	// responseBody, err := openapi.Serialize(rsp.Body, "application/json")
+	// if err != nil {
+	// 	logger.AmPolicyLog.Errorln(err)
+	// 	problemDetails := models.ProblemDetails{
+	// 		Status: http.StatusInternalServerError,
+	// 		Cause:  "SYSTEM_FAILURE",
+	// 		Detail: err.Error(),
+	// 	}
+	// 	c.JSON(http.StatusInternalServerError, problemDetails)
+	// } else {
+	// 	c.Data(rsp.Status, "application/json", responseBody)
+	// }
 }
 
 func (s *Server) getAmPolicyRoutes() []Route {

@@ -24,7 +24,7 @@ type UEAmPolicy struct {
 
 type UEAmPolicys []UEAmPolicy
 
-func HandleOAMGetAmPolicyRequest(
+func (p *Processor) HandleOAMGetAmPolicyRequest(
 	c *gin.Context,
 	supi string) {
 	// step 1: log
