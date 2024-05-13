@@ -4,12 +4,6 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-
-	"github.com/free5gc/openapi"
-	"github.com/free5gc/openapi/models"
-	"github.com/free5gc/pcf/internal/logger"
-	"github.com/free5gc/pcf/internal/sbi/processor"
-	"github.com/free5gc/util/httpwrapper"
 )
 
 func (s *Server) setCorsHeader(c *gin.Context) {
@@ -24,23 +18,26 @@ func (s *Server) setCorsHeader(c *gin.Context) {
 func (s *Server) HTTPOAMGetAmPolicy(c *gin.Context) {
 	s.setCorsHeader(c)
 
-	req := httpwrapper.NewRequest(c.Request, nil)
-	req.Params["supi"] = c.Params.ByName("supi")
+	supi := c.Params.ByName("supi")
+	s.Processor().HandleOAMGetAmPolicyRequest(c, supi)
 
-	rsp := processor.HandleOAMGetAmPolicyRequest(req)
+	// req := httpwrapper.NewRequest(c.Request, nil)
+	// req.Params["supi"] = c.Params.ByName("supi")
 
-	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
-	if err != nil {
-		logger.OamLog.Errorln(err)
-		problemDetails := models.ProblemDetails{
-			Status: http.StatusInternalServerError,
-			Cause:  "SYSTEM_FAILURE",
-			Detail: err.Error(),
-		}
-		c.JSON(http.StatusInternalServerError, problemDetails)
-	} else {
-		c.Data(rsp.Status, "application/json", responseBody)
-	}
+	// rsp := processor.HandleOAMGetAmPolicyRequest(req)
+
+	// responseBody, err := openapi.Serialize(rsp.Body, "application/json")
+	// if err != nil {
+	// 	logger.OamLog.Errorln(err)
+	// 	problemDetails := models.ProblemDetails{
+	// 		Status: http.StatusInternalServerError,
+	// 		Cause:  "SYSTEM_FAILURE",
+	// 		Detail: err.Error(),
+	// 	}
+	// 	c.JSON(http.StatusInternalServerError, problemDetails)
+	// } else {
+	// 	c.Data(rsp.Status, "application/json", responseBody)
+	// }
 }
 
 func (s *Server) getOamRoutes() []Route {
