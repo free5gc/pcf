@@ -1,4 +1,4 @@
-package producer
+package processor
 
 import (
 	"fmt"
@@ -128,12 +128,12 @@ func handleMediaSubComponent(smPolicy *pcf_context.UeSmPolicyData, medComp *mode
 // Subscription to resources allocation outcome (DONE)
 // Invocation of Multimedia Priority Services (TODO)
 // Support of content versioning (TODO)
-func HandlePostAppSessionsContext(request *httpwrapper.Request) *httpwrapper.Response {
+func (p *Processor) HandlePostAppSessionsContext(request *httpwrapper.Request) *httpwrapper.Response {
 	logger.PolicyAuthLog.Traceln("Handle Create AppSessions")
 
 	appSessCtx := request.Body.(models.AppSessionContext)
 
-	response, locationHeader, problemDetails := postAppSessCtxProcedure(&appSessCtx)
+	response, locationHeader, problemDetails := p.postAppSessCtxProcedure(&appSessCtx)
 
 	if response != nil {
 		headers := http.Header{
@@ -150,7 +150,7 @@ func HandlePostAppSessionsContext(request *httpwrapper.Request) *httpwrapper.Res
 	return httpwrapper.NewResponse(int(problemDetails.Status), nil, problemDetails)
 }
 
-func postAppSessCtxProcedure(appSessCtx *models.AppSessionContext) (*models.AppSessionContext,
+func (p *Processor) postAppSessCtxProcedure(appSessCtx *models.AppSessionContext) (*models.AppSessionContext,
 	string, *models.ProblemDetails,
 ) {
 	ascReqData := appSessCtx.AscReqData
@@ -158,7 +158,7 @@ func postAppSessCtxProcedure(appSessCtx *models.AppSessionContext) (*models.AppS
 
 	// Initial BDT policy indication(the only one which is not related to session)
 	if ascReqData.BdtRefId != "" {
-		if err := handleBDTPolicyInd(pcfSelf, appSessCtx); err != nil {
+		if err := p.handleBDTPolicyInd(pcfSelf, appSessCtx); err != nil {
 			problemDetail := util.GetProblemDetail(err.Error(), util.ERROR_REQUEST_PARAMETERS)
 			return nil, "", &problemDetail
 		}
@@ -531,12 +531,12 @@ func GetAppSessionContextProcedure(appSessID string) (*models.ProblemDetails, *m
 }
 
 // HandleModAppSession - Modifies an existing Individual Application Session Context
-func HandleModAppSessionContext(request *httpwrapper.Request) *httpwrapper.Response {
+func (p *Processor) HandleModAppSessionContext(request *httpwrapper.Request) *httpwrapper.Response {
 	appSessID := request.Params["appSessionId"]
 	ascUpdateData := request.Body.(models.AppSessionContextUpdateData)
 	logger.PolicyAuthLog.Infof("Handle Modify AppSessions, AppSessionId[%s]", appSessID)
 
-	problemDetails, response := ModAppSessionContextProcedure(appSessID, ascUpdateData)
+	problemDetails, response := p.ModAppSessionContextProcedure(appSessID, ascUpdateData)
 	if problemDetails == nil {
 		return httpwrapper.NewResponse(http.StatusOK, nil, response)
 	} else {
@@ -544,7 +544,7 @@ func HandleModAppSessionContext(request *httpwrapper.Request) *httpwrapper.Respo
 	}
 }
 
-func ModAppSessionContextProcedure(appSessID string,
+func (p *Processor) ModAppSessionContextProcedure(appSessID string,
 	ascUpdateData models.AppSessionContextUpdateData,
 ) (*models.ProblemDetails, *models.AppSessionContext) {
 	pcfSelf := pcf_context.GetSelf()
@@ -559,7 +559,7 @@ func ModAppSessionContextProcedure(appSessID string,
 	appSessCtx := appSession.AppSessionContext
 	if ascUpdateData.BdtRefId != "" {
 		appSessCtx.AscReqData.BdtRefId = ascUpdateData.BdtRefId
-		if err := handleBDTPolicyInd(pcfSelf, appSessCtx); err != nil {
+		if err := p.handleBDTPolicyInd(pcfSelf, appSessCtx); err != nil {
 			problemDetail := util.GetProblemDetail(err.Error(), util.ERROR_REQUEST_PARAMETERS)
 			return &problemDetail, nil
 		}
@@ -1113,7 +1113,7 @@ func SendAppSessionTermination(appSession *pcf_context.AppSessionData, request m
 }
 
 // Handle Create/ Modify Background Data Transfer Policy Indication
-func handleBDTPolicyInd(pcfSelf *pcf_context.PCFContext,
+func (p *Processor) handleBDTPolicyInd(pcfSelf *pcf_context.PCFContext,
 	appSessCtx *models.AppSessionContext,
 ) (err error) {
 	req := appSessCtx.AscReqData
@@ -1135,7 +1135,7 @@ func handleBDTPolicyInd(pcfSelf *pcf_context.PCFContext,
 		return err
 	}
 
-	client := util.GetNudrClient(getDefaultUdrUri(pcfSelf))
+	client := util.GetNudrClient(p.getDefaultUdrUri(pcfSelf))
 	bdtData, resp, err1 := client.DefaultApi.PolicyDataBdtDataBdtReferenceIdGet(ctx, req.BdtRefId)
 	if err1 != nil {
 		return fmt.Errorf("UDR Get BdtData error[%s]", err1.Error())
