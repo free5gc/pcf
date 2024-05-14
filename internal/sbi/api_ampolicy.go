@@ -87,7 +87,6 @@ func (s *Server) HTTPPoliciesPolAssoIdUpdatePost(c *gin.Context) {
 
 }
 
-// HTTPPoliciesPost -
 func (s *Server) HTTPPoliciesPost(c *gin.Context) {
 	var policyAssociationRequest models.PolicyAssociationRequest
 
@@ -137,27 +136,6 @@ func (s *Server) HTTPPoliciesPost(c *gin.Context) {
 
 	s.Processor().HandlePostPolicies(c, polAssoId, policyAssociationRequest)
 
-	// req := httpwrapper.NewRequest(c.Request, policyAssociationRequest)
-	// req.Params["polAssoId"], _ = c.Params.Get("polAssoId")
-
-	// rsp := s.processor.HandlePostPolicies(req)
-
-	// for key, val := range rsp.Header {
-	// 	c.Header(key, val[0])
-	// }
-
-	// responseBody, err := openapi.Serialize(rsp.Body, "application/json")
-	// if err != nil {
-	// 	logger.AmPolicyLog.Errorln(err)
-	// 	problemDetails := models.ProblemDetails{
-	// 		Status: http.StatusInternalServerError,
-	// 		Cause:  "SYSTEM_FAILURE",
-	// 		Detail: err.Error(),
-	// 	}
-	// 	c.JSON(http.StatusInternalServerError, problemDetails)
-	// } else {
-	// 	c.Data(rsp.Status, "application/json", responseBody)
-	// }
 }
 
 func (s *Server) getAmPolicyRoutes() []Route {

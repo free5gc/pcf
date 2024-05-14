@@ -9,68 +9,57 @@ import (
 	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/internal/util"
-	"github.com/free5gc/util/httpwrapper"
+	"github.com/gin-gonic/gin"
 )
 
-func HandleAmfStatusChangeNotify(request *httpwrapper.Request) *httpwrapper.Response {
+func (p *Processor) HandleAmfStatusChangeNotify(
+	c *gin.Context,
+	amfStatusChangeNotification models.AmfStatusChangeNotification) {
 	logger.CallbackLog.Warnf("[PCF] Handle Amf Status Change Notify is not implemented.")
 
-	notification := request.Body.(models.AmfStatusChangeNotification)
+	// TODO: handle AMF Status Change Notify
+	logger.CallbackLog.Debugf("receive AMF status change notification[%+v]", amfStatusChangeNotification)
 
-	AmfStatusChangeNotifyProcedure(notification)
-
-	return httpwrapper.NewResponse(http.StatusNoContent, nil, nil)
+	c.JSON(http.StatusNoContent, nil)
 }
 
-// TODO: handle AMF Status Change Notify
-func AmfStatusChangeNotifyProcedure(notification models.AmfStatusChangeNotification) {
-	logger.CallbackLog.Debugf("receive AMF status change notification[%+v]", notification)
-}
+func (p *Processor) HandlePolicyDataChangeNotify(
+	c *gin.Context,
+	supi string,
+	policyDataChangeNotification models.PolicyDataChangeNotification) {
 
-func HandlePolicyDataChangeNotify(request *httpwrapper.Request) *httpwrapper.Response {
 	logger.CallbackLog.Warnf("[PCF] Handle Policy Data Change Notify is not implemented.")
 
-	notification := request.Body.(models.PolicyDataChangeNotification)
-	supi := request.Params["supi"]
+	PolicyDataChangeNotifyProcedure(supi, policyDataChangeNotification)
 
-	PolicyDataChangeNotifyProcedure(supi, notification)
-
-	return httpwrapper.NewResponse(http.StatusNotImplemented, nil, nil)
+	c.JSON(http.StatusNotImplemented, nil)
 }
 
 // TODO: handle Policy Data Change Notify
 func PolicyDataChangeNotifyProcedure(supi string, notification models.PolicyDataChangeNotification) {
 }
 
-func HandleInfluenceDataUpdateNotify(request *httpwrapper.Request) *httpwrapper.Response {
+func (p *Processor) HandleInfluenceDataUpdateNotify(
+	c *gin.Context,
+	supi string,
+	pduSessionId string,
+	trafficInfluDataNotif []models.TrafficInfluDataNotif) {
+
 	logger.CallbackLog.Infof("[PCF] Handle Influence Data Update Notify")
 
-	notifications := request.Body.([]models.TrafficInfluDataNotif)
-	supi := request.Params["supi"]
-	pduSessionId := request.Params["pduSessionId"]
-
-	if problemDetails := InfluenceDataUpdateNotifyProcedure(supi, pduSessionId, notifications); problemDetails != nil {
-		return httpwrapper.NewResponse(int(problemDetails.Status), nil, problemDetails)
-	} else {
-		return httpwrapper.NewResponse(http.StatusNoContent, nil, nil)
-	}
-}
-
-func InfluenceDataUpdateNotifyProcedure(supi, pduSessionId string,
-	notifications []models.TrafficInfluDataNotif,
-) *models.ProblemDetails {
 	smPolicyID := fmt.Sprintf("%s-%s", supi, pduSessionId)
 	ue := pcf_context.GetSelf().PCFUeFindByPolicyId(smPolicyID)
 	if ue == nil || ue.SmPolicyData[smPolicyID] == nil {
 		problemDetail := util.GetProblemDetail("smPolicyID not found in PCF", util.CONTEXT_NOT_FOUND)
 		logger.CallbackLog.Errorf(problemDetail.Detail)
-		return &problemDetail
+		c.JSON(int(problemDetail.Status), problemDetail)
+		return
 	}
 	smPolicy := ue.SmPolicyData[smPolicyID]
 	decision := smPolicy.PolicyDecision
 	influenceDataToPccRule := smPolicy.InfluenceDataToPccRule
 	precedence := getAvailablePrecedence(smPolicy.PolicyDecision.PccRules)
-	for _, notification := range notifications {
+	for _, notification := range trafficInfluDataNotif {
 		influenceID := getInfluenceID(notification.ResUri)
 		if influenceID == "" {
 			continue
@@ -107,7 +96,7 @@ func InfluenceDataUpdateNotifyProcedure(supi, pduSessionId string,
 		SmPolicyDecision: decision,
 	}
 	go SendSMPolicyUpdateNotification(smPolicy.PolicyContext.NotificationUri, &smPolicyNotification)
-	return nil
+	c.JSON(http.StatusNoContent, nil)
 }
 
 func getInfluenceID(resUri string) string {

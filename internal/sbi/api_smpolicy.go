@@ -17,8 +17,7 @@ import (
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/pcf/internal/logger"
-	"github.com/free5gc/pcf/internal/sbi/processor"
-	"github.com/free5gc/util/httpwrapper"
+	"github.com/free5gc/pcf/internal/util"
 )
 
 func (s *Server) getSmPolicyRoutes() []Route {
@@ -77,70 +76,37 @@ func (s *Server) HTTPSmPoliciesPost(c *gin.Context) {
 		return
 	}
 
-	req := httpwrapper.NewRequest(c.Request, smPolicyContextData)
-	rsp := s.processor.HandleCreateSmPolicyRequest(req)
-
-	// step 5: response
-	for key, val := range rsp.Header { // header response is optional
-		c.Header(key, val[0])
-	}
-	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
-	if err != nil {
-		logger.SmPolicyLog.Errorln(err)
-		problemDetails := models.ProblemDetails{
-			Status: http.StatusInternalServerError,
-			Cause:  "SYSTEM_FAILURE",
-			Detail: err.Error(),
-		}
-		c.JSON(http.StatusInternalServerError, problemDetails)
-	} else {
-		c.Data(rsp.Status, "application/json", responseBody)
-	}
+	s.Processor().HandleCreateSmPolicyRequest(c, smPolicyContextData)
 }
 
 // SmPoliciesSmPolicyIdDeletePost -
 func (s *Server) HTTPSmPoliciesSmPolicyIdDeletePost(c *gin.Context) {
-	req := httpwrapper.NewRequest(c.Request, nil)
-	req.Params["smPolicyId"] = c.Params.ByName("smPolicyId")
-
-	rsp := s.processor.HandleDeleteSmPolicyContextRequest(req)
-
-	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
-	if err != nil {
-		logger.SmPolicyLog.Errorln(err)
-		problemDetails := models.ProblemDetails{
-			Status: http.StatusInternalServerError,
-			Cause:  "SYSTEM_FAILURE",
-			Detail: err.Error(),
+	smPolicyId := c.Params.ByName("smPolicyId")
+	if smPolicyId == "" {
+		problemDetails := &models.ProblemDetails{
+			Title:  util.ERROR_INITIAL_PARAMETERS,
+			Status: http.StatusBadRequest,
 		}
-		c.JSON(http.StatusInternalServerError, problemDetails)
-	} else {
-		c.Data(rsp.Status, "application/json", responseBody)
+		c.JSON(http.StatusBadRequest, problemDetails)
+		return
 	}
+	s.Processor().HandleDeleteSmPolicyContextRequest(c, smPolicyId)
 }
 
 // SmPoliciesSmPolicyIdGet -
 func (s *Server) HTTPSmPoliciesSmPolicyIDGet(c *gin.Context) {
-	req := httpwrapper.NewRequest(c.Request, nil)
-	req.Params["smPolicyId"] = c.Params.ByName("smPolicyId")
-
-	rsp := processor.HandleGetSmPolicyContextRequest(req)
-
-	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
-	if err != nil {
-		logger.SmPolicyLog.Errorln(err)
-		problemDetails := models.ProblemDetails{
-			Status: http.StatusInternalServerError,
-			Cause:  "SYSTEM_FAILURE",
-			Detail: err.Error(),
+	smPolicyId := c.Params.ByName("smPolicyId")
+	if smPolicyId == "" {
+		problemDetails := &models.ProblemDetails{
+			Title:  util.ERROR_INITIAL_PARAMETERS,
+			Status: http.StatusBadRequest,
 		}
-		c.JSON(http.StatusInternalServerError, problemDetails)
-	} else {
-		c.Data(rsp.Status, "application/json", responseBody)
+		c.JSON(http.StatusBadRequest, problemDetails)
+		return
 	}
+	s.Processor().HandleGetSmPolicyContextRequest(c, smPolicyId)
 }
 
-// SmPoliciesSmPolicyIdUpdatePost -
 func (s *Server) HTTPSmPoliciesSmPolicyIdUpdatePost(c *gin.Context) {
 	var smPolicyUpdateContextData models.SmPolicyUpdateContextData
 	// step 1: retrieve http request body
@@ -171,21 +137,6 @@ func (s *Server) HTTPSmPoliciesSmPolicyIdUpdatePost(c *gin.Context) {
 		return
 	}
 
-	req := httpwrapper.NewRequest(c.Request, smPolicyUpdateContextData)
-	req.Params["smPolicyId"] = c.Params.ByName("smPolicyId")
-
-	rsp := processor.HandleUpdateSmPolicyContextRequest(req)
-
-	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
-	if err != nil {
-		logger.SmPolicyLog.Errorln(err)
-		problemDetails := models.ProblemDetails{
-			Status: http.StatusInternalServerError,
-			Cause:  "SYSTEM_FAILURE",
-			Detail: err.Error(),
-		}
-		c.JSON(http.StatusInternalServerError, problemDetails)
-	} else {
-		c.Data(rsp.Status, "application/json", responseBody)
-	}
+	smPolicyId := c.Params.ByName("smPolicyId")
+	s.Processor().HandleUpdateSmPolicyContextRequest(c, smPolicyId, smPolicyUpdateContextData)
 }

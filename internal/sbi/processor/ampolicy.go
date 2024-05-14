@@ -38,25 +38,12 @@ func (p *Processor) HandleGetPoliciesPolAssoId(
 
 	logger.AmPolicyLog.Infof("Handle AM Policy Association Get")
 
-	response, problemDetails := GetPoliciesPolAssoIdProcedure(polAssoId)
-	if response != nil {
-		c.JSON(http.StatusOK, response)
-	} else if problemDetails != nil {
-		c.JSON(int(problemDetails.Status), problemDetails)
-	}
-
-	problemDetails = &models.ProblemDetails{
-		Status: http.StatusForbidden,
-		Cause:  "UNSPECIFIED",
-	}
-	c.JSON(int(problemDetails.Status), problemDetails)
-}
-
-func GetPoliciesPolAssoIdProcedure(polAssoId string) (*models.PolicyAssociation, *models.ProblemDetails) {
+	// response, problemDetails := GetPoliciesPolAssoIdProcedure(polAssoId)
 	ue := pcf_context.GetSelf().PCFUeFindByPolicyId(polAssoId)
 	if ue == nil || ue.AMPolicyData[polAssoId] == nil {
 		problemDetails := util.GetProblemDetail("polAssoId not found  in PCF", util.CONTEXT_NOT_FOUND)
-		return nil, &problemDetails
+		c.JSON(int(problemDetails.Status), problemDetails)
+		return
 	}
 	amPolicyData := ue.AMPolicyData[polAssoId]
 	rsp := models.PolicyAssociation{
@@ -77,7 +64,7 @@ func GetPoliciesPolAssoIdProcedure(polAssoId string) (*models.PolicyAssociation,
 			}
 		}
 	}
-	return &rsp, nil
+	c.JSON(http.StatusOK, rsp)
 }
 
 func (p *Processor) HandleUpdatePostPoliciesPolAssoId(

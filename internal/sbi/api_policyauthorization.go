@@ -17,9 +17,7 @@ import (
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/pcf/internal/logger"
-	"github.com/free5gc/pcf/internal/sbi/processor"
 	"github.com/free5gc/pcf/internal/util"
-	"github.com/free5gc/util/httpwrapper"
 )
 
 func (s *Server) getPolicyAuthorizationRoutes() []Route {
@@ -97,46 +95,24 @@ func (s *Server) HTTPPostAppSessions(c *gin.Context) {
 		return
 	}
 
-	req := httpwrapper.NewRequest(c.Request, appSessionContext)
-	rsp := s.processor.HandlePostAppSessionsContext(req)
-
-	for key, val := range rsp.Header {
-		c.Header(key, val[0])
-	}
-	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
-	if err != nil {
-		logger.PolicyAuthLog.Errorln(err)
-		problemDetails := models.ProblemDetails{
-			Status: http.StatusInternalServerError,
-			Cause:  "SYSTEM_FAILURE",
-			Detail: err.Error(),
-		}
-		c.JSON(http.StatusInternalServerError, problemDetails)
-	} else {
-		c.Data(rsp.Status, "application/json", responseBody)
-	}
+	s.Processor().HandlePostAppSessionsContext(c, appSessionContext)
 }
 
 // api_events_subscription
 // HTTPDeleteEventsSubsc - deletes the Events Subscription subresource
 func (s *Server) HTTPDeleteEventsSubsc(c *gin.Context) {
-	req := httpwrapper.NewRequest(c.Request, nil)
-	req.Params["appSessionId"], _ = c.Params.Get("appSessionId")
 
-	rsp := processor.HandleDeleteEventsSubscContext(req)
-
-	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
-	if err != nil {
-		logger.PolicyAuthLog.Errorln(err)
-		problemDetails := models.ProblemDetails{
-			Status: http.StatusInternalServerError,
-			Cause:  "SYSTEM_FAILURE",
-			Detail: err.Error(),
+	appSessionId := c.Params.ByName("appSessionId")
+	if appSessionId == "" {
+		problemDetails := &models.ProblemDetails{
+			Title:  util.ERROR_INITIAL_PARAMETERS,
+			Status: http.StatusBadRequest,
 		}
-		c.JSON(http.StatusInternalServerError, problemDetails)
-	} else {
-		c.Data(rsp.Status, "application/json", responseBody)
+		c.JSON(http.StatusBadRequest, problemDetails)
+		return
 	}
+
+	s.Processor().HandleDeleteEventsSubscContext(c, appSessionId)
 }
 
 // HTTPUpdateEventsSubsc - creates or modifies an Events Subscription subresource
@@ -176,27 +152,19 @@ func (s *Server) HTTPUpdateEventsSubsc(c *gin.Context) {
 		return
 	}
 
-	req := httpwrapper.NewRequest(c.Request, eventsSubscReqData)
-	req.Params["appSessionId"], _ = c.Params.Get("appSessionId")
-
-	rsp := processor.HandleUpdateEventsSubscContext(req)
-
-	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
-	if err != nil {
-		logger.PolicyAuthLog.Errorln(err)
-		problemDetails := models.ProblemDetails{
-			Status: http.StatusInternalServerError,
-			Cause:  "SYSTEM_FAILURE",
-			Detail: err.Error(),
+	appSessionId := c.Params.ByName("appSessionId")
+	if appSessionId == "" {
+		problemDetails := &models.ProblemDetails{
+			Title:  util.ERROR_INITIAL_PARAMETERS,
+			Status: http.StatusBadRequest,
 		}
-		c.JSON(http.StatusInternalServerError, problemDetails)
-	} else {
-		c.Data(rsp.Status, "application/json", responseBody)
+		c.JSON(http.StatusBadRequest, problemDetails)
+		return
 	}
+
+	s.Processor().HandleUpdateEventsSubscContext(c, appSessionId, eventsSubscReqData)
 }
 
-// api_individual
-// HTTPDeleteAppSession - Deletes an existing Individual Application Session Context
 func (s *Server) HTTPDeleteAppSession(c *gin.Context) {
 	var eventsSubscReqData *models.EventsSubscReqData
 
@@ -229,44 +197,32 @@ func (s *Server) HTTPDeleteAppSession(c *gin.Context) {
 		}
 	}
 
-	req := httpwrapper.NewRequest(c.Request, eventsSubscReqData)
-	req.Params["appSessionId"], _ = c.Params.Get("appSessionId")
-
-	rsp := processor.HandleDeleteAppSessionContext(req)
-
-	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
-	if err != nil {
-		logger.PolicyAuthLog.Errorln(err)
-		problemDetails := models.ProblemDetails{
-			Status: http.StatusInternalServerError,
-			Cause:  "SYSTEM_FAILURE",
-			Detail: err.Error(),
+	appSessionId := c.Params.ByName("appSessionId")
+	if appSessionId == "" {
+		problemDetails := &models.ProblemDetails{
+			Title:  util.ERROR_INITIAL_PARAMETERS,
+			Status: http.StatusBadRequest,
 		}
-		c.JSON(http.StatusInternalServerError, problemDetails)
-	} else {
-		c.Data(rsp.Status, "application/json", responseBody)
+		c.JSON(http.StatusBadRequest, problemDetails)
+		return
 	}
+
+	s.Processor().HandleDeleteAppSessionContext(c, appSessionId, eventsSubscReqData)
 }
 
 // HTTPGetAppSession - Reads an existing Individual Application Session Context
 func (s *Server) HTTPGetAppSession(c *gin.Context) {
-	req := httpwrapper.NewRequest(c.Request, nil)
-	req.Params["appSessionId"], _ = c.Params.Get("appSessionId")
-
-	rsp := processor.HandleGetAppSessionContext(req)
-
-	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
-	if err != nil {
-		logger.PolicyAuthLog.Errorln(err)
-		problemDetails := models.ProblemDetails{
-			Status: http.StatusInternalServerError,
-			Cause:  "SYSTEM_FAILURE",
-			Detail: err.Error(),
+	appSessionId := c.Params.ByName("appSessionId")
+	if appSessionId == "" {
+		problemDetails := &models.ProblemDetails{
+			Title:  util.ERROR_INITIAL_PARAMETERS,
+			Status: http.StatusBadRequest,
 		}
-		c.JSON(http.StatusInternalServerError, problemDetails)
-	} else {
-		c.Data(rsp.Status, "application/json", responseBody)
+		c.JSON(http.StatusBadRequest, problemDetails)
+		return
 	}
+
+	s.Processor().HandleGetAppSessionContext(c, appSessionId)
 }
 
 // HTTPModAppSession - Modifies an existing Individual Application Session Context
@@ -299,21 +255,15 @@ func (s *Server) HTTPModAppSession(c *gin.Context) {
 		return
 	}
 
-	req := httpwrapper.NewRequest(c.Request, appSessionContextUpdateData)
-	req.Params["appSessionId"], _ = c.Params.Get("appSessionId")
-
-	rsp := s.processor.HandleModAppSessionContext(req)
-
-	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
-	if err != nil {
-		logger.PolicyAuthLog.Errorln(err)
-		problemDetails := models.ProblemDetails{
-			Status: http.StatusInternalServerError,
-			Cause:  "SYSTEM_FAILURE",
-			Detail: err.Error(),
+	appSessionId := c.Params.ByName("appSessionId")
+	if appSessionId == "" {
+		problemDetails := &models.ProblemDetails{
+			Title:  util.ERROR_INITIAL_PARAMETERS,
+			Status: http.StatusBadRequest,
 		}
-		c.JSON(http.StatusInternalServerError, problemDetails)
-	} else {
-		c.Data(rsp.Status, "application/json", responseBody)
+		c.JSON(http.StatusBadRequest, problemDetails)
+		return
 	}
+
+	s.Processor().HandleModAppSessionContext(c, appSessionId, appSessionContextUpdateData)
 }

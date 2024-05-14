@@ -20,8 +20,7 @@ import (
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/pcf/internal/logger"
-	"github.com/free5gc/pcf/internal/sbi/processor"
-	"github.com/free5gc/util/httpwrapper"
+	"github.com/free5gc/pcf/internal/util"
 )
 
 func (s *Server) getBdtPolicyRoutes() []Route {
@@ -44,8 +43,6 @@ func (s *Server) getBdtPolicyRoutes() []Route {
 	}
 }
 
-// api_bdt_policy
-// CreateBDTPolicy - Create a new Individual BDT policy
 func (s *Server) HTTPCreateBDTPolicy(c *gin.Context) {
 	var bdtReqData models.BdtReqData
 	// step 1: retrieve http request body
@@ -76,46 +73,21 @@ func (s *Server) HTTPCreateBDTPolicy(c *gin.Context) {
 		return
 	}
 
-	req := httpwrapper.NewRequest(c.Request, bdtReqData)
-	rsp := s.processor.HandleCreateBDTPolicyContextRequest(req)
-	// step 5: response
-	for key, val := range rsp.Header { // header response is optional
-		c.Header(key, val[0])
-	}
-	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
-	if err != nil {
-		logger.BdtPolicyLog.Errorln(err)
-		problemDetails := models.ProblemDetails{
-			Status: http.StatusInternalServerError,
-			Cause:  "SYSTEM_FAILURE",
-			Detail: err.Error(),
-		}
-		c.JSON(http.StatusInternalServerError, problemDetails)
-	} else {
-		c.Data(rsp.Status, "application/json", responseBody)
-	}
+	s.Processor().HandleCreateBDTPolicyContextRequest(c, bdtReqData)
+
 }
 
-// api_individual
-// GetBDTPolicy - Read an Individual BDT policy
 func (s *Server) HTTPGetBDTPolicy(c *gin.Context) {
-	req := httpwrapper.NewRequest(c.Request, nil)
-	req.Params["bdtPolicyId"] = c.Params.ByName("bdtPolicyId")
-
-	rsp := processor.HandleGetBDTPolicyContextRequest(req)
-
-	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
-	if err != nil {
-		logger.BdtPolicyLog.Errorln(err)
-		problemDetails := models.ProblemDetails{
-			Status: http.StatusInternalServerError,
-			Cause:  "SYSTEM_FAILURE",
-			Detail: err.Error(),
+	bdtPolicyId := c.Params.ByName("bdtPolicyId")
+	if bdtPolicyId == "" {
+		problemDetails := &models.ProblemDetails{
+			Title:  util.ERROR_INITIAL_PARAMETERS,
+			Status: http.StatusBadRequest,
 		}
-		c.JSON(http.StatusInternalServerError, problemDetails)
-	} else {
-		c.Data(rsp.Status, "application/json", responseBody)
+		c.JSON(http.StatusBadRequest, problemDetails)
+		return
 	}
+	s.Processor().HandleGetBDTPolicyContextRequest(c, bdtPolicyId)
 }
 
 // UpdateBDTPolicy - Update an Individual BDT policy
@@ -149,21 +121,14 @@ func (s *Server) HTTPUpdateBDTPolicy(c *gin.Context) {
 		return
 	}
 
-	req := httpwrapper.NewRequest(c.Request, bdtPolicyDataPatch)
-	req.Params["bdtPolicyId"] = c.Params.ByName("bdtPolicyId")
-
-	rsp := s.processor.HandleUpdateBDTPolicyContextProcedure(req)
-
-	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
-	if err != nil {
-		logger.BdtPolicyLog.Errorln(err)
-		problemDetails := models.ProblemDetails{
-			Status: http.StatusInternalServerError,
-			Cause:  "SYSTEM_FAILURE",
-			Detail: err.Error(),
+	bdtPolicyId := c.Params.ByName("bdtPolicyId")
+	if bdtPolicyId == "" {
+		problemDetails := &models.ProblemDetails{
+			Title:  util.ERROR_INITIAL_PARAMETERS,
+			Status: http.StatusBadRequest,
 		}
-		c.JSON(http.StatusInternalServerError, problemDetails)
-	} else {
-		c.Data(rsp.Status, "application/json", responseBody)
+		c.JSON(http.StatusBadRequest, problemDetails)
+		return
 	}
+	s.Processor().HandleUpdateBDTPolicyContextProcedure(c, bdtPolicyId, bdtPolicyDataPatch)
 }

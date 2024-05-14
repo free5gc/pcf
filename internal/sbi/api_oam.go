@@ -20,24 +20,6 @@ func (s *Server) HTTPOAMGetAmPolicy(c *gin.Context) {
 
 	supi := c.Params.ByName("supi")
 	s.Processor().HandleOAMGetAmPolicyRequest(c, supi)
-
-	// req := httpwrapper.NewRequest(c.Request, nil)
-	// req.Params["supi"] = c.Params.ByName("supi")
-
-	// rsp := processor.HandleOAMGetAmPolicyRequest(req)
-
-	// responseBody, err := openapi.Serialize(rsp.Body, "application/json")
-	// if err != nil {
-	// 	logger.OamLog.Errorln(err)
-	// 	problemDetails := models.ProblemDetails{
-	// 		Status: http.StatusInternalServerError,
-	// 		Cause:  "SYSTEM_FAILURE",
-	// 		Detail: err.Error(),
-	// 	}
-	// 	c.JSON(http.StatusInternalServerError, problemDetails)
-	// } else {
-	// 	c.Data(rsp.Status, "application/json", responseBody)
-	// }
 }
 
 func (s *Server) getOamRoutes() []Route {

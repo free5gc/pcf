@@ -8,8 +8,6 @@ import (
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/pcf/internal/logger"
-	"github.com/free5gc/pcf/internal/sbi/processor"
-	"github.com/free5gc/util/httpwrapper"
 )
 
 func (s *Server) getHttpCallBackRoutes() []Route {
@@ -62,26 +60,7 @@ func (s *Server) HTTPAmfStatusChangeNotify(c *gin.Context) {
 		return
 	}
 
-	req := httpwrapper.NewRequest(c.Request, amfStatusChangeNotification)
-
-	rsp := processor.HandleAmfStatusChangeNotify(req)
-
-	if rsp.Status == http.StatusNoContent {
-		c.Status(rsp.Status)
-	} else {
-		responseBody, err := openapi.Serialize(rsp.Body, "application/json")
-		if err != nil {
-			logger.CallbackLog.Errorln(err)
-			problemDetails := models.ProblemDetails{
-				Status: http.StatusInternalServerError,
-				Cause:  "SYSTEM_FAILURE",
-				Detail: err.Error(),
-			}
-			c.JSON(http.StatusInternalServerError, problemDetails)
-		} else {
-			c.Data(rsp.Status, "application/json", responseBody)
-		}
-	}
+	s.Processor().HandleAmfStatusChangeNotify(c, amfStatusChangeNotification)
 }
 
 // sm_policy_notify
@@ -115,23 +94,8 @@ func (s *Server) HTTPUdrPolicyDataChangeNotify(c *gin.Context) {
 		return
 	}
 
-	req := httpwrapper.NewRequest(c.Request, policyDataChangeNotification)
-	req.Params["supi"] = c.Params.ByName("supi")
-
-	rsp := processor.HandlePolicyDataChangeNotify(req)
-
-	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
-	if err != nil {
-		logger.CallbackLog.Errorln(err)
-		problemDetails := models.ProblemDetails{
-			Status: http.StatusInternalServerError,
-			Cause:  "SYSTEM_FAILURE",
-			Detail: err.Error(),
-		}
-		c.JSON(http.StatusInternalServerError, problemDetails)
-	} else {
-		c.Data(rsp.Status, "application/json", responseBody)
-	}
+	supi := c.Params.ByName("supi")
+	s.Processor().HandlePolicyDataChangeNotify(c, supi, policyDataChangeNotification)
 }
 
 // Influence Data Update Notification
@@ -164,22 +128,7 @@ func (s *Server) HTTPUdrInfluenceDataUpdateNotify(c *gin.Context) {
 		return
 	}
 
-	req := httpwrapper.NewRequest(c.Request, trafficInfluDataNotif)
-	req.Params["supi"] = c.Params.ByName("supi")
-	req.Params["pduSessionId"] = c.Params.ByName("pduSessionId")
-
-	rsp := processor.HandleInfluenceDataUpdateNotify(req)
-
-	responseBody, err := openapi.Serialize(rsp.Body, "application/json")
-	if err != nil {
-		logger.CallbackLog.Errorln(err)
-		problemDetails := models.ProblemDetails{
-			Status: http.StatusInternalServerError,
-			Cause:  "SYSTEM_FAILURE",
-			Detail: err.Error(),
-		}
-		c.JSON(http.StatusInternalServerError, problemDetails)
-	} else {
-		c.Data(rsp.Status, "application/json", responseBody)
-	}
+	supi := c.Params.ByName("supi")
+	pduSessionId := c.Params.ByName("pduSessionId")
+	s.Processor().HandleInfluenceDataUpdateNotify(c, supi, pduSessionId, trafficInfluDataNotif)
 }

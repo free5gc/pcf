@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/antihax/optional"
+	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/mohae/deepcopy"
 
@@ -14,78 +15,39 @@ import (
 	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/internal/util"
-	"github.com/free5gc/util/httpwrapper"
 )
 
-func HandleGetBDTPolicyContextRequest(request *httpwrapper.Request) *httpwrapper.Response {
+func (p *Processor) HandleGetBDTPolicyContextRequest(
+	c *gin.Context,
+	bdtPolicyID string) {
 	// step 1: log
 	logger.BdtPolicyLog.Infof("Handle GetBDTPolicyContext")
 
-	// step 2: retrieve request
-	bdtPolicyID := request.Params["bdtPolicyId"]
-
-	// step 3: handle the message
-	response, problemDetails := getBDTPolicyContextProcedure(bdtPolicyID)
-
-	// step 4: process the return value from step 3
-	if response != nil {
-		// status code is based on SPEC, and option headers
-		return httpwrapper.NewResponse(http.StatusOK, nil, response)
-	} else if problemDetails != nil {
-		return httpwrapper.NewResponse(int(problemDetails.Status), nil, problemDetails)
-	}
-	problemDetails = &models.ProblemDetails{
-		Status: http.StatusForbidden,
-		Cause:  "UNSPECIFIED",
-	}
-	return httpwrapper.NewResponse(http.StatusForbidden, nil, problemDetails)
-}
-
-func getBDTPolicyContextProcedure(bdtPolicyID string) (
-	response *models.BdtPolicy, problemDetails *models.ProblemDetails,
-) {
+	// step 2: handle the message
 	logger.BdtPolicyLog.Traceln("Handle BDT Policy GET")
 	// check bdtPolicyID from pcfUeContext
 	if value, ok := pcf_context.GetSelf().BdtPolicyPool.Load(bdtPolicyID); ok {
 		bdtPolicy := value.(*models.BdtPolicy)
-		return bdtPolicy, nil
+		c.JSON(http.StatusOK, bdtPolicy)
+		return
 	} else {
 		// not found
-		problemDetail := util.GetProblemDetail("Can't find bdtPolicyID related resource", util.CONTEXT_NOT_FOUND)
-		logger.BdtPolicyLog.Warnf(problemDetail.Detail)
-		return nil, &problemDetail
+		problemDetails := util.GetProblemDetail("Can't find bdtPolicyID related resource", util.CONTEXT_NOT_FOUND)
+		logger.BdtPolicyLog.Warnf(problemDetails.Detail)
+		c.JSON(int(problemDetails.Status), problemDetails)
+		return
 	}
 }
 
 // UpdateBDTPolicy - Update an Individual BDT policy (choose policy data)
-func (p *Processor) HandleUpdateBDTPolicyContextProcedure(request *httpwrapper.Request) *httpwrapper.Response {
+func (p *Processor) HandleUpdateBDTPolicyContextProcedure(
+	c *gin.Context,
+	bdtPolicyID string,
+	bdtPolicyDataPatch models.BdtPolicyDataPatch) {
 	// step 1: log
 	logger.BdtPolicyLog.Infof("Handle UpdateBDTPolicyContext")
 
-	// step 2: retrieve request
-	requestDataType := request.Body.(models.BdtPolicyDataPatch)
-	bdtPolicyID := request.Params["bdtPolicyId"]
-
-	// step 3: handle the message
-	response, problemDetails := p.updateBDTPolicyContextProcedure(requestDataType, bdtPolicyID)
-
-	// step 4: process the return value from step 3
-	if response != nil {
-		// status code is based on SPEC, and option headers
-		return httpwrapper.NewResponse(http.StatusOK, nil, response)
-	} else if problemDetails != nil {
-		return httpwrapper.NewResponse(int(problemDetails.Status), nil, problemDetails)
-	}
-	problemDetails = &models.ProblemDetails{
-		Status: http.StatusForbidden,
-		Cause:  "UNSPECIFIED",
-	}
-	return httpwrapper.NewResponse(http.StatusForbidden, nil, problemDetails)
-}
-
-func (p *Processor) updateBDTPolicyContextProcedure(request models.BdtPolicyDataPatch, bdtPolicyID string) (
-	response *models.BdtPolicy, problemDetails *models.ProblemDetails,
-) {
+	// step 2: handle the message
 	logger.BdtPolicyLog.Infoln("Handle BDTPolicyUpdate")
 	// check bdtPolicyID from pcfUeContext
 	pcfSelf := pcf_context.GetSelf()
@@ -97,14 +59,15 @@ func (p *Processor) updateBDTPolicyContextProcedure(request models.BdtPolicyData
 		// not found
 		problemDetail := util.GetProblemDetail("Can't find bdtPolicyID related resource", util.CONTEXT_NOT_FOUND)
 		logger.BdtPolicyLog.Warnf(problemDetail.Detail)
-		return nil, &problemDetail
+		c.JSON(int(problemDetail.Status), problemDetail)
+		return
 	}
 
 	for _, policy := range bdtPolicy.BdtPolData.TransfPolicies {
-		if policy.TransPolicyId == request.SelTransPolicyId {
+		if policy.TransPolicyId == bdtPolicyDataPatch.SelTransPolicyId {
 			polData := bdtPolicy.BdtPolData
 			polReq := bdtPolicy.BdtReqData
-			polData.SelTransPolicyId = request.SelTransPolicyId
+			polData.SelTransPolicyId = bdtPolicyDataPatch.SelTransPolicyId
 			bdtData := models.BdtData{
 				AspId:       polReq.AspId,
 				TransPolicy: policy,
@@ -119,7 +82,8 @@ func (p *Processor) updateBDTPolicyContextProcedure(request models.BdtPolicyData
 			client := util.GetNudrClient(p.getDefaultUdrUri(pcfSelf))
 			ctx, pd, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
 			if err != nil {
-				return nil, pd
+				c.JSON(int(pd.Status), pd)
+				return
 			}
 			rsp, err := client.DefaultApi.PolicyDataBdtDataBdtReferenceIdPut(ctx, bdtData.BdtRefId, &param)
 			if err != nil {
@@ -131,49 +95,40 @@ func (p *Processor) updateBDTPolicyContextProcedure(request models.BdtPolicyData
 				}
 			}()
 			logger.BdtPolicyLog.Tracef("bdtPolicyID[%s] has Updated with SelTransPolicyId[%d]",
-				bdtPolicyID, request.SelTransPolicyId)
-			return bdtPolicy, nil
+				bdtPolicyID, bdtPolicyDataPatch.SelTransPolicyId)
+			c.JSON(http.StatusOK, bdtPolicy)
+			return
 		}
 	}
 	problemDetail := util.GetProblemDetail(
 		fmt.Sprintf("Can't find TransPolicyId[%d] in TransfPolicies with bdtPolicyID[%s]",
-			request.SelTransPolicyId, bdtPolicyID),
+			bdtPolicyDataPatch.SelTransPolicyId, bdtPolicyID),
 		util.CONTEXT_NOT_FOUND)
 	logger.BdtPolicyLog.Warnf(problemDetail.Detail)
-	return nil, &problemDetail
+	c.JSON(int(problemDetail.Status), problemDetail)
 }
 
 // CreateBDTPolicy - Create a new Individual BDT policy
-func (p *Processor) HandleCreateBDTPolicyContextRequest(request *httpwrapper.Request) *httpwrapper.Response {
+func (p *Processor) HandleCreateBDTPolicyContextRequest(
+	c *gin.Context,
+	requestMsg models.BdtReqData) {
 	// step 1: log
 	logger.BdtPolicyLog.Infof("Handle CreateBDTPolicyContext")
 
+	var problemDetails *models.ProblemDetails
+
 	// step 2: retrieve request and check mandatory contents
-	requestMsg := request.Body.(models.BdtReqData)
+	// requestMsg := request.Body.(models.BdtReqData)
 	if requestMsg.AspId == "" || requestMsg.DesTimeInt == nil || requestMsg.NumOfUes == 0 || requestMsg.VolPerUe == nil {
 		logger.BdtPolicyLog.Errorf("Required BdtReqData not found: AspId[%+v], DesTimeInt[%+v], NumOfUes[%+v], VolPerUe[%+v]",
 			requestMsg.AspId, requestMsg.DesTimeInt, requestMsg.NumOfUes, requestMsg.VolPerUe)
-		return httpwrapper.NewResponse(http.StatusNotFound, nil, nil)
+		c.JSON(http.StatusNotFound, nil)
+		return
 	}
 
-	// step 3: handle the message
-	header, response, problemDetails := p.createBDTPolicyContextProcedure(&requestMsg)
+	// // step 3: handle the message
 
-	// step 4: process the return value from step 3
-	if response != nil {
-		// status code is based on SPEC, and option headers
-		return httpwrapper.NewResponse(http.StatusCreated, header, response)
-	} else if problemDetails != nil {
-		return httpwrapper.NewResponse(int(problemDetails.Status), nil, problemDetails)
-	} else {
-		return httpwrapper.NewResponse(http.StatusNotFound, nil, nil)
-	}
-}
-
-func (p *Processor) createBDTPolicyContextProcedure(request *models.BdtReqData) (
-	header http.Header, response *models.BdtPolicy, problemDetails *models.ProblemDetails,
-) {
-	response = &models.BdtPolicy{}
+	response := &models.BdtPolicy{}
 	logger.BdtPolicyLog.Traceln("Handle BDT Policy Create")
 
 	pcfSelf := pcf_context.GetSelf()
@@ -185,7 +140,8 @@ func (p *Processor) createBDTPolicyContextProcedure(request *models.BdtReqData) 
 			Detail: "Can't find any UDR which supported to this PCF",
 		}
 		logger.BdtPolicyLog.Warnf(problemDetails.Detail)
-		return nil, nil, problemDetails
+		c.JSON(int(problemDetails.Status), problemDetails)
+		return
 	}
 	pcfSelf.DefaultUdrURI = udrUri
 	pcfSelf.SetDefaultUdrURI(udrUri)
@@ -193,7 +149,8 @@ func (p *Processor) createBDTPolicyContextProcedure(request *models.BdtReqData) 
 	// Query BDT DATA array from UDR
 	ctx, pd, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
 	if err != nil {
-		return nil, nil, pd
+		c.JSON(int(pd.Status), pd)
+		return
 	}
 
 	client := util.GetNudrClient(udrUri)
@@ -204,7 +161,8 @@ func (p *Processor) createBDTPolicyContextProcedure(request *models.BdtReqData) 
 			Detail: "Query to UDR failed",
 		}
 		logger.BdtPolicyLog.Warnf("Query to UDR failed")
-		return nil, nil, problemDetails
+		c.JSON(int(problemDetails.Status), problemDetails)
+		return
 	}
 	defer func() {
 		if rspCloseErr := httpResponse.Body.Close(); rspCloseErr != nil {
@@ -212,12 +170,12 @@ func (p *Processor) createBDTPolicyContextProcedure(request *models.BdtReqData) 
 		}
 	}()
 	// TODO: decide BDT Policy from other bdt policy data
-	response.BdtReqData = deepcopy.Copy(request).(*models.BdtReqData)
+	response.BdtReqData = deepcopy.Copy(requestMsg).(*models.BdtReqData)
 	var bdtData *models.BdtData
 	var bdtPolicyData models.BdtPolicyData
 	for _, data := range bdtDatas {
 		// If ASP has exist, use its background data policy
-		if request.AspId == data.AspId {
+		if requestMsg.AspId == data.AspId {
 			bdtData = &data
 			break
 		}
@@ -226,17 +184,17 @@ func (p *Processor) createBDTPolicyContextProcedure(request *models.BdtReqData) 
 	if bdtData != nil {
 		// found
 		// modify policy according to new request
-		bdtData.TransPolicy.RecTimeInt = request.DesTimeInt
+		bdtData.TransPolicy.RecTimeInt = requestMsg.DesTimeInt
 	} else {
 		// use default bdt policy, TODO: decide bdt transfer data policy
 		bdtData = &models.BdtData{
-			AspId:       request.AspId,
+			AspId:       requestMsg.AspId,
 			BdtRefId:    uuid.New().String(),
-			TransPolicy: getDefaultTransferPolicy(1, *request.DesTimeInt),
+			TransPolicy: getDefaultTransferPolicy(1, *requestMsg.DesTimeInt),
 		}
 	}
-	if request.NwAreaInfo != nil {
-		bdtData.NwAreaInfo = *request.NwAreaInfo
+	if requestMsg.NwAreaInfo != nil {
+		bdtData.NwAreaInfo = *requestMsg.NwAreaInfo
 	}
 	bdtPolicyData.SelTransPolicyId = bdtData.TransPolicy.TransPolicyId
 	// no support feature in subclause 5.8 of TS29554
@@ -250,7 +208,8 @@ func (p *Processor) createBDTPolicyContextProcedure(request *models.BdtReqData) 
 			Detail: "Allocate bdtPolicyID failed",
 		}
 		logger.BdtPolicyLog.Warnf("Allocate bdtPolicyID failed")
-		return nil, nil, problemDetails
+		c.JSON(int(problemDetails.Status), problemDetails)
+		return
 	}
 
 	pcfSelf.BdtPolicyPool.Store(bdtPolicyID, response)
@@ -274,11 +233,17 @@ func (p *Processor) createBDTPolicyContextProcedure(request *models.BdtReqData) 
 	}()
 
 	locationHeader := util.GetResourceUri(models.ServiceName_NPCF_BDTPOLICYCONTROL, bdtPolicyID)
-	header = http.Header{
-		"Location": {locationHeader},
-	}
 	logger.BdtPolicyLog.Tracef("BDT Policy Id[%s] Create", bdtPolicyID)
-	return header, response, problemDetails
+
+	if response != nil {
+		// status code is based on SPEC, and option headers
+		c.Header("Location", locationHeader)
+		c.JSON(http.StatusCreated, response)
+	} else if problemDetails != nil {
+		c.JSON(int(problemDetails.Status), problemDetails)
+	} else {
+		c.JSON(http.StatusNotFound, nil)
+	}
 }
 
 func (p *Processor) getDefaultUdrUri(context *pcf_context.PCFContext) string {
