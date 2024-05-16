@@ -41,7 +41,7 @@ func NewApp(
 	pcf.SetLogLevel(cfg.GetLogLevel())
 	pcf.SetReportCaller(cfg.GetLogReportCaller())
 
-	//這段要嗎?
+	// 這段要嗎?
 	// pcf.ctx, pcf.cancel = context.WithCancel(ctx)
 	// err := pcf_context.InitPcfContext()
 	// if err != nil {
@@ -51,14 +51,14 @@ func NewApp(
 	pcf_context.Init()
 	pcf.pcfCtx = pcf_context.GetSelf()
 
-	//processor
+	// processor
 	// p, err := processor.NewProcessor(pcf)
 	// if err != nil {
 	// 	return pcf, err
 	// }
 	// pcf.processor = p
 
-	//consumer
+	// consumer
 	consumer, err := consumer.NewConsumer(pcf)
 	if err != nil {
 		return pcf, err
@@ -134,8 +134,8 @@ func (a *PcfApp) Start(tlsKeyLogPath string) {
 	if err := a.sbiServer.Run(context.Background(), &a.wg); err != nil {
 		logger.InitLog.Fatalf("Run SBI server failed: %+v", err)
 	}
-
 }
+
 func (a *PcfApp) listenShutdownEvent() {
 	defer func() {
 		if p := recover(); p != nil {
@@ -152,6 +152,7 @@ func (a *PcfApp) listenShutdownEvent() {
 		a.Terminate()
 	}
 }
+
 func (a *PcfApp) Terminate() {
 	logger.InitLog.Infof("Terminating PCF...")
 	// deregister with NRF

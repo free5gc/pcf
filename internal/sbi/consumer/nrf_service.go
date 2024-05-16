@@ -72,8 +72,8 @@ func (s *nnrfService) getNFDiscClient(uri string) *Nnrf_NFDiscovery.APIClient {
 	defer s.nfDiscMu.Unlock()
 	s.nfDiscClients[uri] = client
 	return client
-
 }
+
 func (s *nnrfService) SendSearchNFInstances(
 	nrfUri string, targetNfType, requestNfType models.NfType, param Nnrf_NFDiscovery.SearchNFInstancesParamOpts) (
 	*models.SearchResult, error,
@@ -207,6 +207,7 @@ func (s *nnrfService) BuildNFInstance(context *pcf_context.PCFContext) (profile 
 	}
 	return
 }
+
 func (s *nnrfService) SendRegisterNFInstance(ctx context.Context) (
 	resouceNrfUri string, retrieveNfInstanceID string, err error,
 ) {

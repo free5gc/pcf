@@ -26,7 +26,8 @@ type UEAmPolicys []UEAmPolicy
 
 func (p *Processor) HandleOAMGetAmPolicyRequest(
 	c *gin.Context,
-	supi string) {
+	supi string,
+) {
 	// step 1: log
 	logger.OamLog.Infof("Handle OAMGetAmPolicy")
 
@@ -63,5 +64,4 @@ func (p *Processor) HandleOAMGetAmPolicyRequest(
 		c.JSON(int(problemDetails.Status), problemDetails)
 		return
 	}
-
 }

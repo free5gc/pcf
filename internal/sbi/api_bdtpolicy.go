@@ -74,7 +74,6 @@ func (s *Server) HTTPCreateBDTPolicy(c *gin.Context) {
 	}
 
 	s.Processor().HandleCreateBDTPolicyContextRequest(c, bdtReqData)
-
 }
 
 func (s *Server) HTTPGetBDTPolicy(c *gin.Context) {

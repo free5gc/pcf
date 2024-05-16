@@ -19,7 +19,8 @@ import (
 
 func (p *Processor) HandleGetBDTPolicyContextRequest(
 	c *gin.Context,
-	bdtPolicyID string) {
+	bdtPolicyID string,
+) {
 	// step 1: log
 	logger.BdtPolicyLog.Infof("Handle GetBDTPolicyContext")
 
@@ -43,7 +44,8 @@ func (p *Processor) HandleGetBDTPolicyContextRequest(
 func (p *Processor) HandleUpdateBDTPolicyContextProcedure(
 	c *gin.Context,
 	bdtPolicyID string,
-	bdtPolicyDataPatch models.BdtPolicyDataPatch) {
+	bdtPolicyDataPatch models.BdtPolicyDataPatch,
+) {
 	// step 1: log
 	logger.BdtPolicyLog.Infof("Handle UpdateBDTPolicyContext")
 
@@ -111,7 +113,8 @@ func (p *Processor) HandleUpdateBDTPolicyContextProcedure(
 // CreateBDTPolicy - Create a new Individual BDT policy
 func (p *Processor) HandleCreateBDTPolicyContextRequest(
 	c *gin.Context,
-	requestMsg models.BdtReqData) {
+	requestMsg models.BdtReqData,
+) {
 	// step 1: log
 	logger.BdtPolicyLog.Infof("Handle CreateBDTPolicyContext")
 
@@ -235,15 +238,12 @@ func (p *Processor) HandleCreateBDTPolicyContextRequest(
 	locationHeader := util.GetResourceUri(models.ServiceName_NPCF_BDTPOLICYCONTROL, bdtPolicyID)
 	logger.BdtPolicyLog.Tracef("BDT Policy Id[%s] Create", bdtPolicyID)
 
-	if response != nil {
-		// status code is based on SPEC, and option headers
-		c.Header("Location", locationHeader)
-		c.JSON(http.StatusCreated, response)
-	} else if problemDetails != nil {
+	if problemDetails != nil {
 		c.JSON(int(problemDetails.Status), problemDetails)
-	} else {
-		c.JSON(http.StatusNotFound, nil)
+		return
 	}
+	c.Header("Location", locationHeader)
+	c.JSON(http.StatusCreated, response)
 }
 
 func (p *Processor) getDefaultUdrUri(context *pcf_context.PCFContext) string {

@@ -5,16 +5,18 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/free5gc/openapi/models"
 	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/internal/util"
-	"github.com/gin-gonic/gin"
 )
 
 func (p *Processor) HandleAmfStatusChangeNotify(
 	c *gin.Context,
-	amfStatusChangeNotification models.AmfStatusChangeNotification) {
+	amfStatusChangeNotification models.AmfStatusChangeNotification,
+) {
 	logger.CallbackLog.Warnf("[PCF] Handle Amf Status Change Notify is not implemented.")
 
 	// TODO: handle AMF Status Change Notify
@@ -26,8 +28,8 @@ func (p *Processor) HandleAmfStatusChangeNotify(
 func (p *Processor) HandlePolicyDataChangeNotify(
 	c *gin.Context,
 	supi string,
-	policyDataChangeNotification models.PolicyDataChangeNotification) {
-
+	policyDataChangeNotification models.PolicyDataChangeNotification,
+) {
 	logger.CallbackLog.Warnf("[PCF] Handle Policy Data Change Notify is not implemented.")
 
 	PolicyDataChangeNotifyProcedure(supi, policyDataChangeNotification)
@@ -43,8 +45,8 @@ func (p *Processor) HandleInfluenceDataUpdateNotify(
 	c *gin.Context,
 	supi string,
 	pduSessionId string,
-	trafficInfluDataNotif []models.TrafficInfluDataNotif) {
-
+	trafficInfluDataNotif []models.TrafficInfluDataNotif,
+) {
 	logger.CallbackLog.Infof("[PCF] Handle Influence Data Update Notify")
 
 	smPolicyID := fmt.Sprintf("%s-%s", supi, pduSessionId)

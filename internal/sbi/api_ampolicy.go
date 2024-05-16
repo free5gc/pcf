@@ -84,7 +84,6 @@ func (s *Server) HTTPPoliciesPolAssoIdUpdatePost(c *gin.Context) {
 	}
 
 	s.Processor().HandleUpdatePostPoliciesPolAssoId(c, polAssoId, policyAssociationUpdateRequest)
-
 }
 
 func (s *Server) HTTPPoliciesPost(c *gin.Context) {
@@ -135,12 +134,10 @@ func (s *Server) HTTPPoliciesPost(c *gin.Context) {
 	}
 
 	s.Processor().HandlePostPolicies(c, polAssoId, policyAssociationRequest)
-
 }
 
 func (s *Server) getAmPolicyRoutes() []Route {
 	return []Route{
-
 		{
 			Method:  http.MethodGet,
 			Pattern: "/policies/:polAssoId",

@@ -29,8 +29,8 @@ const (
 // SmPoliciesPost -
 func (p *Processor) HandleCreateSmPolicyRequest(
 	c *gin.Context,
-	request models.SmPolicyContextData) {
-
+	request models.SmPolicyContextData,
+) {
 	logger.SmPolicyLog.Infof("Handle CreateSmPolicy")
 	// step 2: retrieve request
 	// requestDataType := request.Body.(models.SmPolicyContextData)
@@ -492,8 +492,8 @@ func newQosDataWithQosFlowMap(qosFlow map[string]interface{}) *models.QosData {
 // SmPoliciessmPolicyIDDeletePost -
 func (p *Processor) HandleDeleteSmPolicyContextRequest(
 	c *gin.Context,
-	smPolicyId string) {
-
+	smPolicyId string,
+) {
 	logger.SmPolicyLog.Infof("Handle DeleteSmPolicyContext")
 
 	// handle the message
@@ -547,14 +547,13 @@ func (p *Processor) HandleDeleteSmPolicyContextRequest(
 	}
 	delete(ue.RatingGroupData, smPolicyId)
 	c.JSON(http.StatusNoContent, nil)
-
 }
 
 // SmPoliciessmPolicyIDGet -
 func (p *Processor) HandleGetSmPolicyContextRequest(
 	c *gin.Context,
-	smPolicyId string) {
-
+	smPolicyId string,
+) {
 	logger.SmPolicyLog.Infof("Handle GetSmPolicyContext")
 	// handle the message
 	logger.SmPolicyLog.Traceln("Handle GET SM Policy Request")
@@ -579,7 +578,8 @@ func (p *Processor) HandleGetSmPolicyContextRequest(
 func (p *Processor) HandleUpdateSmPolicyContextRequest(
 	c *gin.Context,
 	smPolicyId string,
-	request models.SmPolicyUpdateContextData) {
+	request models.SmPolicyUpdateContextData,
+) {
 	// step 1: log
 	logger.SmPolicyLog.Infof("Handle UpdateSmPolicyContext")
 

@@ -17,8 +17,8 @@ import (
 
 func (p *Processor) HandleDeletePoliciesPolAssoId(
 	c *gin.Context,
-	polAssoId string) {
-
+	polAssoId string,
+) {
 	logger.AmPolicyLog.Infof("Handle AM Policy Association Delete")
 
 	ue := pcf_context.GetSelf().PCFUeFindByPolicyId(polAssoId)
@@ -34,8 +34,8 @@ func (p *Processor) HandleDeletePoliciesPolAssoId(
 // PoliciesPolAssoIdGet -
 func (p *Processor) HandleGetPoliciesPolAssoId(
 	c *gin.Context,
-	polAssoId string) {
-
+	polAssoId string,
+) {
 	logger.AmPolicyLog.Infof("Handle AM Policy Association Get")
 
 	// response, problemDetails := GetPoliciesPolAssoIdProcedure(polAssoId)
@@ -70,8 +70,8 @@ func (p *Processor) HandleGetPoliciesPolAssoId(
 func (p *Processor) HandleUpdatePostPoliciesPolAssoId(
 	c *gin.Context,
 	polAssoId string,
-	policyAssociationUpdateRequest models.PolicyAssociationUpdateRequest) {
-
+	policyAssociationUpdateRequest models.PolicyAssociationUpdateRequest,
+) {
 	logger.AmPolicyLog.Infof("Handle AM Policy Association Update")
 
 	response, problemDetails := UpdatePostPoliciesPolAssoIdProcedure(polAssoId, policyAssociationUpdateRequest)
@@ -167,7 +167,6 @@ func (p *Processor) HandlePostPolicies(
 	polAssoId string,
 	policyAssociationRequest models.PolicyAssociationRequest,
 ) {
-
 	logger.AmPolicyLog.Infof("Handle AM Policy Create Request")
 
 	response, locationHeader, problemDetails := p.PostPoliciesProcedure(polAssoId, policyAssociationRequest)
@@ -184,7 +183,6 @@ func (p *Processor) HandlePostPolicies(
 		Cause:  "UNSPECIFIED",
 	}
 	c.JSON(int(problemDetails.Status), problemDetails)
-
 }
 
 func (p *Processor) PostPoliciesProcedure(polAssoId string,
@@ -287,7 +285,8 @@ func (p *Processor) PostPoliciesProcedure(polAssoId string,
 
 		if needSubscribe {
 			logger.AmPolicyLog.Debugf("Subscribe AMF status change[GUAMI: %+v]", *policyAssociationRequest.Guami)
-			amfUri := p.consumer.SendNFInstancesAMF(pcfSelf.NrfUri, *policyAssociationRequest.Guami, models.ServiceName_NAMF_COMM)
+			amfUri := p.consumer.SendNFInstancesAMF(pcfSelf.NrfUri,
+				*policyAssociationRequest.Guami, models.ServiceName_NAMF_COMM)
 			if amfUri != "" {
 				problemDetails, err := p.consumer.AmfStatusChangeSubscribe(amfUri, []models.Guami{*policyAssociationRequest.Guami})
 				if err != nil {

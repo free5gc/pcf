@@ -101,7 +101,6 @@ func (s *Server) HTTPPostAppSessions(c *gin.Context) {
 // api_events_subscription
 // HTTPDeleteEventsSubsc - deletes the Events Subscription subresource
 func (s *Server) HTTPDeleteEventsSubsc(c *gin.Context) {
-
 	appSessionId := c.Params.ByName("appSessionId")
 	if appSessionId == "" {
 		problemDetails := &models.ProblemDetails{

@@ -130,7 +130,8 @@ func handleMediaSubComponent(smPolicy *pcf_context.UeSmPolicyData, medComp *mode
 // Support of content versioning (TODO)
 func (p *Processor) HandlePostAppSessionsContext(
 	c *gin.Context,
-	appSessionContext models.AppSessionContext) {
+	appSessionContext models.AppSessionContext,
+) {
 	logger.PolicyAuthLog.Traceln("Handle Create AppSessions")
 
 	response, locationHeader, problemDetails := p.postAppSessCtxProcedure(&appSessionContext)
@@ -437,8 +438,8 @@ func (p *Processor) postAppSessCtxProcedure(appSessCtx *models.AppSessionContext
 func (p *Processor) HandleDeleteAppSessionContext(
 	c *gin.Context,
 	appSessionId string,
-	eventsSubscReqData *models.EventsSubscReqData) {
-
+	eventsSubscReqData *models.EventsSubscReqData,
+) {
 	logger.PolicyAuthLog.Infof("Handle Del AppSessions, AppSessionId[%s]", appSessionId)
 
 	pcfSelf := pcf_context.GetSelf()
@@ -497,8 +498,8 @@ func (p *Processor) HandleDeleteAppSessionContext(
 // HandleGetAppSession - Reads an existing Individual Application Session Context
 func (p *Processor) HandleGetAppSessionContext(
 	c *gin.Context,
-	appSessionId string) {
-
+	appSessionId string,
+) {
 	logger.PolicyAuthLog.Infof("Handle Get AppSessions, AppSessionId[%s]", appSessionId)
 
 	pcfSelf := pcf_context.GetSelf()
@@ -514,15 +515,14 @@ func (p *Processor) HandleGetAppSessionContext(
 	}
 	logger.PolicyAuthLog.Tracef("App Session Id[%s] Get", appSessionId)
 	c.JSON(http.StatusOK, appSession.AppSessionContext)
-
 }
 
 // HandleModAppSession - Modifies an existing Individual Application Session Context
 func (p *Processor) HandleModAppSessionContext(
 	c *gin.Context,
 	appSessionId string,
-	appSessionContextUpdateData models.AppSessionContextUpdateData) {
-
+	appSessionContextUpdateData models.AppSessionContextUpdateData,
+) {
 	// appSessID := request.Params["appSessionId"]
 	// ascUpdateData := request.Body.(models.AppSessionContextUpdateData)
 	logger.PolicyAuthLog.Infof("Handle Modify AppSessions, AppSessionId[%s]", appSessionId)
@@ -808,7 +808,8 @@ func (p *Processor) HandleModAppSessionContext(
 // HandleDeleteEventsSubsc - deletes the Events Subscription subresource
 func (p *Processor) HandleDeleteEventsSubscContext(
 	c *gin.Context,
-	appSessionId string) {
+	appSessionId string,
+) {
 	// appSessID := request.Params["appSessID"]
 	logger.PolicyAuthLog.Tracef("Handle Del AppSessions Events Subsc, AppSessionId[%s]", appSessionId)
 
@@ -852,13 +853,11 @@ func (p *Processor) HandleDeleteEventsSubscContext(
 func (p *Processor) HandleUpdateEventsSubscContext(
 	c *gin.Context,
 	appSessionId string,
-	eventsSubscReqData models.EventsSubscReqData) {
-
+	eventsSubscReqData models.EventsSubscReqData,
+) {
 	// EventsSubscReqData := request.Body.(models.EventsSubscReqData)
 	// appSessID := request.Params["appSessID"]
 	logger.PolicyAuthLog.Tracef("Handle Put AppSessions Events Subsc, AppSessionId[%s]", appSessionId)
-
-	// response, locationHeader, status, problemDetails := UpdateEventsSubscContextProcedure(appSessionId, eventsSubscReqData)
 
 	pcfSelf := pcf_context.GetSelf()
 

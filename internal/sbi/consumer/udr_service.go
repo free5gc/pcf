@@ -6,8 +6,8 @@ import (
 	"sync"
 
 	"github.com/free5gc/openapi"
-	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/openapi/Nudr_DataRepository"
+	"github.com/free5gc/openapi/models"
 	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/internal/util"
@@ -55,7 +55,7 @@ func (s *nudrService) CreateInfluenceDataSubscription(ue *pcf_context.UeContext,
 	if err != nil {
 		return "", pd, err
 	}
-	client := s.getDataSubscription(ue.UdrUri);
+	client := s.getDataSubscription(ue.UdrUri)
 	trafficInfluSub := s.buildTrafficInfluSub(request)
 	_, httpResp, localErr := client.InfluenceDataSubscriptionsCollectionApi.
 		ApplicationDataInfluenceDataSubsToNotifyPost(ctx, trafficInfluSub)

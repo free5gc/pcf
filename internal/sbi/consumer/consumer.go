@@ -7,9 +7,8 @@ import (
 	"github.com/free5gc/openapi/Nnrf_NFDiscovery"
 	"github.com/free5gc/openapi/Nnrf_NFManagement"
 	"github.com/free5gc/openapi/Nudr_DataRepository"
-	"github.com/free5gc/pcf/pkg/factory"
-
 	pcf_context "github.com/free5gc/pcf/internal/context"
+	"github.com/free5gc/pcf/pkg/factory"
 )
 
 type pcf interface {

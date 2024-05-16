@@ -46,8 +46,6 @@ func (s *namfService) getNFCommunicationClient(uri string) *Namf_Communication.A
 func (s *namfService) AmfStatusChangeSubscribe(amfUri string, guamiList []models.Guami) (
 	problemDetails *models.ProblemDetails, err error,
 ) {
-	
-
 	logger.ConsumerLog.Debugf("PCF Subscribe to AMF status[%+v]", amfUri)
 	pcfContext := s.consumer.pcf.Context()
 
