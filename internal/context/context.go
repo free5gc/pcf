@@ -82,7 +82,7 @@ type NFContext interface {
 
 var _ NFContext = &PCFContext{}
 
-func InitpcfContext(context *PCFContext) {
+func InitPcfContext(context *PCFContext) {
 	config := factory.PcfConfig
 	logger.UtilLog.Infof("pcfconfig Info: Version[%s] Description[%s]", config.Info.Version, config.Info.Description)
 	configuration := config.Configuration
@@ -157,7 +157,7 @@ func Init() {
 	pcfContext.PcfSuppFeats = make(map[models.ServiceName]openapi.SupportedFeature)
 	pcfContext.BdtPolicyIDGenerator = idgenerator.NewGenerator(1, math.MaxInt64)
 	pcfContext.RatingGroupIdGenerator = idgenerator.NewGenerator(1, math.MaxInt64)
-	InitpcfContext(&pcfContext)
+	InitPcfContext(&pcfContext)
 }
 
 // Create new PCF context

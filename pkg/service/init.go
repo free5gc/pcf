@@ -13,17 +13,24 @@ import (
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/internal/sbi"
 	"github.com/free5gc/pcf/internal/sbi/consumer"
+	"github.com/free5gc/pcf/internal/sbi/processor"
+	"github.com/free5gc/pcf/pkg/app"
 	"github.com/free5gc/pcf/pkg/factory"
 )
 
+var PCF *PcfApp
+
+var _ app.App = &PcfApp{}
+
 type PcfApp struct {
+	app.App
 	cfg    *factory.Config
 	pcfCtx *pcf_context.PCFContext
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	consumer *consumer.Consumer
-	// processor *processor.Processor
+	consumer  *consumer.Consumer
+	processor *processor.Processor
 	sbiServer *sbi.Server
 	wg        sync.WaitGroup
 }
@@ -41,22 +48,9 @@ func NewApp(
 	pcf.SetLogLevel(cfg.GetLogLevel())
 	pcf.SetReportCaller(cfg.GetLogReportCaller())
 
-	// 這段要嗎?
-	// pcf.ctx, pcf.cancel = context.WithCancel(ctx)
-	// err := pcf_context.InitPcfContext()
-	// if err != nil {
-	// 	logger.InitLog.Errorln(err)
-	// 	return pcf, err
-	// }
+	pcf.ctx, pcf.cancel = context.WithCancel(ctx)
 	pcf_context.Init()
 	pcf.pcfCtx = pcf_context.GetSelf()
-
-	// processor
-	// p, err := processor.NewProcessor(pcf)
-	// if err != nil {
-	// 	return pcf, err
-	// }
-	// pcf.processor = p
 
 	// consumer
 	consumer, err := consumer.NewConsumer(pcf)
@@ -64,6 +58,19 @@ func NewApp(
 		return pcf, err
 	}
 	pcf.consumer = consumer
+
+	// processor
+	p, err := processor.NewProcessor(pcf, consumer)
+	if err != nil {
+		return pcf, err
+	}
+	pcf.processor = p
+
+	if pcf.sbiServer, err = sbi.NewServer(pcf, tlsKeyLogPath); err != nil {
+		return nil, err
+	}
+	PCF = pcf
+
 	return pcf, nil
 }
 
@@ -81,6 +88,10 @@ func (a *PcfApp) CancelContext() context.Context {
 
 func (a *PcfApp) Consumer() *consumer.Consumer {
 	return a.consumer
+}
+
+func (a *PcfApp) Processor() *processor.Processor {
+	return a.processor
 }
 
 func (a *PcfApp) SetLogEnable(enable bool) {
@@ -125,11 +136,9 @@ func (a *PcfApp) SetReportCaller(reportCaller bool) {
 	logger.Log.SetReportCaller(reportCaller)
 }
 
-func (a *PcfApp) Start(tlsKeyLogPath string) {
+func (a *PcfApp) Start() {
 	logger.InitLog.Infoln("Server started")
-
 	a.wg.Add(1)
-
 	go a.listenShutdownEvent()
 	if err := a.sbiServer.Run(context.Background(), &a.wg); err != nil {
 		logger.InitLog.Fatalf("Run SBI server failed: %+v", err)
@@ -146,15 +155,19 @@ func (a *PcfApp) listenShutdownEvent() {
 	}()
 
 	<-a.ctx.Done()
+	a.Terminate()
+}
 
+func (a *PcfApp) CallServerStop() {
 	if a.sbiServer != nil {
 		a.sbiServer.Stop(context.Background())
-		a.Terminate()
 	}
 }
 
 func (a *PcfApp) Terminate() {
 	logger.InitLog.Infof("Terminating PCF...")
+	a.cancel()
+	a.CallServerStop()
 	// deregister with NRF
 	problemDetails, err := a.consumer.SendDeregisterNFInstance()
 	if problemDetails != nil {

@@ -149,11 +149,6 @@ func (s *Server) getAmPolicyRoutes() []Route {
 			APIFunc: s.HTTPPoliciesPolAssoIdDelete,
 		},
 		{
-			Method:  http.MethodGet,
-			Pattern: "/policies/:polAssoId",
-			APIFunc: s.HTTPPoliciesPolAssoIdGet,
-		},
-		{
 			Method:  http.MethodPost,
 			Pattern: "/policies/:polAssoId/update",
 			APIFunc: s.HTTPPoliciesPolAssoIdUpdatePost,

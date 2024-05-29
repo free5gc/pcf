@@ -13,10 +13,13 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 
+	"github.com/free5gc/openapi/models"
 	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/internal/sbi/consumer"
 	"github.com/free5gc/pcf/internal/sbi/processor"
+	"github.com/free5gc/pcf/internal/util"
+	"github.com/free5gc/pcf/pkg/app"
 	"github.com/free5gc/pcf/pkg/factory"
 	"github.com/free5gc/util/httpwrapper"
 	logger_util "github.com/free5gc/util/logger"
@@ -50,9 +53,7 @@ func applyRoutes(group *gin.RouterGroup, routes []Route) {
 }
 
 type pcf interface {
-	Config() *factory.Config
-	Context() *pcf_context.PCFContext
-	CancelContext() context.Context
+	app.App
 	Processor() *processor.Processor
 	Consumer() *consumer.Consumer
 }
@@ -76,10 +77,18 @@ func NewServer(pcf pcf, tlsKeyLogPath string) (*Server, error) {
 
 	amPolicyRoutes := s.getAmPolicyRoutes()
 	amPolicyGroup := s.router.Group(factory.PcfAMpolicyCtlResUriPrefix)
+	amRouterAuthorizationCheck := util.NewRouterAuthorizationCheck(models.ServiceName_NPCF_AM_POLICY_CONTROL)
+	amPolicyGroup.Use(func(c *gin.Context) {
+		amRouterAuthorizationCheck.Check(c, pcf_context.GetSelf())
+	})
 	applyRoutes(amPolicyGroup, amPolicyRoutes)
 
 	bdtPolicyRoutes := s.getBdtPolicyRoutes()
 	bdtPolicyGroup := s.router.Group(factory.PcfBdtPolicyCtlResUriPrefix)
+	bdtRouterAuthorizationCheck := util.NewRouterAuthorizationCheck(models.ServiceName_NPCF_BDTPOLICYCONTROL)
+	bdtPolicyGroup.Use(func(c *gin.Context) {
+		bdtRouterAuthorizationCheck.Check(c, pcf_context.GetSelf())
+	})
 	applyRoutes(bdtPolicyGroup, bdtPolicyRoutes)
 
 	httpcallbackRoutes := s.getHttpCallBackRoutes()
@@ -88,10 +97,18 @@ func NewServer(pcf pcf, tlsKeyLogPath string) (*Server, error) {
 
 	oamRoutes := s.getOamRoutes()
 	oamGroup := s.router.Group(factory.PcfOamResUriPrefix)
+	oamRouterAuthorizationCheck := util.NewRouterAuthorizationCheck(models.ServiceName_NPCF_OAM)
+	oamGroup.Use(func(c *gin.Context) {
+		oamRouterAuthorizationCheck.Check(c, pcf_context.GetSelf())
+	})
 	applyRoutes(oamGroup, oamRoutes)
 
 	policyAuthorizationRoutes := s.getPolicyAuthorizationRoutes()
 	policyAuthorizationGroup := s.router.Group(factory.PcfPolicyAuthResUriPrefix)
+	policyAuthorizationRouterAuthorizationCheck := util.NewRouterAuthorizationCheck(models.ServiceName_NPCF_POLICYAUTHORIZATION)
+	policyAuthorizationGroup.Use(func(c *gin.Context) {
+		policyAuthorizationRouterAuthorizationCheck.Check(c, pcf_context.GetSelf())
+	})
 	applyRoutes(policyAuthorizationGroup, policyAuthorizationRoutes)
 
 	uePolicyRoutes := s.getUePolicyRoutes()
@@ -126,6 +143,7 @@ func NewServer(pcf pcf, tlsKeyLogPath string) (*Server, error) {
 func (s *Server) Run(traceCtx context.Context, wg *sync.WaitGroup) error {
 	var err error
 	_, s.Context().NfId, err = s.Consumer().SendRegisterNFInstance(context.Background())
+
 	if err != nil {
 		logger.InitLog.Errorf("CHF register to NRF Error[%s]", err.Error())
 	}
