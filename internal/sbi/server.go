@@ -105,7 +105,8 @@ func NewServer(pcf pcf, tlsKeyLogPath string) (*Server, error) {
 
 	policyAuthorizationRoutes := s.getPolicyAuthorizationRoutes()
 	policyAuthorizationGroup := s.router.Group(factory.PcfPolicyAuthResUriPrefix)
-	policyAuthorizationRouterAuthorizationCheck := util.NewRouterAuthorizationCheck(models.ServiceName_NPCF_POLICYAUTHORIZATION)
+	policyAuthorizationRouterAuthorizationCheck := util.
+		NewRouterAuthorizationCheck(models.ServiceName_NPCF_POLICYAUTHORIZATION)
 	policyAuthorizationGroup.Use(func(c *gin.Context) {
 		policyAuthorizationRouterAuthorizationCheck.Check(c, pcf_context.GetSelf())
 	})
@@ -143,7 +144,6 @@ func NewServer(pcf pcf, tlsKeyLogPath string) (*Server, error) {
 func (s *Server) Run(traceCtx context.Context, wg *sync.WaitGroup) error {
 	var err error
 	_, s.Context().NfId, err = s.Consumer().SendRegisterNFInstance(context.Background())
-
 	if err != nil {
 		logger.InitLog.Errorf("CHF register to NRF Error[%s]", err.Error())
 	}

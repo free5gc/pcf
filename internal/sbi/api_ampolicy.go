@@ -12,7 +12,7 @@ import (
 )
 
 func (s *Server) HTTPPoliciesPolAssoIdDelete(c *gin.Context) {
-	polAssoId := c.Param("polAssoId")
+	polAssoId, _ := c.Params.Get("polAssoId")
 
 	if polAssoId == "" {
 		problemDetails := &models.ProblemDetails{
@@ -28,7 +28,7 @@ func (s *Server) HTTPPoliciesPolAssoIdDelete(c *gin.Context) {
 
 // HTTPPoliciesPolAssoIdGet -
 func (s *Server) HTTPPoliciesPolAssoIdGet(c *gin.Context) {
-	polAssoId := c.Param("polAssoId")
+	polAssoId, _ := c.Params.Get("polAssoId")
 
 	if polAssoId == "" {
 		problemDetails := &models.ProblemDetails{
@@ -72,7 +72,7 @@ func (s *Server) HTTPPoliciesPolAssoIdUpdatePost(c *gin.Context) {
 		return
 	}
 
-	polAssoId := c.Param("polAssoId")
+	polAssoId, _ := c.Params.Get("polAssoId")
 
 	if polAssoId == "" {
 		problemDetails := &models.ProblemDetails{
@@ -88,7 +88,6 @@ func (s *Server) HTTPPoliciesPolAssoIdUpdatePost(c *gin.Context) {
 
 func (s *Server) HTTPPoliciesPost(c *gin.Context) {
 	var policyAssociationRequest models.PolicyAssociationRequest
-
 	requestBody, err := c.GetRawData()
 	if err != nil {
 		problemDetail := models.ProblemDetails{
@@ -122,16 +121,7 @@ func (s *Server) HTTPPoliciesPost(c *gin.Context) {
 		return
 	}
 
-	polAssoId := c.Param("polAssoId")
-
-	if polAssoId == "" {
-		problemDetails := &models.ProblemDetails{
-			Title:  util.ERROR_INITIAL_PARAMETERS,
-			Status: http.StatusBadRequest,
-		}
-		c.JSON(http.StatusBadRequest, problemDetails)
-		return
-	}
+	polAssoId, _ := c.Params.Get("polAssoId")
 
 	s.Processor().HandlePostPolicies(c, polAssoId, policyAssociationRequest)
 }
