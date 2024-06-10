@@ -160,7 +160,7 @@ func (a *PcfApp) listenShutdownEvent() {
 
 func (a *PcfApp) CallServerStop() {
 	if a.sbiServer != nil {
-		a.sbiServer.Stop(context.Background())
+		a.sbiServer.Shutdown(context.Background())
 	}
 }
 

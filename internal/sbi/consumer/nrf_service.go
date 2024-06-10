@@ -90,11 +90,13 @@ func (s *nnrfService) SendSearchNFInstances(
 	if err != nil {
 		logger.ConsumerLog.Errorf("SearchNFInstances failed: %+v", err)
 	}
+
 	defer func() {
 		if resCloseErr := res.Body.Close(); resCloseErr != nil {
 			logger.ConsumerLog.Errorf("NFInstancesStoreApi response body cannot close: %+v", resCloseErr)
 		}
 	}()
+
 	if res != nil && res.StatusCode == http.StatusTemporaryRedirect {
 		return nil, fmt.Errorf("Temporary Redirect For Non NRF Consumer")
 	}
@@ -108,14 +110,6 @@ func (s *nnrfService) SendNFInstancesUDR(nrfUri, id string) string {
 	localVarOptionals := Nnrf_NFDiscovery.SearchNFInstancesParamOpts{
 		// 	DataSet: optional.NewInterface(models.DataSetId_SUBSCRIPTION),
 	}
-	// switch types {
-	// case NFDiscoveryToUDRParamSupi:
-	// 	localVarOptionals.Supi = optional.NewString(id)
-	// case NFDiscoveryToUDRParamExtGroupId:
-	// 	localVarOptionals.ExternalGroupIdentity = optional.NewString(id)
-	// case NFDiscoveryToUDRParamGpsi:
-	// 	localVarOptionals.Gpsi = optional.NewString(id)
-	// }
 
 	result, err := s.SendSearchNFInstances(nrfUri, targetNfType, requestNfType, localVarOptionals)
 	if err != nil {
@@ -156,14 +150,6 @@ func (s *nnrfService) SendNFInstancesAMF(nrfUri string, guami models.Guami, serv
 	localVarOptionals := Nnrf_NFDiscovery.SearchNFInstancesParamOpts{
 		Guami: optional.NewInterface(util.MarshToJsonString(guami)),
 	}
-	// switch types {
-	// case NFDiscoveryToUDRParamSupi:
-	// 	localVarOptionals.Supi = optional.NewString(id)
-	// case NFDiscoveryToUDRParamExtGroupId:
-	// 	localVarOptionals.ExternalGroupIdentity = optional.NewString(id)
-	// case NFDiscoveryToUDRParamGpsi:
-	// 	localVarOptionals.Gpsi = optional.NewString(id)
-	// }
 
 	result, err := s.SendSearchNFInstances(nrfUri, targetNfType, requestNfType, localVarOptionals)
 	if err != nil {
@@ -226,7 +212,7 @@ func (s *nnrfService) SendRegisterNFInstance(ctx context.Context) (
 	for {
 		nf, res, err = client.NFInstanceIDDocumentApi.RegisterNFInstance(context.TODO(), pcfContext.NfId, nfProfile)
 		if err != nil || res == nil {
-			logger.ConsumerLog.Errorf("CHF register to NRF Error[%v]", err)
+			logger.ConsumerLog.Errorf("PCF register to NRF Error[%v]", err)
 			time.Sleep(2 * time.Second)
 			continue
 		}

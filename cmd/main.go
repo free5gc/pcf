@@ -93,7 +93,7 @@ func action(cliCtx *cli.Context) error {
 		logger.MainLog.Infoln("pcf is nil")
 	}
 	pcf.Start()
-	PCF.WaitRoutineStopped()
+	pcf.WaitRoutineStopped()
 
 	return nil
 }

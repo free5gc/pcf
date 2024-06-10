@@ -121,7 +121,6 @@ func (p *Processor) HandleCreateBDTPolicyContextRequest(
 	var problemDetails *models.ProblemDetails
 
 	// step 2: retrieve request and check mandatory contents
-	// requestMsg := request.Body.(models.BdtReqData)
 	if requestMsg.AspId == "" || requestMsg.DesTimeInt == nil || requestMsg.NumOfUes == 0 || requestMsg.VolPerUe == nil {
 		logger.BdtPolicyLog.Errorf("Required BdtReqData not found: AspId[%+v], DesTimeInt[%+v], NumOfUes[%+v], VolPerUe[%+v]",
 			requestMsg.AspId, requestMsg.DesTimeInt, requestMsg.NumOfUes, requestMsg.VolPerUe)

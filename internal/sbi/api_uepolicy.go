@@ -42,16 +42,20 @@ func (s *Server) getUePolicyRoutes() []Route {
 
 // PoliciesPolAssoIdDelete -
 func (s *Server) PoliciesPolAssoIdDelete(c *gin.Context) {
+	c.JSON(http.StatusNotImplemented, nil)
 }
 
 // PoliciesPolAssoIdGet -
 func (s *Server) PoliciesPolAssoIdGet(c *gin.Context) {
+	c.JSON(http.StatusNotImplemented, nil)
 }
 
 // PoliciesPolAssoIdUpdatePost -
 func (s *Server) PoliciesPolAssoIdUpdatePost(c *gin.Context) {
+	c.JSON(http.StatusNotImplemented, nil)
 }
 
 // PoliciesPost -
 func (s *Server) PoliciesPost(c *gin.Context) {
+	c.JSON(http.StatusNotImplemented, nil)
 }

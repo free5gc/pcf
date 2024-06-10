@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 
@@ -23,10 +22,6 @@ import (
 	"github.com/free5gc/pcf/pkg/factory"
 	"github.com/free5gc/util/httpwrapper"
 	logger_util "github.com/free5gc/util/logger"
-)
-
-const (
-	CorsConfigMaxAge = 86400
 )
 
 type Route struct {
@@ -116,18 +111,6 @@ func NewServer(pcf pcf, tlsKeyLogPath string) (*Server, error) {
 	uePolicyGroup := s.router.Group(factory.PcfUePolicyCtlResUriPrefix)
 	applyRoutes(uePolicyGroup, uePolicyRoutes)
 
-	s.router.Use(cors.New(cors.Config{
-		AllowMethods: []string{"GET", "POST", "OPTIONS", "PUT", "PATCH", "DELETE"},
-		AllowHeaders: []string{
-			"Origin", "Content-Length", "Content-Type", "User-Agent",
-			"Referrer", "Host", "Token", "X-Requested-With",
-		},
-		ExposeHeaders:    []string{"Content-Length"},
-		AllowCredentials: true,
-		AllowAllOrigins:  true,
-		MaxAge:           CorsConfigMaxAge,
-	}))
-
 	cfg := s.Config()
 	bindAddr := cfg.GetSbiBindingAddr()
 	logger.SBILog.Infof("Binding addr: [%s]", bindAddr)
@@ -145,7 +128,7 @@ func (s *Server) Run(traceCtx context.Context, wg *sync.WaitGroup) error {
 	var err error
 	_, s.Context().NfId, err = s.Consumer().SendRegisterNFInstance(context.Background())
 	if err != nil {
-		logger.InitLog.Errorf("CHF register to NRF Error[%s]", err.Error())
+		logger.InitLog.Errorf("PCF register to NRF Error[%s]", err.Error())
 	}
 
 	wg.Add(1)
@@ -154,7 +137,7 @@ func (s *Server) Run(traceCtx context.Context, wg *sync.WaitGroup) error {
 	return nil
 }
 
-func (s *Server) Stop(traceCtx context.Context) {
+func (s *Server) Shutdown(traceCtx context.Context) {
 	const defaultShutdownTimeout time.Duration = 2 * time.Second
 
 	if s.httpServer != nil {

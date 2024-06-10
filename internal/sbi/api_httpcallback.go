@@ -8,6 +8,7 @@ import (
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/pcf/internal/logger"
+	"github.com/free5gc/pcf/internal/util"
 )
 
 func (s *Server) getHttpCallBackRoutes() []Route {
@@ -95,6 +96,14 @@ func (s *Server) HTTPUdrPolicyDataChangeNotify(c *gin.Context) {
 	}
 
 	supi := c.Params.ByName("supi")
+	if supi == "" {
+		problemDetails := &models.ProblemDetails{
+			Title:  util.ERROR_INITIAL_PARAMETERS,
+			Status: http.StatusBadRequest,
+		}
+		c.JSON(http.StatusBadRequest, problemDetails)
+		return
+	}
 	s.Processor().HandlePolicyDataChangeNotify(c, supi, policyDataChangeNotification)
 }
 
@@ -130,5 +139,13 @@ func (s *Server) HTTPUdrInfluenceDataUpdateNotify(c *gin.Context) {
 
 	supi := c.Params.ByName("supi")
 	pduSessionId := c.Params.ByName("pduSessionId")
+	if supi == "" || pduSessionId == "" {
+		problemDetails := &models.ProblemDetails{
+			Title:  util.ERROR_INITIAL_PARAMETERS,
+			Status: http.StatusBadRequest,
+		}
+		c.JSON(http.StatusBadRequest, problemDetails)
+		return
+	}
 	s.Processor().HandleInfluenceDataUpdateNotify(c, supi, pduSessionId, trafficInfluDataNotif)
 }

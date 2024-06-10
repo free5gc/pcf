@@ -138,5 +138,13 @@ func (s *Server) HTTPSmPoliciesSmPolicyIdUpdatePost(c *gin.Context) {
 	}
 
 	smPolicyId := c.Params.ByName("smPolicyId")
+	if smPolicyId == "" {
+		problemDetails := &models.ProblemDetails{
+			Title:  util.ERROR_INITIAL_PARAMETERS,
+			Status: http.StatusBadRequest,
+		}
+		c.JSON(http.StatusBadRequest, problemDetails)
+		return
+	}
 	s.Processor().HandleUpdateSmPolicyContextRequest(c, smPolicyId, smPolicyUpdateContextData)
 }
