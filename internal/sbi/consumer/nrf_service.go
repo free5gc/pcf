@@ -210,7 +210,7 @@ func (s *nnrfService) SendRegisterNFInstance(ctx context.Context) (
 	var nf models.NfProfile
 	var res *http.Response
 	for {
-		nf, res, err = client.NFInstanceIDDocumentApi.RegisterNFInstance(context.TODO(), pcfContext.NfId, nfProfile)
+		nf, res, err = client.NFInstanceIDDocumentApi.RegisterNFInstance(ctx, pcfContext.NfId, nfProfile)
 		if err != nil || res == nil {
 			logger.ConsumerLog.Errorf("PCF register to NRF Error[%v]", err)
 			time.Sleep(2 * time.Second)

@@ -143,6 +143,7 @@ func (a *PcfApp) Start() {
 	if err := a.sbiServer.Run(context.Background(), &a.wg); err != nil {
 		logger.InitLog.Fatalf("Run SBI server failed: %+v", err)
 	}
+	a.WaitRoutineStopped()
 }
 
 func (a *PcfApp) listenShutdownEvent() {
@@ -155,7 +156,7 @@ func (a *PcfApp) listenShutdownEvent() {
 	}()
 
 	<-a.ctx.Done()
-	a.Terminate()
+	a.terminateProcedure()
 }
 
 func (a *PcfApp) CallServerStop() {
@@ -165,8 +166,11 @@ func (a *PcfApp) CallServerStop() {
 }
 
 func (a *PcfApp) Terminate() {
-	logger.InitLog.Infof("Terminating PCF...")
 	a.cancel()
+}
+
+func (a *PcfApp) terminateProcedure() {
+	logger.MainLog.Infof("Terminating PCF...")
 	a.CallServerStop()
 	// deregister with NRF
 	problemDetails, err := a.consumer.SendDeregisterNFInstance()
@@ -183,9 +187,4 @@ func (a *PcfApp) Terminate() {
 func (a *PcfApp) WaitRoutineStopped() {
 	a.wg.Wait()
 	logger.MainLog.Infof("PCF App is terminated")
-}
-
-func (a *PcfApp) Stop() {
-	a.cancel()
-	a.WaitRoutineStopped()
 }
