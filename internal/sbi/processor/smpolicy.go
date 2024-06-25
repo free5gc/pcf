@@ -32,11 +32,6 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 	request models.SmPolicyContextData,
 ) {
 	logger.SmPolicyLog.Infof("Handle CreateSmPolicy")
-	// step 2: retrieve request
-	// requestDataType := request.Body.(models.SmPolicyContextData)
-
-	// step 3: handle the message
-	// header, response, problemDetails := p.createSMPolicyProcedure(requestDataType)
 
 	var err error
 	queryStrength := 2 // 2: case-insensitive, 3: case-sensitive
