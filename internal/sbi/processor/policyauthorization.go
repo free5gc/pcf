@@ -155,7 +155,7 @@ func (p *Processor) postAppSessCtxProcedure(appSessCtx *models.AppSessionContext
 	string, *models.ProblemDetails,
 ) {
 	ascReqData := appSessCtx.AscReqData
-	pcfSelf := pcf_context.GetSelf()
+	pcfSelf := p.Context()
 
 	// Initial BDT policy indication(the only one which is not related to session)
 	if ascReqData.BdtRefId != "" {
@@ -429,7 +429,7 @@ func (p *Processor) postAppSessCtxProcedure(appSessCtx *models.AppSessionContext
 			ResourceUri:      util.GetResourceUri(models.ServiceName_NPCF_SMPOLICYCONTROL, smPolicyID),
 			SmPolicyDecision: smPolicy.PolicyDecision,
 		}
-		go SendSMPolicyUpdateNotification(smPolicy.PolicyContext.NotificationUri, &notification)
+		go p.SendSMPolicyUpdateNotification(smPolicy.PolicyContext.NotificationUri, &notification)
 	}
 	return appSessCtx, locationHeader, nil
 }
@@ -442,7 +442,7 @@ func (p *Processor) HandleDeleteAppSessionContext(
 ) {
 	logger.PolicyAuthLog.Infof("Handle Del AppSessions, AppSessionId[%s]", appSessionId)
 
-	pcfSelf := pcf_context.GetSelf()
+	pcfSelf := p.Context()
 	var appSession *pcf_context.AppSessionData
 	if val, ok := pcfSelf.AppSessionPool.Load(appSessionId); ok {
 		appSession = val.(*pcf_context.AppSessionData)
@@ -490,7 +490,7 @@ func (p *Processor) HandleDeleteAppSessionContext(
 		ResourceUri:      util.GetResourceUri(models.ServiceName_NPCF_SMPOLICYCONTROL, smPolicyID),
 		SmPolicyDecision: &deletedSmPolicyDec,
 	}
-	go SendSMPolicyUpdateNotification(smPolicy.PolicyContext.NotificationUri, &notification)
+	go p.SendSMPolicyUpdateNotification(smPolicy.PolicyContext.NotificationUri, &notification)
 	logger.PolicyAuthLog.Tracef("Send SM Policy[%s] Update Notification", smPolicyID)
 	c.JSON(http.StatusNoContent, nil)
 }
@@ -502,7 +502,7 @@ func (p *Processor) HandleGetAppSessionContext(
 ) {
 	logger.PolicyAuthLog.Infof("Handle Get AppSessions, AppSessionId[%s]", appSessionId)
 
-	pcfSelf := pcf_context.GetSelf()
+	pcfSelf := p.Context()
 
 	var appSession *pcf_context.AppSessionData
 	if val, ok := pcfSelf.AppSessionPool.Load(appSessionId); ok {
@@ -527,7 +527,7 @@ func (p *Processor) HandleModAppSessionContext(
 	// ascUpdateData := request.Body.(models.AppSessionContextUpdateData)
 	logger.PolicyAuthLog.Infof("Handle Modify AppSessions, AppSessionId[%s]", appSessionId)
 
-	pcfSelf := pcf_context.GetSelf()
+	pcfSelf := p.Context()
 	var appSession *pcf_context.AppSessionData
 	if val, ok := pcfSelf.AppSessionPool.Load(appSessionId); ok {
 		appSession = val.(*pcf_context.AppSessionData)
@@ -799,7 +799,7 @@ func (p *Processor) HandleModAppSessionContext(
 			ResourceUri:      util.GetResourceUri(models.ServiceName_NPCF_SMPOLICYCONTROL, smPolicyID),
 			SmPolicyDecision: smPolicy.PolicyDecision,
 		}
-		go SendSMPolicyUpdateNotification(smPolicy.PolicyContext.NotificationUri, &notification)
+		go p.SendSMPolicyUpdateNotification(smPolicy.PolicyContext.NotificationUri, &notification)
 		logger.PolicyAuthLog.Tracef("Send SM Policy[%s] Update Notification", smPolicyID)
 	}
 	c.JSON(http.StatusOK, appSessCtx)
@@ -815,7 +815,7 @@ func (p *Processor) HandleDeleteEventsSubscContext(
 
 	// problemDetails := DeleteEventsSubscContextProcedure(appSessionId)
 
-	pcfSelf := pcf_context.GetSelf()
+	pcfSelf := p.Context()
 	var appSession *pcf_context.AppSessionData
 	if val, ok := pcfSelf.AppSessionPool.Load(appSessionId); ok {
 		appSession = val.(*pcf_context.AppSessionData)
@@ -843,7 +843,7 @@ func (p *Processor) HandleDeleteEventsSubscContext(
 			ResourceUri:      util.GetResourceUri(models.ServiceName_NPCF_SMPOLICYCONTROL, smPolicyID),
 			SmPolicyDecision: smPolicy.PolicyDecision,
 		}
-		go SendSMPolicyUpdateNotification(smPolicy.PolicyContext.NotificationUri, &notification)
+		go p.SendSMPolicyUpdateNotification(smPolicy.PolicyContext.NotificationUri, &notification)
 		logger.PolicyAuthLog.Tracef("Send SM Policy[%s] Update Notification", smPolicyID)
 	}
 	c.JSON(http.StatusNoContent, nil)
@@ -859,7 +859,7 @@ func (p *Processor) HandleUpdateEventsSubscContext(
 	// appSessID := request.Params["appSessID"]
 	logger.PolicyAuthLog.Tracef("Handle Put AppSessions Events Subsc, AppSessionId[%s]", appSessionId)
 
-	pcfSelf := pcf_context.GetSelf()
+	pcfSelf := p.Context()
 
 	var appSession *pcf_context.AppSessionData
 	if val, ok := pcfSelf.AppSessionPool.Load(appSessionId); ok {
@@ -977,7 +977,7 @@ func (p *Processor) HandleUpdateEventsSubscContext(
 			ResourceUri:      util.GetResourceUri(models.ServiceName_NPCF_SMPOLICYCONTROL, smPolicyID),
 			SmPolicyDecision: smPolicy.PolicyDecision,
 		}
-		go SendSMPolicyUpdateNotification(smPolicy.PolicyContext.NotificationUri, &notification)
+		go p.SendSMPolicyUpdateNotification(smPolicy.PolicyContext.NotificationUri, &notification)
 		logger.PolicyAuthLog.Tracef("Send SM Policy[%s] Update Notification", smPolicyID)
 	}
 	if created {
@@ -995,7 +995,7 @@ func (p *Processor) HandleUpdateEventsSubscContext(
 	}
 }
 
-func SendAppSessionEventNotification(appSession *pcf_context.AppSessionData, request models.EventsNotification) {
+func (p *Processor) SendAppSessionEventNotification(appSession *pcf_context.AppSessionData, request models.EventsNotification) {
 	logger.PolicyAuthLog.Tracef("Send App Session Event Notification")
 	if appSession == nil {
 		logger.PolicyAuthLog.Warnln("Send App Session Event Notification Error[appSession is nil]")
@@ -1004,7 +1004,7 @@ func SendAppSessionEventNotification(appSession *pcf_context.AppSessionData, req
 	uri := appSession.EventUri
 
 	if uri != "" {
-		ctx, _, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NPCF_POLICYAUTHORIZATION, models.NfType_PCF)
+		ctx, _, err := p.Context().GetTokenCtx(models.ServiceName_NPCF_POLICYAUTHORIZATION, models.NfType_PCF)
 		if err != nil {
 			return
 		}
@@ -1040,7 +1040,7 @@ func SendAppSessionEventNotification(appSession *pcf_context.AppSessionData, req
 	}
 }
 
-func SendAppSessionTermination(appSession *pcf_context.AppSessionData, request models.TerminationInfo) {
+func (p *Processor) SendAppSessionTermination(appSession *pcf_context.AppSessionData, request models.TerminationInfo) {
 	logger.PolicyAuthLog.Tracef("Send App Session Termination")
 	if appSession == nil {
 		logger.PolicyAuthLog.Warnln("Send App Session Termination Error[appSession is nil]")
@@ -1049,7 +1049,7 @@ func SendAppSessionTermination(appSession *pcf_context.AppSessionData, request m
 	uri := appSession.AppSessionContext.AscReqData.NotifUri
 
 	if uri != "" {
-		ctx, _, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NPCF_POLICYAUTHORIZATION, models.NfType_PCF)
+		ctx, _, err := p.Context().GetTokenCtx(models.ServiceName_NPCF_POLICYAUTHORIZATION, models.NfType_PCF)
 		if err != nil {
 			return
 		}
@@ -1101,7 +1101,7 @@ func (p *Processor) handleBDTPolicyInd(pcfSelf *pcf_context.PCFContext,
 			requestSuppFeat).String(),
 	}
 
-	ctx, _, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
+	ctx, _, err := p.Context().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
 	if err != nil {
 		return err
 	}

@@ -8,7 +8,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/free5gc/openapi/models"
-	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/internal/util"
 )
@@ -50,7 +49,7 @@ func (p *Processor) HandleInfluenceDataUpdateNotify(
 	logger.CallbackLog.Infof("[PCF] Handle Influence Data Update Notify")
 
 	smPolicyID := fmt.Sprintf("%s-%s", supi, pduSessionId)
-	ue := pcf_context.GetSelf().PCFUeFindByPolicyId(smPolicyID)
+	ue := p.Context().PCFUeFindByPolicyId(smPolicyID)
 	if ue == nil || ue.SmPolicyData[smPolicyID] == nil {
 		problemDetail := util.GetProblemDetail("smPolicyID not found in PCF", util.CONTEXT_NOT_FOUND)
 		logger.CallbackLog.Errorf(problemDetail.Detail)
@@ -97,7 +96,7 @@ func (p *Processor) HandleInfluenceDataUpdateNotify(
 		ResourceUri:      util.GetResourceUri(models.ServiceName_NPCF_SMPOLICYCONTROL, smPolicyID),
 		SmPolicyDecision: decision,
 	}
-	go SendSMPolicyUpdateNotification(smPolicy.PolicyContext.NotificationUri, &smPolicyNotification)
+	go p.SendSMPolicyUpdateNotification(smPolicy.PolicyContext.NotificationUri, &smPolicyNotification)
 	c.JSON(http.StatusNoContent, nil)
 }
 

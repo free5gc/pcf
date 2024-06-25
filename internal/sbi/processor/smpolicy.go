@@ -49,7 +49,7 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 		return
 	}
 
-	pcfSelf := pcf_context.GetSelf()
+	pcfSelf := p.Context()
 	var ue *pcf_context.UeContext
 	if val, exist := pcfSelf.UePool.Load(request.Supi); exist {
 		ue = val.(*pcf_context.UeContext)
@@ -79,7 +79,7 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 		}
 		var response *http.Response
 
-		ctx, pd, err1 := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
+		ctx, pd, err1 := p.Context().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
 		if err1 != nil {
 			c.JSON(int(pd.Status), pd)
 			return
@@ -218,7 +218,7 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 		logger.SmPolicyLog.Errorf("chargingInterface %+v", chargingInterface)
 		util.SetPccRuleRelatedData(&decision, pcc, nil, nil, nil, nil)
 	} else if chargingInterface != nil {
-		rg, err1 := pcf_context.GetSelf().RatingGroupIdGenerator.Allocate()
+		rg, err1 := p.Context().RatingGroupIdGenerator.Allocate()
 		if err1 != nil {
 			logger.SmPolicyLog.Error("rating group allocate error")
 			problemDetails := util.GetProblemDetail("rating group allocate error", util.ERROR_IDGENERATOR)
@@ -314,7 +314,7 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 			if err != nil {
 				logger.SmPolicyLog.Errorf("Fail to get charging data to mongoDB err: %+v", err)
 			} else {
-				rg, err1 := pcf_context.GetSelf().RatingGroupIdGenerator.Allocate()
+				rg, err1 := p.Context().RatingGroupIdGenerator.Allocate()
 				if err1 != nil {
 					logger.SmPolicyLog.Error("rating group allocate error")
 					problemDetails := util.GetProblemDetail("rating group allocate error", util.ERROR_IDGENERATOR)
@@ -380,7 +380,7 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 		Supis:            optional.NewInterface([]string{request.Supi}),
 	}
 
-	ctx, pd, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
+	ctx, pd, err := p.Context().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
 	if err != nil {
 		c.JSON(int(pd.Status), pd)
 		return
@@ -424,7 +424,7 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 	smPolicyData.SubscriptionID = subscriptionID
 
 	// Create PCF binding data to BSF
-	policyAuthorizationService := pcf_context.GetSelf().NfService[models.ServiceName_NPCF_POLICYAUTHORIZATION]
+	policyAuthorizationService := p.Context().NfService[models.ServiceName_NPCF_POLICYAUTHORIZATION]
 	pcfBinding := models.PcfBinding{
 		Supi:           request.Supi,
 		Gpsi:           request.Gpsi,
@@ -438,11 +438,11 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 	}
 
 	// TODO: Record BSF URI instead of discovering from NRF every time
-	bsfUri := p.consumer.SendNFInstancesBSF(pcf_context.GetSelf().NrfUri)
+	bsfUri := p.consumer.SendNFInstancesBSF(p.Context().NrfUri)
 	if bsfUri != "" {
 		bsfClient := util.GetNbsfClient(bsfUri)
 
-		ctx, pd, err = pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NBSF_MANAGEMENT, models.NfType_BSF)
+		ctx, pd, err = p.Context().GetTokenCtx(models.ServiceName_NBSF_MANAGEMENT, models.NfType_BSF)
 		if err != nil {
 			c.JSON(int(pd.Status), pd)
 			return
@@ -499,7 +499,7 @@ func (p *Processor) HandleDeleteSmPolicyContextRequest(
 	// handle the message
 	logger.AmPolicyLog.Traceln("Handle SM Policy Delete")
 
-	ue := pcf_context.GetSelf().PCFUeFindByPolicyId(smPolicyId)
+	ue := p.Context().PCFUeFindByPolicyId(smPolicyId)
 	if ue == nil || ue.SmPolicyData[smPolicyId] == nil {
 		problemDetail := util.GetProblemDetail("smPolicyID not found in PCF", util.CONTEXT_NOT_FOUND)
 		logger.SmPolicyLog.Warnf(problemDetail.Detail)
@@ -507,7 +507,7 @@ func (p *Processor) HandleDeleteSmPolicyContextRequest(
 		return
 	}
 
-	pcfSelf := pcf_context.GetSelf()
+	pcfSelf := p.Context()
 	smPolicy := ue.SmPolicyData[smPolicyId]
 
 	problemDetail, err := p.consumer.RemoveInfluenceDataSubscription(ue, smPolicy.SubscriptionID)
@@ -528,7 +528,7 @@ func (p *Processor) HandleDeleteSmPolicyContextRequest(
 	for appSessionID := range smPolicy.AppSessions {
 		if val, exist := pcfSelf.AppSessionPool.Load(appSessionID); exist {
 			appSession := val.(*pcf_context.AppSessionData)
-			SendAppSessionTermination(appSession, terminationInfo)
+			p.SendAppSessionTermination(appSession, terminationInfo)
 			pcfSelf.AppSessionPool.Delete(appSessionID)
 			logger.SmPolicyLog.Tracef("SMPolicy[%s] DELETE Related AppSession[%s]", smPolicyId, appSessionID)
 		}
@@ -558,7 +558,7 @@ func (p *Processor) HandleGetSmPolicyContextRequest(
 	// handle the message
 	logger.SmPolicyLog.Traceln("Handle GET SM Policy Request")
 
-	ue := pcf_context.GetSelf().PCFUeFindByPolicyId(smPolicyId)
+	ue := p.Context().PCFUeFindByPolicyId(smPolicyId)
 	if ue == nil || ue.SmPolicyData[smPolicyId] == nil {
 		problemDetail := util.GetProblemDetail("smPolicyID not found in PCF", util.CONTEXT_NOT_FOUND)
 		logger.SmPolicyLog.Warnf(problemDetail.Detail)
@@ -587,7 +587,7 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 
 	logger.SmPolicyLog.Traceln("Handle updateSmPolicyContext")
 
-	ue := pcf_context.GetSelf().PCFUeFindByPolicyId(smPolicyId)
+	ue := p.Context().PCFUeFindByPolicyId(smPolicyId)
 	if ue == nil || ue.SmPolicyData[smPolicyId] == nil {
 		problemDetail := util.GetProblemDetail("smPolicyID not found in PCF", util.CONTEXT_NOT_FOUND)
 		logger.SmPolicyLog.Warnf(problemDetail.Detail)
@@ -944,7 +944,7 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 		afEventsNotification.EvNotifs = append(afEventsNotification.EvNotifs, afNotif)
 	}
 	if afEventsNotification.EvNotifs != nil {
-		sendSmPolicyRelatedAppSessionNotification(
+		p.sendSmPolicyRelatedAppSessionNotification(
 			smPolicy, afEventsNotification, request.AccuUsageReports, successRules, failRules)
 	}
 
@@ -959,12 +959,12 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 	c.JSON(http.StatusOK, smPolicyDecision)
 }
 
-func sendSmPolicyRelatedAppSessionNotification(smPolicy *pcf_context.UeSmPolicyData,
+func (p *Processor) sendSmPolicyRelatedAppSessionNotification(smPolicy *pcf_context.UeSmPolicyData,
 	notification models.EventsNotification, usageReports []models.AccuUsageReport,
 	successRules, failRules []models.RuleReport,
 ) {
 	for appSessionId := range smPolicy.AppSessions {
-		if val, exist := pcf_context.GetSelf().AppSessionPool.Load(appSessionId); exist {
+		if val, exist := p.Context().AppSessionPool.Load(appSessionId); exist {
 			appSession := val.(*pcf_context.AppSessionData)
 			if len(appSession.Events) == 0 {
 				continue
@@ -1123,13 +1123,13 @@ func sendSmPolicyRelatedAppSessionNotification(smPolicy *pcf_context.UeSmPolicyD
 				}
 			}
 			if sessionNotif.EvNotifs != nil {
-				SendAppSessionEventNotification(appSession, sessionNotif)
+				p.SendAppSessionEventNotification(appSession, sessionNotif)
 			}
 		}
 	}
 }
 
-func SendSMPolicyUpdateNotification(
+func (p *Processor) SendSMPolicyUpdateNotification(
 	uri string, request *models.SmPolicyNotification,
 ) {
 	if uri == "" {
@@ -1137,7 +1137,7 @@ func SendSMPolicyUpdateNotification(
 		return
 	}
 
-	ctx, _, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NPCF_SMPOLICYCONTROL, models.NfType_PCF)
+	ctx, _, err := p.Context().GetTokenCtx(models.ServiceName_NPCF_SMPOLICYCONTROL, models.NfType_PCF)
 	if err != nil {
 		return
 	}
@@ -1171,7 +1171,7 @@ func SendSMPolicyUpdateNotification(
 	}
 }
 
-func SendSMPolicyTerminationRequestNotification(
+func (p *Processor) SendSMPolicyTerminationRequestNotification(
 	uri string, request *models.TerminationNotification,
 ) {
 	if uri == "" {
@@ -1179,7 +1179,7 @@ func SendSMPolicyTerminationRequestNotification(
 		return
 	}
 
-	ctx, _, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NPCF_SMPOLICYCONTROL, models.NfType_PCF)
+	ctx, _, err := p.Context().GetTokenCtx(models.ServiceName_NPCF_SMPOLICYCONTROL, models.NfType_PCF)
 	if err != nil {
 		return
 	}

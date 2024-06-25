@@ -27,7 +27,7 @@ func (p *Processor) HandleGetBDTPolicyContextRequest(
 	// step 2: handle the message
 	logger.BdtPolicyLog.Traceln("Handle BDT Policy GET")
 	// check bdtPolicyID from pcfUeContext
-	if value, ok := pcf_context.GetSelf().BdtPolicyPool.Load(bdtPolicyID); ok {
+	if value, ok := p.Context().BdtPolicyPool.Load(bdtPolicyID); ok {
 		bdtPolicy := value.(*models.BdtPolicy)
 		c.JSON(http.StatusOK, bdtPolicy)
 		return
@@ -52,10 +52,10 @@ func (p *Processor) HandleUpdateBDTPolicyContextProcedure(
 	// step 2: handle the message
 	logger.BdtPolicyLog.Infoln("Handle BDTPolicyUpdate")
 	// check bdtPolicyID from pcfUeContext
-	pcfSelf := pcf_context.GetSelf()
+	pcfSelf := p.Context()
 
 	var bdtPolicy *models.BdtPolicy
-	if value, ok := pcf_context.GetSelf().BdtPolicyPool.Load(bdtPolicyID); ok {
+	if value, ok := p.Context().BdtPolicyPool.Load(bdtPolicyID); ok {
 		bdtPolicy = value.(*models.BdtPolicy)
 	} else {
 		// not found
@@ -82,7 +82,7 @@ func (p *Processor) HandleUpdateBDTPolicyContextProcedure(
 				BdtData: optional.NewInterface(bdtData),
 			}
 			client := util.GetNudrClient(p.getDefaultUdrUri(pcfSelf))
-			ctx, pd, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
+			ctx, pd, err := p.Context().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
 			if err != nil {
 				c.JSON(int(pd.Status), pd)
 				return
@@ -133,7 +133,7 @@ func (p *Processor) HandleCreateBDTPolicyContextRequest(
 	response := &models.BdtPolicy{}
 	logger.BdtPolicyLog.Traceln("Handle BDT Policy Create")
 
-	pcfSelf := pcf_context.GetSelf()
+	pcfSelf := p.Context()
 	udrUri := p.getDefaultUdrUri(pcfSelf)
 	if udrUri == "" {
 		// Can't find any UDR support this Ue
@@ -149,7 +149,7 @@ func (p *Processor) HandleCreateBDTPolicyContextRequest(
 	pcfSelf.SetDefaultUdrURI(udrUri)
 
 	// Query BDT DATA array from UDR
-	ctx, pd, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
+	ctx, pd, err := p.Context().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
 	if err != nil {
 		c.JSON(int(pd.Status), pd)
 		return

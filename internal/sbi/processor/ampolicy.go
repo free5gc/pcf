@@ -21,7 +21,7 @@ func (p *Processor) HandleDeletePoliciesPolAssoId(
 ) {
 	logger.AmPolicyLog.Infof("Handle AM Policy Association Delete")
 
-	ue := pcf_context.GetSelf().PCFUeFindByPolicyId(polAssoId)
+	ue := p.Context().PCFUeFindByPolicyId(polAssoId)
 	if ue == nil || ue.AMPolicyData[polAssoId] == nil {
 		problemDetails := util.GetProblemDetail("polAssoId not found  in PCF", util.CONTEXT_NOT_FOUND)
 		c.JSON(int(problemDetails.Status), problemDetails)
@@ -39,7 +39,7 @@ func (p *Processor) HandleGetPoliciesPolAssoId(
 	logger.AmPolicyLog.Infof("Handle AM Policy Association Get")
 
 	// response, problemDetails := GetPoliciesPolAssoIdProcedure(polAssoId)
-	ue := pcf_context.GetSelf().PCFUeFindByPolicyId(polAssoId)
+	ue := p.Context().PCFUeFindByPolicyId(polAssoId)
 	if ue == nil || ue.AMPolicyData[polAssoId] == nil {
 		problemDetails := util.GetProblemDetail("polAssoId not found  in PCF", util.CONTEXT_NOT_FOUND)
 		c.JSON(int(problemDetails.Status), problemDetails)
@@ -74,7 +74,7 @@ func (p *Processor) HandleUpdatePostPoliciesPolAssoId(
 ) {
 	logger.AmPolicyLog.Infof("Handle AM Policy Association Update")
 
-	response, problemDetails := UpdatePostPoliciesPolAssoIdProcedure(polAssoId, policyAssociationUpdateRequest)
+	response, problemDetails := p.UpdatePostPoliciesPolAssoIdProcedure(polAssoId, policyAssociationUpdateRequest)
 	if response != nil {
 		c.JSON(http.StatusOK, response)
 	} else if problemDetails != nil {
@@ -88,10 +88,10 @@ func (p *Processor) HandleUpdatePostPoliciesPolAssoId(
 	c.JSON(int(problemDetails.Status), problemDetails)
 }
 
-func UpdatePostPoliciesPolAssoIdProcedure(polAssoId string,
+func (p *Processor) UpdatePostPoliciesPolAssoIdProcedure(polAssoId string,
 	policyAssociationUpdateRequest models.PolicyAssociationUpdateRequest,
 ) (*models.PolicyUpdate, *models.ProblemDetails) {
-	ue := pcf_context.GetSelf().PCFUeFindByPolicyId(polAssoId)
+	ue := p.Context().PCFUeFindByPolicyId(polAssoId)
 	if ue == nil || ue.AMPolicyData[polAssoId] == nil {
 		problemDetails := util.GetProblemDetail("polAssoId not found  in PCF", util.CONTEXT_NOT_FOUND)
 		return nil, &problemDetails
@@ -189,7 +189,7 @@ func (p *Processor) PostPoliciesProcedure(polAssoId string,
 	policyAssociationRequest models.PolicyAssociationRequest,
 ) (*models.PolicyAssociation, string, *models.ProblemDetails) {
 	var response models.PolicyAssociation
-	pcfSelf := pcf_context.GetSelf()
+	pcfSelf := p.Context()
 	var ue *pcf_context.UeContext
 	if val, ok := pcfSelf.UePool.Load(policyAssociationRequest.Supi); ok {
 		ue = val.(*pcf_context.UeContext)
@@ -218,7 +218,7 @@ func (p *Processor) PostPoliciesProcedure(polAssoId string,
 	assolId := fmt.Sprintf("%s-%d", ue.Supi, ue.PolAssociationIDGenerator)
 	amPolicy := ue.AMPolicyData[assolId]
 
-	ctx, pd, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
+	ctx, pd, err := p.Context().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
 	if err != nil {
 		return nil, "", pd
 	}
@@ -305,7 +305,7 @@ func (p *Processor) PostPoliciesProcedure(polAssoId string,
 }
 
 // Send AM Policy Update to AMF if policy has changed
-func SendAMPolicyUpdateNotification(ue *pcf_context.UeContext, PolId string, request models.PolicyUpdate) {
+func (p *Processor) SendAMPolicyUpdateNotification(ue *pcf_context.UeContext, PolId string, request models.PolicyUpdate) {
 	if ue == nil {
 		logger.AmPolicyLog.Warnln("Policy Update Notification Error[Ue is nil]")
 		return
@@ -316,7 +316,7 @@ func SendAMPolicyUpdateNotification(ue *pcf_context.UeContext, PolId string, req
 		return
 	}
 
-	ctx, _, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NPCF_AM_POLICY_CONTROL, models.NfType_PCF)
+	ctx, _, err := p.Context().GetTokenCtx(models.ServiceName_NPCF_AM_POLICY_CONTROL, models.NfType_PCF)
 	if err != nil {
 		return
 	}
@@ -358,7 +358,7 @@ func SendAMPolicyUpdateNotification(ue *pcf_context.UeContext, PolId string, req
 }
 
 // Send AM Policy Update to AMF if policy has been terminated
-func SendAMPolicyTerminationRequestNotification(ue *pcf_context.UeContext,
+func (p *Processor) SendAMPolicyTerminationRequestNotification(ue *pcf_context.UeContext,
 	PolId string, request models.TerminationNotification,
 ) {
 	if ue == nil {
@@ -374,7 +374,7 @@ func SendAMPolicyTerminationRequestNotification(ue *pcf_context.UeContext,
 	client := util.GetNpcfAMPolicyCallbackClient()
 	uri := amPolicyData.NotificationUri
 
-	ctx, _, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NPCF_AM_POLICY_CONTROL, models.NfType_PCF)
+	ctx, _, err := p.Context().GetTokenCtx(models.ServiceName_NPCF_AM_POLICY_CONTROL, models.NfType_PCF)
 	if err != nil {
 		return
 	}
@@ -419,5 +419,5 @@ func (p *Processor) getUdrUri(ue *pcf_context.UeContext) string {
 	if ue.UdrUri != "" {
 		return ue.UdrUri
 	}
-	return p.consumer.SendNFInstancesUDR(pcf_context.GetSelf().NrfUri, ue.Supi)
+	return p.consumer.SendNFInstancesUDR(p.Context().NrfUri, ue.Supi)
 }
