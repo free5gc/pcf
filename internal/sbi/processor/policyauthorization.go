@@ -995,7 +995,9 @@ func (p *Processor) HandleUpdateEventsSubscContext(
 	}
 }
 
-func (p *Processor) SendAppSessionEventNotification(appSession *pcf_context.AppSessionData, request models.EventsNotification) {
+func (p *Processor) SendAppSessionEventNotification(appSession *pcf_context.AppSessionData,
+	request models.EventsNotification,
+) {
 	logger.PolicyAuthLog.Tracef("Send App Session Event Notification")
 	if appSession == nil {
 		logger.PolicyAuthLog.Warnln("Send App Session Event Notification Error[appSession is nil]")

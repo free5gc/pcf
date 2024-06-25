@@ -305,7 +305,9 @@ func (p *Processor) PostPoliciesProcedure(polAssoId string,
 }
 
 // Send AM Policy Update to AMF if policy has changed
-func (p *Processor) SendAMPolicyUpdateNotification(ue *pcf_context.UeContext, PolId string, request models.PolicyUpdate) {
+func (p *Processor) SendAMPolicyUpdateNotification(ue *pcf_context.UeContext,
+	PolId string, request models.PolicyUpdate,
+) {
 	if ue == nil {
 		logger.AmPolicyLog.Warnln("Policy Update Notification Error[Ue is nil]")
 		return
