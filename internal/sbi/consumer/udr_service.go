@@ -51,7 +51,7 @@ func (s *nudrService) CreateInfluenceDataSubscription(ue *pcf_context.UeContext,
 		logger.ConsumerLog.Warnf("Can't find corresponding UDR with UE[%s]", ue.Supi)
 		return "", &problemDetail, nil
 	}
-	ctx, pd, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
+	ctx, pd, err := s.consumer.Context().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
 	if err != nil {
 		return "", pd, err
 	}
@@ -89,7 +89,7 @@ func (s *nudrService) buildTrafficInfluSub(request models.SmPolicyContextData) m
 		Snssais:          []models.Snssai{*request.SliceInfo},
 		InternalGroupIds: request.InterGrpIds,
 		Supis:            []string{request.Supi},
-		NotificationUri: pcf_context.GetSelf().GetIPv4Uri() +
+		NotificationUri: s.consumer.Context().GetIPv4Uri() +
 			pcf_context.InfluenceDataUpdateNotifyUri + "/" +
 			request.Supi + "/" + strconv.Itoa(int(request.PduSessionId)),
 		// TODO: support expiry time and resend subscription when expired
@@ -105,7 +105,7 @@ func (s *nudrService) RemoveInfluenceDataSubscription(ue *pcf_context.UeContext,
 		logger.ConsumerLog.Warnf("Can't find corresponding UDR with UE[%s]", ue.Supi)
 		return &problemDetail, nil
 	}
-	ctx, pd, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
+	ctx, pd, err := s.consumer.Context().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
 	if err != nil {
 		return pd, err
 	}

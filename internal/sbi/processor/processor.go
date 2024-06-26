@@ -11,12 +11,6 @@ type Processor struct {
 	consumer *consumer.Consumer
 }
 
-type HandlerResponse struct {
-	Status  int
-	Headers map[string][]string
-	Body    interface{}
-}
-
 func NewProcessor(pcf app.App, consumer *consumer.Consumer) (*Processor, error) {
 	p := &Processor{
 		App:      pcf,

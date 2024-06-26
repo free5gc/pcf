@@ -523,8 +523,6 @@ func (p *Processor) HandleModAppSessionContext(
 	appSessionId string,
 	appSessionContextUpdateData models.AppSessionContextUpdateData,
 ) {
-	// appSessID := request.Params["appSessionId"]
-	// ascUpdateData := request.Body.(models.AppSessionContextUpdateData)
 	logger.PolicyAuthLog.Infof("Handle Modify AppSessions, AppSessionId[%s]", appSessionId)
 
 	pcfSelf := p.Context()
@@ -810,10 +808,7 @@ func (p *Processor) HandleDeleteEventsSubscContext(
 	c *gin.Context,
 	appSessionId string,
 ) {
-	// appSessID := request.Params["appSessID"]
 	logger.PolicyAuthLog.Tracef("Handle Del AppSessions Events Subsc, AppSessionId[%s]", appSessionId)
-
-	// problemDetails := DeleteEventsSubscContextProcedure(appSessionId)
 
 	pcfSelf := p.Context()
 	var appSession *pcf_context.AppSessionData
@@ -830,8 +825,6 @@ func (p *Processor) HandleDeleteEventsSubscContext(
 	appSession.EventUri = ""
 	appSession.AppSessionContext.EvsNotif = nil
 	appSession.AppSessionContext.AscReqData.EvSubsc = nil
-
-	// changed := appSession.SmPolicyData.ArrangeExistEventSubscription()
 
 	logger.PolicyAuthLog.Tracef("App Session Id[%s] Del Events Subsc success", appSessionId)
 
@@ -855,8 +848,6 @@ func (p *Processor) HandleUpdateEventsSubscContext(
 	appSessionId string,
 	eventsSubscReqData models.EventsSubscReqData,
 ) {
-	// EventsSubscReqData := request.Body.(models.EventsSubscReqData)
-	// appSessID := request.Params["appSessID"]
 	logger.PolicyAuthLog.Tracef("Handle Put AppSessions Events Subsc, AppSessionId[%s]", appSessionId)
 
 	pcfSelf := p.Context()

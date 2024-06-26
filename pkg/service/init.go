@@ -173,7 +173,7 @@ func (a *PcfApp) terminateProcedure() {
 	logger.MainLog.Infof("Terminating PCF...")
 	a.CallServerStop()
 	// deregister with NRF
-	problemDetails, err := a.consumer.SendDeregisterNFInstance()
+	problemDetails, err := a.Consumer().SendDeregisterNFInstance()
 	if problemDetails != nil {
 		logger.InitLog.Errorf("Deregister NF instance Failed Problem[%+v]", problemDetails)
 	} else if err != nil {

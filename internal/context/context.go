@@ -458,11 +458,6 @@ func (c *PCFContext) AuthorizationCheck(token string, serviceName models.Service
 		logger.UtilLog.Debugf("PCFContext::AuthorizationCheck: OAuth2 not required\n")
 		return nil
 	}
-	// TODO: free5gc webconsole uses npcf-oam but it can't get token since it's not an NF.
-	if serviceName == models.ServiceName_NPCF_OAM {
-		logger.UtilLog.Warnf("OAuth2 is enable but namf-oam didn't check token now.")
-		return nil
-	}
 
 	logger.UtilLog.Debugf("PCFContext::AuthorizationCheck: token[%s] serviceName[%s]\n", token, serviceName)
 	return oauth.VerifyOAuth(token, string(serviceName), c.NrfCertPem)

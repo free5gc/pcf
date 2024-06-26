@@ -13,7 +13,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/free5gc/openapi/models"
-	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/internal/sbi/consumer"
 	"github.com/free5gc/pcf/internal/sbi/processor"
@@ -74,7 +73,7 @@ func NewServer(pcf pcf, tlsKeyLogPath string) (*Server, error) {
 	amPolicyGroup := s.router.Group(factory.PcfAMpolicyCtlResUriPrefix)
 	amRouterAuthorizationCheck := util.NewRouterAuthorizationCheck(models.ServiceName_NPCF_AM_POLICY_CONTROL)
 	amPolicyGroup.Use(func(c *gin.Context) {
-		amRouterAuthorizationCheck.Check(c, pcf_context.GetSelf())
+		amRouterAuthorizationCheck.Check(c, s.Context())
 	})
 	applyRoutes(amPolicyGroup, amPolicyRoutes)
 
@@ -82,7 +81,7 @@ func NewServer(pcf pcf, tlsKeyLogPath string) (*Server, error) {
 	bdtPolicyGroup := s.router.Group(factory.PcfBdtPolicyCtlResUriPrefix)
 	bdtRouterAuthorizationCheck := util.NewRouterAuthorizationCheck(models.ServiceName_NPCF_BDTPOLICYCONTROL)
 	bdtPolicyGroup.Use(func(c *gin.Context) {
-		bdtRouterAuthorizationCheck.Check(c, pcf_context.GetSelf())
+		bdtRouterAuthorizationCheck.Check(c, s.Context())
 	})
 	applyRoutes(bdtPolicyGroup, bdtPolicyRoutes)
 
@@ -94,7 +93,7 @@ func NewServer(pcf pcf, tlsKeyLogPath string) (*Server, error) {
 	oamGroup := s.router.Group(factory.PcfOamResUriPrefix)
 	oamRouterAuthorizationCheck := util.NewRouterAuthorizationCheck(models.ServiceName_NPCF_OAM)
 	oamGroup.Use(func(c *gin.Context) {
-		oamRouterAuthorizationCheck.Check(c, pcf_context.GetSelf())
+		oamRouterAuthorizationCheck.Check(c, s.Context())
 	})
 	applyRoutes(oamGroup, oamRoutes)
 
@@ -103,7 +102,7 @@ func NewServer(pcf pcf, tlsKeyLogPath string) (*Server, error) {
 	policyAuthorizationRouterAuthorizationCheck := util.
 		NewRouterAuthorizationCheck(models.ServiceName_NPCF_POLICYAUTHORIZATION)
 	policyAuthorizationGroup.Use(func(c *gin.Context) {
-		policyAuthorizationRouterAuthorizationCheck.Check(c, pcf_context.GetSelf())
+		policyAuthorizationRouterAuthorizationCheck.Check(c, s.Context())
 	})
 	applyRoutes(policyAuthorizationGroup, policyAuthorizationRoutes)
 

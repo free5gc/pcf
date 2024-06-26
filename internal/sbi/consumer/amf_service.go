@@ -56,7 +56,7 @@ func (s *namfService) AmfStatusChangeSubscribe(amfUri string, guamiList []models
 		AmfStatusUri: fmt.Sprintf("%s"+factory.PcfCallbackResUriPrefix+"/amfstatus", pcfContext.GetIPv4Uri()),
 		GuamiList:    guamiList,
 	}
-	ctx, pd, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NAMF_COMM, models.NfType_AMF)
+	ctx, pd, err := pcfContext.GetTokenCtx(models.ServiceName_NAMF_COMM, models.NfType_AMF)
 	if err != nil {
 		return pd, err
 	}

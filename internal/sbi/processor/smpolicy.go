@@ -26,7 +26,6 @@ const (
 	chargingDataColl = "policyData.ues.chargingData"
 )
 
-// SmPoliciesPost -
 func (p *Processor) HandleCreateSmPolicyRequest(
 	c *gin.Context,
 	request models.SmPolicyContextData,
@@ -101,7 +100,6 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 	if amPolicy == nil {
 		problemDetail := util.GetProblemDetail("Can't find corresponding AM Policy", util.POLICY_CONTEXT_DENIED)
 		logger.SmPolicyLog.Warnf("Can't find corresponding AM Policy")
-		// message.SendHttpResponseMessage(httpChannel, nil, int(rsp.Status), rsp)
 		c.JSON(int(problemDetail.Status), problemDetail)
 		return
 	}
@@ -544,7 +542,6 @@ func (p *Processor) HandleDeleteSmPolicyContextRequest(
 	c.JSON(http.StatusNoContent, nil)
 }
 
-// SmPoliciessmPolicyIDGet -
 func (p *Processor) HandleGetSmPolicyContextRequest(
 	c *gin.Context,
 	smPolicyId string,
@@ -569,16 +566,12 @@ func (p *Processor) HandleGetSmPolicyContextRequest(
 	c.JSON(http.StatusOK, response)
 }
 
-// SmPoliciessmPolicyIDUpdatePost -
 func (p *Processor) HandleUpdateSmPolicyContextRequest(
 	c *gin.Context,
 	smPolicyId string,
 	request models.SmPolicyUpdateContextData,
 ) {
-	// step 1: log
 	logger.SmPolicyLog.Infof("Handle UpdateSmPolicyContext")
-
-	// // step 3: handle the message
 
 	logger.SmPolicyLog.Traceln("Handle updateSmPolicyContext")
 
@@ -950,7 +943,6 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 		return
 	}
 	logger.SmPolicyLog.Tracef("SMPolicy smPolicyID[%s] Update", smPolicyId)
-	// message.SendHttpResponseMessage(httpChannel, nil, http.StatusOK, *smPolicyDecision)
 	c.JSON(http.StatusOK, smPolicyDecision)
 }
 
