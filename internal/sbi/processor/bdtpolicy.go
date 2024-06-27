@@ -254,7 +254,7 @@ func (p *Processor) getDefaultUdrUri(context *pcf_context.PCFContext) string {
 	param := Nnrf_NFDiscovery.SearchNFInstancesParamOpts{
 		ServiceNames: optional.NewInterface([]models.ServiceName{models.ServiceName_NUDR_DR}),
 	}
-	resp, err := p.consumer.SendSearchNFInstances(context.NrfUri, models.NfType_UDR, models.NfType_PCF, param)
+	resp, err := p.Consumer().SendSearchNFInstances(context.NrfUri, models.NfType_UDR, models.NfType_PCF, param)
 	if err != nil {
 		return ""
 	}

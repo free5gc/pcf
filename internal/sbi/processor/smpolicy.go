@@ -408,7 +408,7 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 	}
 
 	// Subscribe to Traffic Influence Data in UDR
-	subscriptionID, problemDetail, err := p.consumer.CreateInfluenceDataSubscription(ue, request)
+	subscriptionID, problemDetail, err := p.Consumer().CreateInfluenceDataSubscription(ue, request)
 	if problemDetail != nil {
 		logger.SmPolicyLog.Errorf("Subscribe UDR Influence Data Failed Problem[%+v]", problemDetail)
 	} else if err != nil {
@@ -431,7 +431,7 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 	}
 
 	// TODO: Record BSF URI instead of discovering from NRF every time
-	bsfUri := p.consumer.SendNFInstancesBSF(p.Context().NrfUri)
+	bsfUri := p.Consumer().SendNFInstancesBSF(p.Context().NrfUri)
 	if bsfUri != "" {
 		bsfClient := util.GetNbsfClient(bsfUri)
 
@@ -503,7 +503,7 @@ func (p *Processor) HandleDeleteSmPolicyContextRequest(
 	pcfSelf := p.Context()
 	smPolicy := ue.SmPolicyData[smPolicyId]
 
-	problemDetail, err := p.consumer.RemoveInfluenceDataSubscription(ue, smPolicy.SubscriptionID)
+	problemDetail, err := p.Consumer().RemoveInfluenceDataSubscription(ue, smPolicy.SubscriptionID)
 	if problemDetail != nil {
 		logger.SmPolicyLog.Errorf("Remove UDR Influence Data Subscription Failed Problem[%+v]", problemDetail)
 	} else if err != nil {

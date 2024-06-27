@@ -5,21 +5,19 @@ import (
 	"github.com/free5gc/pcf/pkg/app"
 )
 
-type Processor struct {
+type PCF interface {
 	app.App
-
-	consumer *consumer.Consumer
+	Consumer() *consumer.Consumer
 }
 
-func NewProcessor(pcf app.App, consumer *consumer.Consumer) (*Processor, error) {
+type Processor struct {
+	PCF
+}
+
+func NewProcessor(pcf PCF, consumer *consumer.Consumer) (*Processor, error) {
 	p := &Processor{
-		App:      pcf,
-		consumer: consumer,
+		PCF: pcf,
 	}
 
 	return p, nil
-}
-
-func (p *Processor) Consumer() *consumer.Consumer {
-	return p.consumer
 }

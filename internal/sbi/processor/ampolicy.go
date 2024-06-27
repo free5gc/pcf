@@ -285,10 +285,11 @@ func (p *Processor) PostPoliciesProcedure(polAssoId string,
 
 		if needSubscribe {
 			logger.AmPolicyLog.Debugf("Subscribe AMF status change[GUAMI: %+v]", *policyAssociationRequest.Guami)
-			amfUri := p.consumer.SendNFInstancesAMF(pcfSelf.NrfUri,
+			amfUri := p.Consumer().SendNFInstancesAMF(pcfSelf.NrfUri,
 				*policyAssociationRequest.Guami, models.ServiceName_NAMF_COMM)
 			if amfUri != "" {
-				problemDetails, err := p.consumer.AmfStatusChangeSubscribe(amfUri, []models.Guami{*policyAssociationRequest.Guami})
+				problemDetails, err := p.Consumer().AmfStatusChangeSubscribe(amfUri,
+					[]models.Guami{*policyAssociationRequest.Guami})
 				if err != nil {
 					logger.AmPolicyLog.Errorf("Subscribe AMF status change error[%+v]", err)
 				} else if problemDetails != nil {
@@ -421,5 +422,5 @@ func (p *Processor) getUdrUri(ue *pcf_context.UeContext) string {
 	if ue.UdrUri != "" {
 		return ue.UdrUri
 	}
-	return p.consumer.SendNFInstancesUDR(p.Context().NrfUri, ue.Supi)
+	return p.Consumer().SendNFInstancesUDR(p.Context().NrfUri, ue.Supi)
 }
