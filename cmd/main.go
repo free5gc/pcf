@@ -12,10 +12,13 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"runtime/debug"
+	"syscall"
 
 	"github.com/urfave/cli"
 
@@ -64,19 +67,32 @@ func action(cliCtx *cli.Context) error {
 	logger.MainLog.Infoln(cliCtx.App.Name)
 	logger.MainLog.Infoln("PCF version: ", version.GetVersion())
 
+	ctx, cancel := context.WithCancel(context.Background())
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		<-sigCh  // Wait for interrupt signal to gracefully shutdown UPF
+		cancel() // Notify each goroutine and wait them stopped
+	}()
+
 	cfg, err := factory.ReadConfig(cliCtx.String("config"))
 	if err != nil {
+		sigCh <- nil
 		return err
 	}
 	factory.PcfConfig = cfg
 
-	pcf, err := service.NewApp(cfg)
+	pcf, err := service.NewApp(ctx, cfg, tlsKeyLogPath)
 	if err != nil {
+		sigCh <- nil
 		return err
 	}
 	PCF = pcf
-
-	pcf.Start(tlsKeyLogPath)
+	if pcf == nil {
+		logger.MainLog.Infoln("pcf is nil")
+	}
+	pcf.Start()
 
 	return nil
 }

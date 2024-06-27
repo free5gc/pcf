@@ -82,7 +82,7 @@ type NFContext interface {
 
 var _ NFContext = &PCFContext{}
 
-func InitpcfContext(context *PCFContext) {
+func InitPcfContext(context *PCFContext) {
 	config := factory.PcfConfig
 	logger.UtilLog.Infof("pcfconfig Info: Version[%s] Description[%s]", config.Info.Version, config.Info.Description)
 	configuration := config.Configuration
@@ -157,7 +157,7 @@ func Init() {
 	pcfContext.PcfSuppFeats = make(map[models.ServiceName]openapi.SupportedFeature)
 	pcfContext.BdtPolicyIDGenerator = idgenerator.NewGenerator(1, math.MaxInt64)
 	pcfContext.RatingGroupIdGenerator = idgenerator.NewGenerator(1, math.MaxInt64)
-	InitpcfContext(&pcfContext)
+	InitPcfContext(&pcfContext)
 }
 
 // Create new PCF context
@@ -456,11 +456,6 @@ func (c *PCFContext) GetTokenCtx(serviceName models.ServiceName, targetNF models
 func (c *PCFContext) AuthorizationCheck(token string, serviceName models.ServiceName) error {
 	if !c.OAuth2Required {
 		logger.UtilLog.Debugf("PCFContext::AuthorizationCheck: OAuth2 not required\n")
-		return nil
-	}
-	// TODO: free5gc webconsole uses npcf-oam but it can't get token since it's not an NF.
-	if serviceName == models.ServiceName_NPCF_OAM {
-		logger.UtilLog.Warnf("OAuth2 is enable but namf-oam didn't check token now.")
 		return nil
 	}
 

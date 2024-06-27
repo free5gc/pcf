@@ -1,68 +1,49 @@
-package producer
+package processor
 
 import (
 	"fmt"
 	"net/http"
 	"reflect"
 
+	"github.com/gin-gonic/gin"
 	"github.com/mohae/deepcopy"
 
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/models"
 	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
-	"github.com/free5gc/pcf/internal/sbi/consumer"
 	"github.com/free5gc/pcf/internal/util"
-	"github.com/free5gc/util/httpwrapper"
 )
 
-func HandleDeletePoliciesPolAssoId(request *httpwrapper.Request) *httpwrapper.Response {
+func (p *Processor) HandleDeletePoliciesPolAssoId(
+	c *gin.Context,
+	polAssoId string,
+) {
 	logger.AmPolicyLog.Infof("Handle AM Policy Association Delete")
 
-	polAssoId := request.Params["polAssoId"]
-
-	problemDetails := DeletePoliciesPolAssoIdProcedure(polAssoId)
-	if problemDetails == nil {
-		return httpwrapper.NewResponse(http.StatusNoContent, nil, nil)
-	} else {
-		return httpwrapper.NewResponse(int(problemDetails.Status), nil, problemDetails)
-	}
-}
-
-func DeletePoliciesPolAssoIdProcedure(polAssoId string) *models.ProblemDetails {
-	ue := pcf_context.GetSelf().PCFUeFindByPolicyId(polAssoId)
+	ue := p.Context().PCFUeFindByPolicyId(polAssoId)
 	if ue == nil || ue.AMPolicyData[polAssoId] == nil {
 		problemDetails := util.GetProblemDetail("polAssoId not found  in PCF", util.CONTEXT_NOT_FOUND)
-		return &problemDetails
+		c.JSON(int(problemDetails.Status), problemDetails)
 	}
+
 	delete(ue.AMPolicyData, polAssoId)
-	return nil
+	c.JSON(http.StatusNoContent, nil)
 }
 
 // PoliciesPolAssoIdGet -
-func HandleGetPoliciesPolAssoId(request *httpwrapper.Request) *httpwrapper.Response {
+func (p *Processor) HandleGetPoliciesPolAssoId(
+	c *gin.Context,
+	polAssoId string,
+) {
 	logger.AmPolicyLog.Infof("Handle AM Policy Association Get")
 
-	polAssoId := request.Params["polAssoId"]
-
-	response, problemDetails := GetPoliciesPolAssoIdProcedure(polAssoId)
-	if response != nil {
-		return httpwrapper.NewResponse(http.StatusOK, nil, response)
-	} else if problemDetails != nil {
-		return httpwrapper.NewResponse(int(problemDetails.Status), nil, problemDetails)
-	}
-	problemDetails = &models.ProblemDetails{
-		Status: http.StatusForbidden,
-		Cause:  "UNSPECIFIED",
-	}
-	return httpwrapper.NewResponse(int(problemDetails.Status), nil, problemDetails)
-}
-
-func GetPoliciesPolAssoIdProcedure(polAssoId string) (*models.PolicyAssociation, *models.ProblemDetails) {
-	ue := pcf_context.GetSelf().PCFUeFindByPolicyId(polAssoId)
+	// response, problemDetails := GetPoliciesPolAssoIdProcedure(polAssoId)
+	ue := p.Context().PCFUeFindByPolicyId(polAssoId)
 	if ue == nil || ue.AMPolicyData[polAssoId] == nil {
 		problemDetails := util.GetProblemDetail("polAssoId not found  in PCF", util.CONTEXT_NOT_FOUND)
-		return nil, &problemDetails
+		c.JSON(int(problemDetails.Status), problemDetails)
+		return
 	}
 	amPolicyData := ue.AMPolicyData[polAssoId]
 	rsp := models.PolicyAssociation{
@@ -83,32 +64,34 @@ func GetPoliciesPolAssoIdProcedure(polAssoId string) (*models.PolicyAssociation,
 			}
 		}
 	}
-	return &rsp, nil
+	c.JSON(http.StatusOK, rsp)
 }
 
-func HandleUpdatePostPoliciesPolAssoId(request *httpwrapper.Request) *httpwrapper.Response {
+func (p *Processor) HandleUpdatePostPoliciesPolAssoId(
+	c *gin.Context,
+	polAssoId string,
+	policyAssociationUpdateRequest models.PolicyAssociationUpdateRequest,
+) {
 	logger.AmPolicyLog.Infof("Handle AM Policy Association Update")
 
-	polAssoId := request.Params["polAssoId"]
-	policyAssociationUpdateRequest := request.Body.(models.PolicyAssociationUpdateRequest)
-
-	response, problemDetails := UpdatePostPoliciesPolAssoIdProcedure(polAssoId, policyAssociationUpdateRequest)
+	response, problemDetails := p.UpdatePostPoliciesPolAssoIdProcedure(polAssoId, policyAssociationUpdateRequest)
 	if response != nil {
-		return httpwrapper.NewResponse(http.StatusOK, nil, response)
+		c.JSON(http.StatusOK, response)
 	} else if problemDetails != nil {
-		return httpwrapper.NewResponse(int(problemDetails.Status), nil, problemDetails)
+		c.JSON(int(problemDetails.Status), problemDetails)
 	}
+
 	problemDetails = &models.ProblemDetails{
 		Status: http.StatusForbidden,
 		Cause:  "UNSPECIFIED",
 	}
-	return httpwrapper.NewResponse(int(problemDetails.Status), nil, problemDetails)
+	c.JSON(int(problemDetails.Status), problemDetails)
 }
 
-func UpdatePostPoliciesPolAssoIdProcedure(polAssoId string,
+func (p *Processor) UpdatePostPoliciesPolAssoIdProcedure(polAssoId string,
 	policyAssociationUpdateRequest models.PolicyAssociationUpdateRequest,
 ) (*models.PolicyUpdate, *models.ProblemDetails) {
-	ue := pcf_context.GetSelf().PCFUeFindByPolicyId(polAssoId)
+	ue := p.Context().PCFUeFindByPolicyId(polAssoId)
 	if ue == nil || ue.AMPolicyData[polAssoId] == nil {
 		problemDetails := util.GetProblemDetail("polAssoId not found  in PCF", util.CONTEXT_NOT_FOUND)
 		return nil, &problemDetails
@@ -179,33 +162,34 @@ func UpdatePostPoliciesPolAssoIdProcedure(polAssoId string,
 }
 
 // Create AM Policy
-func HandlePostPolicies(request *httpwrapper.Request) *httpwrapper.Response {
+func (p *Processor) HandlePostPolicies(
+	c *gin.Context,
+	polAssoId string,
+	policyAssociationRequest models.PolicyAssociationRequest,
+) {
 	logger.AmPolicyLog.Infof("Handle AM Policy Create Request")
 
-	polAssoId := request.Params["polAssoId"]
-	policyAssociationRequest := request.Body.(models.PolicyAssociationRequest)
-
-	response, locationHeader, problemDetails := PostPoliciesProcedure(polAssoId, policyAssociationRequest)
-	headers := http.Header{
-		"Location": {locationHeader},
-	}
+	response, locationHeader, problemDetails := p.PostPoliciesProcedure(polAssoId, policyAssociationRequest)
 	if response != nil {
-		return httpwrapper.NewResponse(http.StatusCreated, headers, response)
+		// TODO: set gin header
+		c.Header("Location", locationHeader)
+		c.JSON(http.StatusCreated, response)
 	} else if problemDetails != nil {
-		return httpwrapper.NewResponse(int(problemDetails.Status), nil, problemDetails)
+		c.JSON(int(problemDetails.Status), problemDetails)
 	}
+
 	problemDetails = &models.ProblemDetails{
 		Status: http.StatusForbidden,
 		Cause:  "UNSPECIFIED",
 	}
-	return httpwrapper.NewResponse(int(problemDetails.Status), nil, problemDetails)
+	c.JSON(int(problemDetails.Status), problemDetails)
 }
 
-func PostPoliciesProcedure(polAssoId string,
+func (p *Processor) PostPoliciesProcedure(polAssoId string,
 	policyAssociationRequest models.PolicyAssociationRequest,
 ) (*models.PolicyAssociation, string, *models.ProblemDetails) {
 	var response models.PolicyAssociation
-	pcfSelf := pcf_context.GetSelf()
+	pcfSelf := p.Context()
 	var ue *pcf_context.UeContext
 	if val, ok := pcfSelf.UePool.Load(policyAssociationRequest.Supi); ok {
 		ue = val.(*pcf_context.UeContext)
@@ -220,7 +204,7 @@ func PostPoliciesProcedure(polAssoId string,
 			ue = newUe
 		}
 	}
-	udrUri := getUdrUri(ue)
+	udrUri := p.getUdrUri(ue)
 	if udrUri == "" {
 		// Can't find any UDR support this Ue
 		pcfSelf.UePool.Delete(ue.Supi)
@@ -234,7 +218,7 @@ func PostPoliciesProcedure(polAssoId string,
 	assolId := fmt.Sprintf("%s-%d", ue.Supi, ue.PolAssociationIDGenerator)
 	amPolicy := ue.AMPolicyData[assolId]
 
-	ctx, pd, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
+	ctx, pd, err := p.Context().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
 	if err != nil {
 		return nil, "", pd
 	}
@@ -301,9 +285,11 @@ func PostPoliciesProcedure(polAssoId string,
 
 		if needSubscribe {
 			logger.AmPolicyLog.Debugf("Subscribe AMF status change[GUAMI: %+v]", *policyAssociationRequest.Guami)
-			amfUri := consumer.SendNFInstancesAMF(pcfSelf.NrfUri, *policyAssociationRequest.Guami, models.ServiceName_NAMF_COMM)
+			amfUri := p.Consumer().SendNFInstancesAMF(pcfSelf.NrfUri,
+				*policyAssociationRequest.Guami, models.ServiceName_NAMF_COMM)
 			if amfUri != "" {
-				problemDetails, err := consumer.AmfStatusChangeSubscribe(amfUri, []models.Guami{*policyAssociationRequest.Guami})
+				problemDetails, err := p.Consumer().AmfStatusChangeSubscribe(amfUri,
+					[]models.Guami{*policyAssociationRequest.Guami})
 				if err != nil {
 					logger.AmPolicyLog.Errorf("Subscribe AMF status change error[%+v]", err)
 				} else if problemDetails != nil {
@@ -320,7 +306,9 @@ func PostPoliciesProcedure(polAssoId string,
 }
 
 // Send AM Policy Update to AMF if policy has changed
-func SendAMPolicyUpdateNotification(ue *pcf_context.UeContext, PolId string, request models.PolicyUpdate) {
+func (p *Processor) SendAMPolicyUpdateNotification(ue *pcf_context.UeContext,
+	PolId string, request models.PolicyUpdate,
+) {
 	if ue == nil {
 		logger.AmPolicyLog.Warnln("Policy Update Notification Error[Ue is nil]")
 		return
@@ -331,7 +319,7 @@ func SendAMPolicyUpdateNotification(ue *pcf_context.UeContext, PolId string, req
 		return
 	}
 
-	ctx, _, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NPCF_AM_POLICY_CONTROL, models.NfType_PCF)
+	ctx, _, err := p.Context().GetTokenCtx(models.ServiceName_NPCF_AM_POLICY_CONTROL, models.NfType_PCF)
 	if err != nil {
 		return
 	}
@@ -373,7 +361,7 @@ func SendAMPolicyUpdateNotification(ue *pcf_context.UeContext, PolId string, req
 }
 
 // Send AM Policy Update to AMF if policy has been terminated
-func SendAMPolicyTerminationRequestNotification(ue *pcf_context.UeContext,
+func (p *Processor) SendAMPolicyTerminationRequestNotification(ue *pcf_context.UeContext,
 	PolId string, request models.TerminationNotification,
 ) {
 	if ue == nil {
@@ -389,7 +377,7 @@ func SendAMPolicyTerminationRequestNotification(ue *pcf_context.UeContext,
 	client := util.GetNpcfAMPolicyCallbackClient()
 	uri := amPolicyData.NotificationUri
 
-	ctx, _, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NPCF_AM_POLICY_CONTROL, models.NfType_PCF)
+	ctx, _, err := p.Context().GetTokenCtx(models.ServiceName_NPCF_AM_POLICY_CONTROL, models.NfType_PCF)
 	if err != nil {
 		return
 	}
@@ -430,9 +418,9 @@ func SendAMPolicyTerminationRequestNotification(ue *pcf_context.UeContext,
 }
 
 // returns UDR Uri of Ue, if ue.UdrUri dose not exist, query NRF to get supported Udr Uri
-func getUdrUri(ue *pcf_context.UeContext) string {
+func (p *Processor) getUdrUri(ue *pcf_context.UeContext) string {
 	if ue.UdrUri != "" {
 		return ue.UdrUri
 	}
-	return consumer.SendNFInstancesUDR(pcf_context.GetSelf().NrfUri, ue.Supi)
+	return p.Consumer().SendNFInstancesUDR(p.Context().NrfUri, ue.Supi)
 }

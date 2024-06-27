@@ -3,27 +3,60 @@ package consumer
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/free5gc/openapi"
+	"github.com/free5gc/openapi/Namf_Communication"
 	"github.com/free5gc/openapi/models"
 	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
-	"github.com/free5gc/pcf/internal/util"
 	"github.com/free5gc/pcf/pkg/factory"
 )
 
-func AmfStatusChangeSubscribe(amfUri string, guamiList []models.Guami) (
+type namfService struct {
+	consumer *Consumer
+
+	nfComMu sync.RWMutex
+
+	nfComClients map[string]*Namf_Communication.APIClient
+}
+
+func (s *namfService) getNFCommunicationClient(uri string) *Namf_Communication.APIClient {
+	if uri == "" {
+		return nil
+	}
+	s.nfComMu.RLock()
+	client, ok := s.nfComClients[uri]
+	if ok {
+		defer s.nfComMu.RUnlock()
+		return client
+	}
+
+	configuration := Namf_Communication.NewConfiguration()
+	configuration.SetBasePath(uri)
+	client = Namf_Communication.NewAPIClient(configuration)
+
+	s.nfComMu.RUnlock()
+	s.nfComMu.Lock()
+	defer s.nfComMu.Unlock()
+	s.nfComClients[uri] = client
+	return client
+}
+
+func (s *namfService) AmfStatusChangeSubscribe(amfUri string, guamiList []models.Guami) (
 	problemDetails *models.ProblemDetails, err error,
 ) {
 	logger.ConsumerLog.Debugf("PCF Subscribe to AMF status[%+v]", amfUri)
-	pcfSelf := pcf_context.GetSelf()
-	client := util.GetNamfClient(amfUri)
+	pcfContext := s.consumer.pcf.Context()
+
+	// Set client and set url
+	client := s.getNFCommunicationClient(amfUri)
 
 	subscriptionData := models.SubscriptionData{
-		AmfStatusUri: fmt.Sprintf("%s"+factory.PcfCallbackResUriPrefix+"/amfstatus", pcfSelf.GetIPv4Uri()),
+		AmfStatusUri: fmt.Sprintf("%s"+factory.PcfCallbackResUriPrefix+"/amfstatus", pcfContext.GetIPv4Uri()),
 		GuamiList:    guamiList,
 	}
-	ctx, pd, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NAMF_COMM, models.NfType_AMF)
+	ctx, pd, err := pcfContext.GetTokenCtx(models.ServiceName_NAMF_COMM, models.NfType_AMF)
 	if err != nil {
 		return pd, err
 	}
@@ -45,7 +78,7 @@ func AmfStatusChangeSubscribe(amfUri string, guamiList []models.Guami) (
 			AmfStatusUri: res.AmfStatusUri,
 			GuamiList:    res.GuamiList,
 		}
-		pcfSelf.NewAmfStatusSubscription(subscriptionID, amfStatusSubsData)
+		pcfContext.NewAmfStatusSubscription(subscriptionID, amfStatusSubsData)
 	} else if httpResp != nil {
 		if httpResp.Status != localErr.Error() {
 			err = localErr

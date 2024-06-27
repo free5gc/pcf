@@ -1,4 +1,4 @@
-package producer
+package processor
 
 import (
 	"fmt"
@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/antihax/optional"
+	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 
 	"github.com/free5gc/openapi"
@@ -14,10 +15,8 @@ import (
 	"github.com/free5gc/openapi/models"
 	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
-	"github.com/free5gc/pcf/internal/sbi/consumer"
 	"github.com/free5gc/pcf/internal/util"
 	"github.com/free5gc/util/flowdesc"
-	"github.com/free5gc/util/httpwrapper"
 	"github.com/free5gc/util/mongoapi"
 )
 
@@ -27,52 +26,12 @@ const (
 	chargingDataColl = "policyData.ues.chargingData"
 )
 
-// SmPoliciesPost -
-func HandleCreateSmPolicyRequest(request *httpwrapper.Request) *httpwrapper.Response {
-	// step 1: log
-	logger.SmPolicyLog.Infof("Handle CreateSmPolicy")
-	// step 2: retrieve request
-	requestDataType := request.Body.(models.SmPolicyContextData)
-
-	// step 3: handle the message
-	header, response, problemDetails := createSMPolicyProcedure(requestDataType)
-
-	// step 4: process the return value from step 3
-	if response != nil {
-		// status code is based on SPEC, and option headers
-		return httpwrapper.NewResponse(http.StatusCreated, header, response)
-	} else if problemDetails != nil {
-		return httpwrapper.NewResponse(int(problemDetails.Status), nil, problemDetails)
-	} else {
-		return httpwrapper.NewResponse(http.StatusNotFound, nil, nil)
-	}
-}
-
-func newQosDataWithQosFlowMap(qosFlow map[string]interface{}) *models.QosData {
-	qosData := &models.QosData{
-		QosId:  strconv.Itoa(int(qosFlow["qosRef"].(float64))),
-		Qnc:    false,
-		Var5qi: int32(qosFlow["5qi"].(float64)),
-	}
-	if qosFlow["mbrUL"] != nil {
-		qosData.MaxbrUl = qosFlow["mbrUL"].(string)
-	}
-	if qosFlow["mbrDL"] != nil {
-		qosData.MaxbrDl = qosFlow["mbrDL"].(string)
-	}
-	if qosFlow["gbrUL"] != nil {
-		qosData.GbrUl = qosFlow["gbrUL"].(string)
-	}
-	if qosFlow["gbrDL"] != nil {
-		qosData.GbrDl = qosFlow["gbrDL"].(string)
-	}
-
-	return qosData
-}
-
-func createSMPolicyProcedure(request models.SmPolicyContextData) (
-	header http.Header, response *models.SmPolicyDecision, problemDetails *models.ProblemDetails,
+func (p *Processor) HandleCreateSmPolicyRequest(
+	c *gin.Context,
+	request models.SmPolicyContextData,
 ) {
+	logger.SmPolicyLog.Infof("Handle CreateSmPolicy")
+
 	var err error
 	queryStrength := 2 // 2: case-insensitive, 3: case-sensitive
 	logger.SmPolicyLog.Tracef("Handle Create SM Policy Request")
@@ -80,10 +39,11 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 	if request.Supi == "" || request.SliceInfo == nil || len(request.SliceInfo.Sd) != 6 {
 		problemDetail := util.GetProblemDetail("Errorneous/Missing Mandotory IE", util.ERROR_INITIAL_PARAMETERS)
 		logger.SmPolicyLog.Warnln("Errorneous/Missing Mandotory IE", util.ERROR_INITIAL_PARAMETERS)
-		return nil, nil, &problemDetail
+		c.JSON(int(problemDetail.Status), problemDetail)
+		return
 	}
 
-	pcfSelf := pcf_context.GetSelf()
+	pcfSelf := p.Context()
 	var ue *pcf_context.UeContext
 	if val, exist := pcfSelf.UePool.Load(request.Supi); exist {
 		ue = val.(*pcf_context.UeContext)
@@ -92,13 +52,15 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 	if ue == nil {
 		problemDetail := util.GetProblemDetail("Supi is not supported in PCF", util.USER_UNKNOWN)
 		logger.SmPolicyLog.Warnf("Supi[%s] is not supported in PCF", request.Supi)
-		return nil, nil, &problemDetail
+		c.JSON(int(problemDetail.Status), problemDetail)
+		return
 	}
-	udrUri := getUdrUri(ue)
+	udrUri := p.getUdrUri(ue)
 	if udrUri == "" {
 		problemDetail := util.GetProblemDetail("Can't find corresponding UDR with UE", util.USER_UNKNOWN)
 		logger.SmPolicyLog.Warnf("Can't find corresponding UDR with UE[%s]", ue.Supi)
-		return nil, nil, &problemDetail
+		c.JSON(int(problemDetail.Status), problemDetail)
+		return
 	}
 	var smData models.SmPolicyData
 	smPolicyID := fmt.Sprintf("%s-%d", ue.Supi, request.PduSessionId)
@@ -111,16 +73,18 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 		}
 		var response *http.Response
 
-		ctx, pd, err1 := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
+		ctx, pd, err1 := p.Context().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
 		if err1 != nil {
-			return nil, nil, pd
+			c.JSON(int(pd.Status), pd)
+			return
 		}
 
 		smData, response, err1 = client.DefaultApi.PolicyDataUesUeIdSmDataGet(ctx, ue.Supi, &param)
 		if err1 != nil || response == nil || response.StatusCode != http.StatusOK {
 			problemDetail := util.GetProblemDetail("Can't find UE SM Policy Data in UDR", util.USER_UNKNOWN)
 			logger.SmPolicyLog.Warnf("Can't find UE[%s] SM Policy Data in UDR", ue.Supi)
-			return nil, nil, &problemDetail
+			c.JSON(int(problemDetail.Status), problemDetail)
+			return
 		}
 		defer func() {
 			if rspCloseErr := response.Body.Close(); rspCloseErr != nil {
@@ -136,8 +100,8 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 	if amPolicy == nil {
 		problemDetail := util.GetProblemDetail("Can't find corresponding AM Policy", util.POLICY_CONTEXT_DENIED)
 		logger.SmPolicyLog.Warnf("Can't find corresponding AM Policy")
-		// message.SendHttpResponseMessage(httpChannel, nil, int(rsp.Status), rsp)
-		return nil, nil, &problemDetail
+		c.JSON(int(problemDetail.Status), problemDetail)
+		return
 	}
 	// TODO: check service restrict
 	if ue.Gpsi == "" {
@@ -247,11 +211,12 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 		logger.SmPolicyLog.Errorf("chargingInterface %+v", chargingInterface)
 		util.SetPccRuleRelatedData(&decision, pcc, nil, nil, nil, nil)
 	} else if chargingInterface != nil {
-		rg, err1 := pcf_context.GetSelf().RatingGroupIdGenerator.Allocate()
+		rg, err1 := p.Context().RatingGroupIdGenerator.Allocate()
 		if err1 != nil {
 			logger.SmPolicyLog.Error("rating group allocate error")
 			problemDetails := util.GetProblemDetail("rating group allocate error", util.ERROR_IDGENERATOR)
-			return nil, nil, &problemDetails
+			c.JSON(int(problemDetails.Status), problemDetails)
+			return
 		}
 		chgData := &models.ChargingData{
 			ChgId:          util.GetChgId(smPolicyData.ChargingIdGenerator),
@@ -342,11 +307,12 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 			if err != nil {
 				logger.SmPolicyLog.Errorf("Fail to get charging data to mongoDB err: %+v", err)
 			} else {
-				rg, err1 := pcf_context.GetSelf().RatingGroupIdGenerator.Allocate()
+				rg, err1 := p.Context().RatingGroupIdGenerator.Allocate()
 				if err1 != nil {
 					logger.SmPolicyLog.Error("rating group allocate error")
 					problemDetails := util.GetProblemDetail("rating group allocate error", util.ERROR_IDGENERATOR)
-					return nil, nil, &problemDetails
+					c.JSON(int(problemDetails.Status), problemDetails)
+					return
 				}
 				chgData := &models.ChargingData{
 					ChgId:          util.GetChgId(smPolicyData.ChargingIdGenerator),
@@ -407,9 +373,10 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 		Supis:            optional.NewInterface([]string{request.Supi}),
 	}
 
-	ctx, pd, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
+	ctx, pd, err := p.Context().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
 	if err != nil {
-		return nil, nil, pd
+		c.JSON(int(pd.Status), pd)
+		return
 	}
 
 	udrClient := util.GetNudrClient(udrUri)
@@ -441,7 +408,7 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 	}
 
 	// Subscribe to Traffic Influence Data in UDR
-	subscriptionID, problemDetail, err := consumer.CreateInfluenceDataSubscription(ue, request)
+	subscriptionID, problemDetail, err := p.Consumer().CreateInfluenceDataSubscription(ue, request)
 	if problemDetail != nil {
 		logger.SmPolicyLog.Errorf("Subscribe UDR Influence Data Failed Problem[%+v]", problemDetail)
 	} else if err != nil {
@@ -450,7 +417,7 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 	smPolicyData.SubscriptionID = subscriptionID
 
 	// Create PCF binding data to BSF
-	policyAuthorizationService := pcf_context.GetSelf().NfService[models.ServiceName_NPCF_POLICYAUTHORIZATION]
+	policyAuthorizationService := p.Context().NfService[models.ServiceName_NPCF_POLICYAUTHORIZATION]
 	pcfBinding := models.PcfBinding{
 		Supi:           request.Supi,
 		Gpsi:           request.Gpsi,
@@ -464,13 +431,14 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 	}
 
 	// TODO: Record BSF URI instead of discovering from NRF every time
-	bsfUri := consumer.SendNFInstancesBSF(pcf_context.GetSelf().NrfUri)
+	bsfUri := p.Consumer().SendNFInstancesBSF(p.Context().NrfUri)
 	if bsfUri != "" {
 		bsfClient := util.GetNbsfClient(bsfUri)
 
-		ctx, pd, err = pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NBSF_MANAGEMENT, models.NfType_BSF)
+		ctx, pd, err = p.Context().GetTokenCtx(models.ServiceName_NBSF_MANAGEMENT, models.NfType_BSF)
 		if err != nil {
-			return nil, nil, pd
+			c.JSON(int(pd.Status), pd)
+			return
 		}
 
 		_, resp, err = bsfClient.PCFBindingsCollectionApi.CreatePCFBinding(ctx, pcfBinding)
@@ -487,48 +455,55 @@ func createSMPolicyProcedure(request models.SmPolicyContextData) (
 		}
 	}
 	locationHeader := util.GetResourceUri(models.ServiceName_NPCF_SMPOLICYCONTROL, smPolicyID)
-	header = http.Header{
-		"Location": {locationHeader},
-	}
+	c.Header("Location", locationHeader)
 	logger.SmPolicyLog.Tracef("SMPolicy PduSessionId[%d] Create", request.PduSessionId)
+	c.JSON(http.StatusCreated, decision)
+}
 
-	return header, &decision, nil
+func newQosDataWithQosFlowMap(qosFlow map[string]interface{}) *models.QosData {
+	qosData := &models.QosData{
+		QosId:  strconv.Itoa(int(qosFlow["qosRef"].(float64))),
+		Qnc:    false,
+		Var5qi: int32(qosFlow["5qi"].(float64)),
+	}
+	if qosFlow["mbrUL"] != nil {
+		qosData.MaxbrUl = qosFlow["mbrUL"].(string)
+	}
+	if qosFlow["mbrDL"] != nil {
+		qosData.MaxbrDl = qosFlow["mbrDL"].(string)
+	}
+	if qosFlow["gbrUL"] != nil {
+		qosData.GbrUl = qosFlow["gbrUL"].(string)
+	}
+	if qosFlow["gbrDL"] != nil {
+		qosData.GbrDl = qosFlow["gbrDL"].(string)
+	}
+
+	return qosData
 }
 
 // SmPoliciessmPolicyIDDeletePost -
-func HandleDeleteSmPolicyContextRequest(request *httpwrapper.Request) *httpwrapper.Response {
-	// step 1: log
+func (p *Processor) HandleDeleteSmPolicyContextRequest(
+	c *gin.Context,
+	smPolicyId string,
+) {
 	logger.SmPolicyLog.Infof("Handle DeleteSmPolicyContext")
 
-	// step 2: retrieve request
-	smPolicyID := request.Params["smPolicyId"]
-
-	// step 3: handle the message
-	problemDetails := deleteSmPolicyContextProcedure(smPolicyID)
-
-	// step 4: process the return value from step 3
-	if problemDetails != nil {
-		// status code is based on SPEC, and option headers
-		return httpwrapper.NewResponse(int(problemDetails.Status), nil, problemDetails)
-	} else {
-		return httpwrapper.NewResponse(http.StatusNoContent, nil, nil)
-	}
-}
-
-func deleteSmPolicyContextProcedure(smPolicyID string) *models.ProblemDetails {
+	// handle the message
 	logger.AmPolicyLog.Traceln("Handle SM Policy Delete")
 
-	ue := pcf_context.GetSelf().PCFUeFindByPolicyId(smPolicyID)
-	if ue == nil || ue.SmPolicyData[smPolicyID] == nil {
+	ue := p.Context().PCFUeFindByPolicyId(smPolicyId)
+	if ue == nil || ue.SmPolicyData[smPolicyId] == nil {
 		problemDetail := util.GetProblemDetail("smPolicyID not found in PCF", util.CONTEXT_NOT_FOUND)
 		logger.SmPolicyLog.Warnf(problemDetail.Detail)
-		return &problemDetail
+		c.JSON(int(problemDetail.Status), problemDetail)
+		return
 	}
 
-	pcfSelf := pcf_context.GetSelf()
-	smPolicy := ue.SmPolicyData[smPolicyID]
+	pcfSelf := p.Context()
+	smPolicy := ue.SmPolicyData[smPolicyId]
 
-	problemDetail, err := consumer.RemoveInfluenceDataSubscription(ue, smPolicy.SubscriptionID)
+	problemDetail, err := p.Consumer().RemoveInfluenceDataSubscription(ue, smPolicy.SubscriptionID)
 	if problemDetail != nil {
 		logger.SmPolicyLog.Errorf("Remove UDR Influence Data Subscription Failed Problem[%+v]", problemDetail)
 	} else if err != nil {
@@ -536,8 +511,8 @@ func deleteSmPolicyContextProcedure(smPolicyID string) *models.ProblemDetails {
 	}
 
 	// Unsubscrice UDR
-	delete(ue.SmPolicyData, smPolicyID)
-	logger.SmPolicyLog.Tracef("SMPolicy smPolicyID[%s] DELETE", smPolicyID)
+	delete(ue.SmPolicyData, smPolicyId)
+	logger.SmPolicyLog.Tracef("SMPolicy smPolicyID[%s] DELETE", smPolicyId)
 
 	// Release related App Session
 	terminationInfo := models.TerminationInfo{
@@ -546,13 +521,13 @@ func deleteSmPolicyContextProcedure(smPolicyID string) *models.ProblemDetails {
 	for appSessionID := range smPolicy.AppSessions {
 		if val, exist := pcfSelf.AppSessionPool.Load(appSessionID); exist {
 			appSession := val.(*pcf_context.AppSessionData)
-			SendAppSessionTermination(appSession, terminationInfo)
+			p.SendAppSessionTermination(appSession, terminationInfo)
 			pcfSelf.AppSessionPool.Delete(appSessionID)
-			logger.SmPolicyLog.Tracef("SMPolicy[%s] DELETE Related AppSession[%s]", smPolicyID, appSessionID)
+			logger.SmPolicyLog.Tracef("SMPolicy[%s] DELETE Related AppSession[%s]", smPolicyId, appSessionID)
 		}
 	}
 
-	for _, ratingGroup := range ue.RatingGroupData[smPolicyID] {
+	for _, ratingGroup := range ue.RatingGroupData[smPolicyId] {
 		pcfSelf.RatingGroupIdGenerator.FreeID(int64(ratingGroup))
 
 		filterCharging := bson.M{
@@ -563,92 +538,51 @@ func deleteSmPolicyContextProcedure(smPolicyID string) *models.ProblemDetails {
 			logger.SmPolicyLog.Errorf("Fail to delete charging data, ratingGroup: %+v, err: %+v", ratingGroup, err)
 		}
 	}
-	delete(ue.RatingGroupData, smPolicyID)
-	return nil
+	delete(ue.RatingGroupData, smPolicyId)
+	c.JSON(http.StatusNoContent, nil)
 }
 
-// SmPoliciessmPolicyIDGet -
-func HandleGetSmPolicyContextRequest(request *httpwrapper.Request) *httpwrapper.Response {
-	// step 1: log
-	logger.SmPolicyLog.Infof("Handle GetSmPolicyContext")
-
-	// step 2: retrieve request
-	smPolicyID := request.Params["smPolicyId"]
-	// step 3: handle the message
-	response, problemDetails := getSmPolicyContextProcedure(smPolicyID)
-
-	// step 4: process the return value from step 3
-	if response != nil {
-		// status code is based on SPEC, and option headers
-		return httpwrapper.NewResponse(http.StatusOK, nil, response)
-	} else if problemDetails != nil {
-		return httpwrapper.NewResponse(int(problemDetails.Status), nil, problemDetails)
-	}
-	problemDetails = &models.ProblemDetails{
-		Status: http.StatusForbidden,
-		Cause:  "UNSPECIFIED",
-	}
-	return httpwrapper.NewResponse(http.StatusForbidden, nil, problemDetails)
-}
-
-func getSmPolicyContextProcedure(smPolicyID string) (
-	response *models.SmPolicyControl, problemDetails *models.ProblemDetails,
+func (p *Processor) HandleGetSmPolicyContextRequest(
+	c *gin.Context,
+	smPolicyId string,
 ) {
+	logger.SmPolicyLog.Infof("Handle GetSmPolicyContext")
+	// handle the message
 	logger.SmPolicyLog.Traceln("Handle GET SM Policy Request")
 
-	ue := pcf_context.GetSelf().PCFUeFindByPolicyId(smPolicyID)
-	if ue == nil || ue.SmPolicyData[smPolicyID] == nil {
+	ue := p.Context().PCFUeFindByPolicyId(smPolicyId)
+	if ue == nil || ue.SmPolicyData[smPolicyId] == nil {
 		problemDetail := util.GetProblemDetail("smPolicyID not found in PCF", util.CONTEXT_NOT_FOUND)
 		logger.SmPolicyLog.Warnf(problemDetail.Detail)
-		return nil, &problemDetail
+		c.JSON(int(problemDetail.Status), problemDetail)
+		return
 	}
-	smPolicyData := ue.SmPolicyData[smPolicyID]
-	response = &models.SmPolicyControl{
+	smPolicyData := ue.SmPolicyData[smPolicyId]
+	response := &models.SmPolicyControl{
 		Policy:  smPolicyData.PolicyDecision,
 		Context: smPolicyData.PolicyContext,
 	}
-	logger.SmPolicyLog.Tracef("SMPolicy smPolicyID[%s] GET", smPolicyID)
-	return response, nil
+	logger.SmPolicyLog.Tracef("SMPolicy smPolicyID[%s] GET", smPolicyId)
+	c.JSON(http.StatusOK, response)
 }
 
-// SmPoliciessmPolicyIDUpdatePost -
-func HandleUpdateSmPolicyContextRequest(request *httpwrapper.Request) *httpwrapper.Response {
-	// step 1: log
+func (p *Processor) HandleUpdateSmPolicyContextRequest(
+	c *gin.Context,
+	smPolicyId string,
+	request models.SmPolicyUpdateContextData,
+) {
 	logger.SmPolicyLog.Infof("Handle UpdateSmPolicyContext")
 
-	// step 2: retrieve request
-	requestDataType := request.Body.(models.SmPolicyUpdateContextData)
-	smPolicyID := request.Params["smPolicyId"]
-
-	// step 3: handle the message
-	response, problemDetails := updateSmPolicyContextProcedure(requestDataType, smPolicyID)
-
-	// step 4: process the return value from step 3
-	if response != nil {
-		// status code is based on SPEC, and option headers
-		return httpwrapper.NewResponse(http.StatusOK, nil, response)
-	} else if problemDetails != nil {
-		return httpwrapper.NewResponse(int(problemDetails.Status), nil, problemDetails)
-	}
-	problemDetails = &models.ProblemDetails{
-		Status: http.StatusForbidden,
-		Cause:  "UNSPECIFIED",
-	}
-	return httpwrapper.NewResponse(http.StatusForbidden, nil, problemDetails)
-}
-
-func updateSmPolicyContextProcedure(request models.SmPolicyUpdateContextData, smPolicyID string) (
-	response *models.SmPolicyDecision, problemDetails *models.ProblemDetails,
-) {
 	logger.SmPolicyLog.Traceln("Handle updateSmPolicyContext")
 
-	ue := pcf_context.GetSelf().PCFUeFindByPolicyId(smPolicyID)
-	if ue == nil || ue.SmPolicyData[smPolicyID] == nil {
+	ue := p.Context().PCFUeFindByPolicyId(smPolicyId)
+	if ue == nil || ue.SmPolicyData[smPolicyId] == nil {
 		problemDetail := util.GetProblemDetail("smPolicyID not found in PCF", util.CONTEXT_NOT_FOUND)
 		logger.SmPolicyLog.Warnf(problemDetail.Detail)
-		return nil, &problemDetail
+		c.JSON(int(problemDetail.Status), problemDetail)
+		return
 	}
-	smPolicy := ue.SmPolicyData[smPolicyID]
+	smPolicy := ue.SmPolicyData[smPolicyId]
 	smPolicyDecision := smPolicy.PolicyDecision
 	smPolicyContext := smPolicy.PolicyContext
 	errCause := ""
@@ -706,7 +640,8 @@ func updateSmPolicyContextProcedure(request models.SmPolicyUpdateContextData, sm
 				if err != nil {
 					problemDetail := util.GetProblemDetail(err.Error(), util.ERROR_TRAFFIC_MAPPING_INFO_REJECTED)
 					logger.SmPolicyLog.Warnf(problemDetail.Detail)
-					return nil, &problemDetail
+					c.JSON(int(problemDetail.Status), problemDetail)
+					return
 				}
 				if qosData.GbrDl != "" {
 					logger.SmPolicyLog.Tracef("SM Policy Dnn[%s] Data Aggregate decrease %s and then DL GBR remain[%.2f Kbps]",
@@ -754,7 +689,8 @@ func updateSmPolicyContextProcedure(request models.SmPolicyUpdateContextData, sm
 								smPolicy.RemainGbrUL = origUl
 								problemDetail := util.GetProblemDetail(err.Error(), util.ERROR_TRAFFIC_MAPPING_INFO_REJECTED)
 								logger.SmPolicyLog.Warnf(problemDetail.Detail)
-								return nil, &problemDetail
+								c.JSON(int(problemDetail.Status), problemDetail)
+								return
 							}
 							qosData.Var5qi = req.ReqQos.Var5qi
 							qosData.GbrDl = gbrDl
@@ -996,26 +932,26 @@ func updateSmPolicyContextProcedure(request models.SmPolicyUpdateContextData, sm
 		afEventsNotification.EvNotifs = append(afEventsNotification.EvNotifs, afNotif)
 	}
 	if afEventsNotification.EvNotifs != nil {
-		sendSmPolicyRelatedAppSessionNotification(
+		p.sendSmPolicyRelatedAppSessionNotification(
 			smPolicy, afEventsNotification, request.AccuUsageReports, successRules, failRules)
 	}
 
 	if errCause != "" {
 		problemDetail := util.GetProblemDetail(errCause, util.ERROR_TRIGGER_EVENT)
 		logger.SmPolicyLog.Warnf(errCause)
-		return nil, &problemDetail
+		c.JSON(int(problemDetail.Status), problemDetail)
+		return
 	}
-	logger.SmPolicyLog.Tracef("SMPolicy smPolicyID[%s] Update", smPolicyID)
-	// message.SendHttpResponseMessage(httpChannel, nil, http.StatusOK, *smPolicyDecision)
-	return smPolicyDecision, nil
+	logger.SmPolicyLog.Tracef("SMPolicy smPolicyID[%s] Update", smPolicyId)
+	c.JSON(http.StatusOK, smPolicyDecision)
 }
 
-func sendSmPolicyRelatedAppSessionNotification(smPolicy *pcf_context.UeSmPolicyData,
+func (p *Processor) sendSmPolicyRelatedAppSessionNotification(smPolicy *pcf_context.UeSmPolicyData,
 	notification models.EventsNotification, usageReports []models.AccuUsageReport,
 	successRules, failRules []models.RuleReport,
 ) {
 	for appSessionId := range smPolicy.AppSessions {
-		if val, exist := pcf_context.GetSelf().AppSessionPool.Load(appSessionId); exist {
+		if val, exist := p.Context().AppSessionPool.Load(appSessionId); exist {
 			appSession := val.(*pcf_context.AppSessionData)
 			if len(appSession.Events) == 0 {
 				continue
@@ -1174,13 +1110,13 @@ func sendSmPolicyRelatedAppSessionNotification(smPolicy *pcf_context.UeSmPolicyD
 				}
 			}
 			if sessionNotif.EvNotifs != nil {
-				SendAppSessionEventNotification(appSession, sessionNotif)
+				p.SendAppSessionEventNotification(appSession, sessionNotif)
 			}
 		}
 	}
 }
 
-func SendSMPolicyUpdateNotification(
+func (p *Processor) SendSMPolicyUpdateNotification(
 	uri string, request *models.SmPolicyNotification,
 ) {
 	if uri == "" {
@@ -1188,7 +1124,7 @@ func SendSMPolicyUpdateNotification(
 		return
 	}
 
-	ctx, _, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NPCF_SMPOLICYCONTROL, models.NfType_PCF)
+	ctx, _, err := p.Context().GetTokenCtx(models.ServiceName_NPCF_SMPOLICYCONTROL, models.NfType_PCF)
 	if err != nil {
 		return
 	}
@@ -1222,7 +1158,7 @@ func SendSMPolicyUpdateNotification(
 	}
 }
 
-func SendSMPolicyTerminationRequestNotification(
+func (p *Processor) SendSMPolicyTerminationRequestNotification(
 	uri string, request *models.TerminationNotification,
 ) {
 	if uri == "" {
@@ -1230,7 +1166,7 @@ func SendSMPolicyTerminationRequestNotification(
 		return
 	}
 
-	ctx, _, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NPCF_SMPOLICYCONTROL, models.NfType_PCF)
+	ctx, _, err := p.Context().GetTokenCtx(models.ServiceName_NPCF_SMPOLICYCONTROL, models.NfType_PCF)
 	if err != nil {
 		return
 	}
