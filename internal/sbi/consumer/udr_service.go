@@ -1,10 +1,12 @@
 package consumer
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 	"sync"
 
+	"github.com/antihax/optional"
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/Nudr_DataRepository"
 	"github.com/free5gc/openapi/models"
@@ -41,6 +43,53 @@ func (s *nudrService) getDataSubscription(uri string) *Nudr_DataRepository.APICl
 	defer s.nfDataSubMu.Unlock()
 	s.nfDataSubClients[uri] = client
 	return client
+}
+
+func (s *nudrService) GetAfInfluenceData(
+	ue *pcf_context.UeContext,
+	supi, dnn string,
+	interGrpIds []string,
+	sliceInfo *models.Snssai,
+) (
+	tiData []models.TrafficInfluData,
+	problemDetails *models.ProblemDetails,
+	err error,
+) {
+	client := s.getDataSubscription(ue.UdrUri)
+	ctx, pd, err := s.consumer.Context().GetTokenCtx(
+		models.ServiceName_NUDR_DR,
+		models.NfType_UDR)
+	if err != nil {
+		return []models.TrafficInfluData{}, pd, err
+	}
+
+	param := &Nudr_DataRepository.ApplicationDataInfluenceDataGetParamOpts{
+		Dnns: optional.NewInterface([]string{dnn}),
+		Snssais: optional.NewInterface(
+			util.MarshToJsonString([]models.Snssai{*sliceInfo}),
+		),
+		Supis:        optional.NewInterface([]string{supi}),
+		InfluenceIds: optional.NewInterface(interGrpIds),
+	}
+
+	tiData, rsp, err := client.InfluenceDataApi.ApplicationDataInfluenceDataGet(ctx, param)
+	defer func() {
+		if rsp != nil {
+			if rsp.Body != nil {
+				if rsp.Body.Close() != nil {
+					logger.ConsumerLog.Errorf("getAfInfluenceData response body cannot close")
+				}
+			}
+		}
+	}()
+	if err != nil {
+		apiError := new(openapi.GenericOpenAPIError)
+		if ok := errors.As(err, &apiError); ok {
+			problemDetails = apiError.Model().(*models.ProblemDetails)
+		}
+	}
+
+	return tiData, problemDetails, err
 }
 
 func (s *nudrService) CreateInfluenceDataSubscription(ue *pcf_context.UeContext, request models.SmPolicyContextData) (
