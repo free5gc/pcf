@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/antihax/optional"
+
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/Nudr_DataRepository"
 	"github.com/free5gc/openapi/models"

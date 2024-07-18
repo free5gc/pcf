@@ -396,7 +396,6 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 				precedence++
 			}
 		}
-		// TODO: trasfer tiData to tcData and apply to PCC rule
 	}
 
 	// Subscribe to Traffic Influence Data in UDR
