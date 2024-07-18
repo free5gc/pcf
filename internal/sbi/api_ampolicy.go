@@ -44,7 +44,7 @@ func (s *Server) HTTPPoliciesPolAssoIdGet(c *gin.Context) {
 
 // HTTPPoliciesPolAssoIdUpdatePost -
 func (s *Server) HTTPPoliciesPolAssoIdUpdatePost(c *gin.Context) {
-	var policyAssociationUpdateRequest models.PolicyAssociationUpdateRequest
+	var policyAssociationUpdateRequest models.PcfAmPolicyControlPolicyAssociationUpdateRequest
 
 	requestBody, err := c.GetRawData()
 	if err != nil {
@@ -87,7 +87,7 @@ func (s *Server) HTTPPoliciesPolAssoIdUpdatePost(c *gin.Context) {
 }
 
 func (s *Server) HTTPPoliciesPost(c *gin.Context) {
-	var policyAssociationRequest models.PolicyAssociationRequest
+	var policyAssociationRequest models.PcfAmPolicyControlPolicyAssociationRequest
 	requestBody, err := c.GetRawData()
 	if err != nil {
 		problemDetail := models.ProblemDetails{
@@ -115,7 +115,7 @@ func (s *Server) HTTPPoliciesPost(c *gin.Context) {
 	}
 
 	if policyAssociationRequest.Supi == "" || policyAssociationRequest.NotificationUri == "" {
-		rsp := util.GetProblemDetail("Miss Mandotory IE", util.ERROR_REQUEST_PARAMETERS)
+		rsp := util.GetProblemDetail("Miss Mandatory IE", util.ERROR_REQUEST_PARAMETERS)
 		logger.AmPolicyLog.Errorln(rsp.Detail)
 		c.JSON(int(rsp.Status), rsp)
 		return
@@ -129,21 +129,25 @@ func (s *Server) HTTPPoliciesPost(c *gin.Context) {
 func (s *Server) getAmPolicyRoutes() []Route {
 	return []Route{
 		{
+			Name:    "ReadIndividualAMPolicyAssociation",
 			Method:  http.MethodGet,
 			Pattern: "/policies/:polAssoId",
 			APIFunc: s.HTTPPoliciesPolAssoIdGet,
 		},
 		{
+			Name:    "DeleteIndividualAMPolicyAssociation",
 			Method:  http.MethodDelete,
 			Pattern: "/policies/:polAssoId",
 			APIFunc: s.HTTPPoliciesPolAssoIdDelete,
 		},
 		{
+			Name:    "ReportObservedEventTriggersForIndividualAMPolicyAssociation",
 			Method:  http.MethodPost,
 			Pattern: "/policies/:polAssoId/update",
 			APIFunc: s.HTTPPoliciesPolAssoIdUpdatePost,
 		},
 		{
+			Name:    "CreateIndividualAMPolicyAssociation",
 			Method:  http.MethodPost,
 			Pattern: "/policies",
 			APIFunc: s.HTTPPoliciesPost,
