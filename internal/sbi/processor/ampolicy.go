@@ -38,7 +38,6 @@ func (p *Processor) HandleGetPoliciesPolAssoId(
 ) {
 	logger.AmPolicyLog.Infof("Handle AM Policy Association Get")
 
-	// response, problemDetails := GetPoliciesPolAssoIdProcedure(polAssoId)
 	ue := p.Context().PCFUeFindByPolicyId(polAssoId)
 	if ue == nil || ue.AMPolicyData[polAssoId] == nil {
 		problemDetails := util.GetProblemDetail("polAssoId not found  in PCF", util.CONTEXT_NOT_FOUND)
@@ -46,7 +45,7 @@ func (p *Processor) HandleGetPoliciesPolAssoId(
 		return
 	}
 	amPolicyData := ue.AMPolicyData[polAssoId]
-	rsp := models.PolicyAssociation{
+	rsp := models.PcfAmPolicyControlPolicyAssociation{
 		SuppFeat: amPolicyData.SuppFeat,
 	}
 	if amPolicyData.Rfsp != 0 {
@@ -58,7 +57,7 @@ func (p *Processor) HandleGetPoliciesPolAssoId(
 	if amPolicyData.Triggers != nil {
 		rsp.Triggers = amPolicyData.Triggers
 		for _, trigger := range amPolicyData.Triggers {
-			if trigger == models.RequestTrigger_PRA_CH {
+			if trigger == models.PcfAmPolicyControlRequestTrigger_PRA_CH {
 				rsp.Pras = amPolicyData.Pras
 				break
 			}
@@ -70,7 +69,7 @@ func (p *Processor) HandleGetPoliciesPolAssoId(
 func (p *Processor) HandleUpdatePostPoliciesPolAssoId(
 	c *gin.Context,
 	polAssoId string,
-	policyAssociationUpdateRequest models.PolicyAssociationUpdateRequest,
+	policyAssociationUpdateRequest models.PcfAmPolicyControlPolicyAssociationUpdateRequest,
 ) {
 	logger.AmPolicyLog.Infof("Handle AM Policy Association Update")
 
@@ -89,8 +88,8 @@ func (p *Processor) HandleUpdatePostPoliciesPolAssoId(
 }
 
 func (p *Processor) UpdatePostPoliciesPolAssoIdProcedure(polAssoId string,
-	policyAssociationUpdateRequest models.PolicyAssociationUpdateRequest,
-) (*models.PolicyUpdate, *models.ProblemDetails) {
+	policyAssociationUpdateRequest models.PcfAmPolicyControlPolicyAssociationUpdateRequest,
+) (*models.PcfAmPolicyControlPolicyUpdate, *models.ProblemDetails) {
 	ue := p.Context().PCFUeFindByPolicyId(polAssoId)
 	if ue == nil || ue.AMPolicyData[polAssoId] == nil {
 		problemDetails := util.GetProblemDetail("polAssoId not found  in PCF", util.CONTEXT_NOT_FOUND)
@@ -98,7 +97,7 @@ func (p *Processor) UpdatePostPoliciesPolAssoIdProcedure(polAssoId string,
 	}
 
 	amPolicyData := ue.AMPolicyData[polAssoId]
-	var response models.PolicyUpdate
+	var response models.PcfAmPolicyControlPolicyUpdate
 	if policyAssociationUpdateRequest.NotificationUri != "" {
 		amPolicyData.NotificationUri = policyAssociationUpdateRequest.NotificationUri
 	}
@@ -111,7 +110,7 @@ func (p *Processor) UpdatePostPoliciesPolAssoIdProcedure(polAssoId string,
 	for _, trigger := range policyAssociationUpdateRequest.Triggers {
 		// TODO: Modify the value according to policies
 		switch trigger {
-		case models.RequestTrigger_LOC_CH:
+		case models.PcfAmPolicyControlRequestTrigger_LOC_CH:
 			// TODO: report to AF subscriber
 			if policyAssociationUpdateRequest.UserLoc == nil {
 				problemDetail := util.GetProblemDetail("UserLoc are nli", util.ERROR_REQUEST_PARAMETERS)
@@ -121,7 +120,7 @@ func (p *Processor) UpdatePostPoliciesPolAssoIdProcedure(polAssoId string,
 			}
 			amPolicyData.UserLoc = policyAssociationUpdateRequest.UserLoc
 			logger.AmPolicyLog.Infof("Ue[%s] UserLocation %+v", ue.Supi, amPolicyData.UserLoc)
-		case models.RequestTrigger_PRA_CH:
+		case models.PcfAmPolicyControlRequestTrigger_PRA_CH:
 			if policyAssociationUpdateRequest.PraStatuses == nil {
 				problemDetail := util.GetProblemDetail("PraStatuses are nli", util.ERROR_REQUEST_PARAMETERS)
 				logger.AmPolicyLog.Warnln("PraStatuses doesn't exist in Policy Association",
@@ -132,7 +131,7 @@ func (p *Processor) UpdatePostPoliciesPolAssoIdProcedure(polAssoId string,
 				// TODO: report to AF subscriber
 				logger.AmPolicyLog.Infof("Policy Association Presence Id[%s] change state to %s", praId, praInfo.PresenceState)
 			}
-		case models.RequestTrigger_SERV_AREA_CH:
+		case models.PcfAmPolicyControlRequestTrigger_SERV_AREA_CH:
 			if policyAssociationUpdateRequest.ServAreaRes == nil {
 				problemDetail := util.GetProblemDetail("ServAreaRes are nli", util.ERROR_REQUEST_PARAMETERS)
 				logger.AmPolicyLog.Warnln("ServAreaRes doesn't exist in Policy Association",
@@ -142,7 +141,7 @@ func (p *Processor) UpdatePostPoliciesPolAssoIdProcedure(polAssoId string,
 				amPolicyData.ServAreaRes = policyAssociationUpdateRequest.ServAreaRes
 				response.ServAreaRes = policyAssociationUpdateRequest.ServAreaRes
 			}
-		case models.RequestTrigger_RFSP_CH:
+		case models.PcfAmPolicyControlRequestTrigger_RFSP_CH:
 			if policyAssociationUpdateRequest.Rfsp == 0 {
 				problemDetail := util.GetProblemDetail("Rfsp are nli", util.ERROR_REQUEST_PARAMETERS)
 				logger.AmPolicyLog.Warnln("Rfsp doesn't exist in Policy Association Requset Update while Triggers include RFSP_CH")
@@ -165,7 +164,7 @@ func (p *Processor) UpdatePostPoliciesPolAssoIdProcedure(polAssoId string,
 func (p *Processor) HandlePostPolicies(
 	c *gin.Context,
 	polAssoId string,
-	policyAssociationRequest models.PolicyAssociationRequest,
+	policyAssociationRequest models.PcfAmPolicyControlPolicyAssociationRequest,
 ) {
 	logger.AmPolicyLog.Infof("Handle AM Policy Create Request")
 
@@ -188,9 +187,9 @@ func (p *Processor) HandlePostPolicies(
 }
 
 func (p *Processor) PostPoliciesProcedure(polAssoId string,
-	policyAssociationRequest models.PolicyAssociationRequest,
-) (*models.PolicyAssociation, string, *models.ProblemDetails) {
-	var response models.PolicyAssociation
+	policyAssociationRequest models.PcfAmPolicyControlPolicyAssociationRequest,
+) (*models.PcfAmPolicyControlPolicyAssociation, string, *models.ProblemDetails) {
+	var response models.PcfAmPolicyControlPolicyAssociation
 	pcfSelf := p.Context()
 	var ue *pcf_context.UeContext
 	if val, ok := pcfSelf.UePool.Load(policyAssociationRequest.Supi); ok {
@@ -216,11 +215,11 @@ func (p *Processor) PostPoliciesProcedure(polAssoId string,
 	}
 	ue.UdrUri = udrUri
 
-	response.Request = deepcopy.Copy(&policyAssociationRequest).(*models.PolicyAssociationRequest)
+	response.Request = deepcopy.Copy(&policyAssociationRequest).(*models.PcfAmPolicyControlPolicyAssociationRequest)
 	assolId := fmt.Sprintf("%s-%d", ue.Supi, ue.PolAssociationIDGenerator)
 	amPolicy := ue.AMPolicyData[assolId]
 
-	ctx, pd, err := p.Context().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
+	ctx, pd, err := p.Context().GetTokenCtx(models.ServiceName_NUDR_DR, models.NrfNfManagementNfType_UDR)
 	if err != nil {
 		return nil, "", pd
 	}
@@ -309,7 +308,7 @@ func (p *Processor) PostPoliciesProcedure(polAssoId string,
 
 // Send AM Policy Update to AMF if policy has changed
 func (p *Processor) SendAMPolicyUpdateNotification(ue *pcf_context.UeContext,
-	PolId string, request models.PolicyUpdate,
+	PolId string, request models.PcfAmPolicyControlPolicyUpdate,
 ) {
 	if ue == nil {
 		logger.AmPolicyLog.Warnln("Policy Update Notification Error[Ue is nil]")
@@ -321,7 +320,7 @@ func (p *Processor) SendAMPolicyUpdateNotification(ue *pcf_context.UeContext,
 		return
 	}
 
-	ctx, _, err := p.Context().GetTokenCtx(models.ServiceName_NPCF_AM_POLICY_CONTROL, models.NfType_PCF)
+	ctx, _, err := p.Context().GetTokenCtx(models.ServiceName_NPCF_AM_POLICY_CONTROL, models.NrfNfManagementNfType_PCF)
 	if err != nil {
 		return
 	}
@@ -364,7 +363,7 @@ func (p *Processor) SendAMPolicyUpdateNotification(ue *pcf_context.UeContext,
 
 // Send AM Policy Update to AMF if policy has been terminated
 func (p *Processor) SendAMPolicyTerminationRequestNotification(ue *pcf_context.UeContext,
-	PolId string, request models.TerminationNotification,
+	PolId string, request models.PcfAmPolicyControlTerminationNotification,
 ) {
 	if ue == nil {
 		logger.AmPolicyLog.Warnln("Policy Assocition Termination Request Notification Error[Ue is nil]")
@@ -379,7 +378,7 @@ func (p *Processor) SendAMPolicyTerminationRequestNotification(ue *pcf_context.U
 	client := util.GetNpcfAMPolicyCallbackClient()
 	uri := amPolicyData.NotificationUri
 
-	ctx, _, err := p.Context().GetTokenCtx(models.ServiceName_NPCF_AM_POLICY_CONTROL, models.NfType_PCF)
+	ctx, _, err := p.Context().GetTokenCtx(models.ServiceName_NPCF_AM_POLICY_CONTROL, models.NrfNfManagementNfType_PCF)
 	if err != nil {
 		return
 	}
