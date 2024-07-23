@@ -14,7 +14,7 @@ type Processor struct {
 	PCF
 }
 
-func NewProcessor(pcf PCF, consumer *consumer.Consumer) (*Processor, error) {
+func NewProcessor(pcf PCF) (*Processor, error) {
 	p := &Processor{
 		PCF: pcf,
 	}

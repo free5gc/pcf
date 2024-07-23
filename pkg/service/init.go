@@ -60,7 +60,7 @@ func NewApp(
 	pcf.consumer = consumer
 
 	// processor
-	p, err := processor.NewProcessor(pcf, consumer)
+	p, err := processor.NewProcessor(pcf)
 	if err != nil {
 		return pcf, err
 	}
