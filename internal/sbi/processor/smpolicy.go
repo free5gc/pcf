@@ -366,29 +366,19 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 	smPolicyData.PolicyDecision = &decision
 	// TODO: PCC rule, PraInfo ...
 	// Get Application Data Influence Data from UDR
-	reqParam := Nudr_DataRepository.ApplicationDataInfluenceDataGetParamOpts{
-		Dnns:             optional.NewInterface([]string{request.Dnn}),
-		Snssais:          optional.NewInterface(util.MarshToJsonString([]models.Snssai{*request.SliceInfo})),
-		InternalGroupIds: optional.NewInterface(request.InterGrpIds),
-		Supis:            optional.NewInterface([]string{request.Supi}),
-	}
 
-	ctx, pd, err := p.Context().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
+	trafficInfluDatas, pd, err := p.Consumer().GetAfInfluenceData(
+		ue,
+		request.Supi,
+		request.Dnn,
+		request.InterGrpIds,
+		request.SliceInfo,
+	)
 	if err != nil {
 		c.JSON(int(pd.Status), pd)
 		return
 	}
 
-	udrClient := util.GetNudrClient(udrUri)
-	var resp *http.Response
-	trafficInfluDatas, resp, err := udrClient.InfluenceDataApi.
-		ApplicationDataInfluenceDataGet(ctx, &reqParam)
-	if err != nil || resp == nil || resp.StatusCode != http.StatusOK {
-		logger.SmPolicyLog.Warnf("Error response from UDR Application Data Influence Data Get")
-	}
-	if err = resp.Body.Close(); err != nil {
-		logger.SmPolicyLog.Warnf("failed to close response of Application Data Influence Data Get")
-	}
 	logger.SmPolicyLog.Infof("Matched [%d] trafficInfluDatas from UDR", len(trafficInfluDatas))
 	if len(trafficInfluDatas) != 0 {
 		// UE identity in UDR appData and apply appData to sm poliocy
@@ -435,13 +425,13 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 	if bsfUri != "" {
 		bsfClient := util.GetNbsfClient(bsfUri)
 
-		ctx, pd, err = p.Context().GetTokenCtx(models.ServiceName_NBSF_MANAGEMENT, models.NfType_BSF)
+		ctx, pd, err := p.Context().GetTokenCtx(models.ServiceName_NBSF_MANAGEMENT, models.NfType_BSF)
 		if err != nil {
 			c.JSON(int(pd.Status), pd)
 			return
 		}
 
-		_, resp, err = bsfClient.PCFBindingsCollectionApi.CreatePCFBinding(ctx, pcfBinding)
+		_, resp, err := bsfClient.PCFBindingsCollectionApi.CreatePCFBinding(ctx, pcfBinding)
 		if err != nil || resp == nil || resp.StatusCode != http.StatusCreated {
 			logger.SmPolicyLog.Warnf("Create PCF binding data in BSF error[%+v]", err)
 			// Uncomment the following to return error response --> PDU SessEstReq will fail
