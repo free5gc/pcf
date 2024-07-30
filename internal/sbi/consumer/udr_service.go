@@ -6,8 +6,8 @@ import (
 	"sync"
 
 	"github.com/free5gc/openapi"
-	"github.com/free5gc/openapi/Nudr_DataRepository"
 	"github.com/free5gc/openapi/models"
+	"github.com/free5gc/openapi/udr/DataRepository"
 	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/internal/util"
@@ -18,10 +18,10 @@ type nudrService struct {
 
 	nfDataSubMu sync.RWMutex
 
-	nfDataSubClients map[string]*Nudr_DataRepository.APIClient
+	nfDataSubClients map[string]*DataRepository.APIClient
 }
 
-func (s *nudrService) getDataSubscription(uri string) *Nudr_DataRepository.APIClient {
+func (s *nudrService) getDataSubscription(uri string) *DataRepository.APIClient {
 	if uri == "" {
 		return nil
 	}
@@ -32,9 +32,9 @@ func (s *nudrService) getDataSubscription(uri string) *Nudr_DataRepository.APICl
 		return client
 	}
 
-	configuration := Nudr_DataRepository.NewConfiguration()
+	configuration := DataRepository.NewConfiguration()
 	configuration.SetBasePath(uri)
-	client = Nudr_DataRepository.NewAPIClient(configuration)
+	client = DataRepository.NewAPIClient(configuration)
 
 	s.nfDataSubMu.RUnlock()
 	s.nfDataSubMu.Lock()
@@ -51,35 +51,25 @@ func (s *nudrService) CreateInfluenceDataSubscription(ue *pcf_context.UeContext,
 		logger.ConsumerLog.Warnf("Can't find corresponding UDR with UE[%s]", ue.Supi)
 		return "", &problemDetail, nil
 	}
-	ctx, pd, err := s.consumer.Context().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
+	ctx, pd, err := s.consumer.Context().GetTokenCtx(models.ServiceName_NUDR_DR, models.NrfNfManagementNfType_UDR)
 	if err != nil {
 		return "", pd, err
 	}
 	client := s.getDataSubscription(ue.UdrUri)
 	trafficInfluSub := s.buildTrafficInfluSub(request)
-	_, httpResp, localErr := client.InfluenceDataSubscriptionsCollectionApi.
-		ApplicationDataInfluenceDataSubsToNotifyPost(ctx, trafficInfluSub)
+	individualInfluenceDataSubscReq := DataRepository.CreateIndividualInfluenceDataSubscriptionRequest{
+		TrafficInfluSub: &trafficInfluSub,
+	}
+	httpResp, localErr := client.InfluenceDataSubscriptionsCollectionApi.
+		CreateIndividualInfluenceDataSubscription(ctx, &individualInfluenceDataSubscReq)
 	if localErr == nil {
-		locationHeader := httpResp.Header.Get("Location")
+		locationHeader := httpResp.Location
 		subscriptionID = locationHeader[strings.LastIndex(locationHeader, "/")+1:]
 		logger.ConsumerLog.Debugf("Influence Data Subscription ID: %s", subscriptionID)
 		return subscriptionID, nil, nil
-	} else if httpResp != nil {
-		defer func() {
-			if rspCloseErr := httpResp.Body.Close(); rspCloseErr != nil {
-				logger.ConsumerLog.Errorf("CreateInfluenceDataSubscription response body cannot close: %+v",
-					rspCloseErr)
-			}
-		}()
-		if httpResp.Status != localErr.Error() {
-			err = localErr
-			return subscriptionID, problemDetails, err
-		}
-		problem := localErr.(openapi.GenericOpenAPIError).Model().(models.ProblemDetails)
-		problemDetails = &problem
-	} else {
-		err = openapi.ReportError("server no response")
 	}
+	problem := localErr.(openapi.GenericOpenAPIError).Model().(models.ProblemDetails)
+	problemDetails = &problem
 	return "", problemDetails, err
 }
 
@@ -105,31 +95,20 @@ func (s *nudrService) RemoveInfluenceDataSubscription(ue *pcf_context.UeContext,
 		logger.ConsumerLog.Warnf("Can't find corresponding UDR with UE[%s]", ue.Supi)
 		return &problemDetail, nil
 	}
-	ctx, pd, err := s.consumer.Context().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
+	ctx, pd, err := s.consumer.Context().GetTokenCtx(models.ServiceName_NUDR_DR, models.NrfNfManagementNfType_UDR)
 	if err != nil {
 		return pd, err
 	}
 	client := s.getDataSubscription(ue.UdrUri)
-	httpResp, localErr := client.IndividualInfluenceDataSubscriptionDocumentApi.
-		ApplicationDataInfluenceDataSubsToNotifySubscriptionIdDelete(ctx, subscriptionID)
-	if localErr == nil {
-		logger.ConsumerLog.Debugf("Nudr_DataRepository Remove Influence Data Subscription Status %s",
-			httpResp.Status)
-	} else if httpResp != nil {
-		defer func() {
-			if rspCloseErr := httpResp.Body.Close(); rspCloseErr != nil {
-				logger.ConsumerLog.Errorf("RemoveInfluenceDataSubscription response body cannot close: %+v",
-					rspCloseErr)
-			}
-		}()
-		if httpResp.Status != localErr.Error() {
-			err = localErr
-			return problemDetails, err
-		}
-		problem := localErr.(openapi.GenericOpenAPIError).Model().(models.ProblemDetails)
-		problemDetails = &problem
-	} else {
-		err = openapi.ReportError("server no response")
+	deleteIndividualInfluenceDataSubscriptionReq := DataRepository.DeleteIndividualInfluenceDataSubscriptionRequest{
+		SubscriptionId: &subscriptionID,
 	}
+	_, localErr := client.IndividualInfluenceDataSubscriptionDocumentApi.
+		DeleteIndividualInfluenceDataSubscription(ctx, &deleteIndividualInfluenceDataSubscriptionReq)
+	if localErr == nil {
+		logger.ConsumerLog.Debugf("DataRepository Remove Influence Data Subscription Status With No Err")
+	}
+	problem := localErr.(openapi.GenericOpenAPIError).Model().(models.ProblemDetails)
+	problemDetails = &problem
 	return problemDetails, err
 }
