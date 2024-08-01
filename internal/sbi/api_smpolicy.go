@@ -23,30 +23,34 @@ import (
 func (s *Server) getSmPolicyRoutes() []Route {
 	return []Route{
 		{
+			Name:    "CreateSMPolicy",
 			Method:  http.MethodPost,
 			Pattern: "/sm-policies",
-			APIFunc: s.HTTPSmPoliciesPost,
+			APIFunc: s.HTTPCreateSMPolicy,
 		},
 		{
+			Name:    "DeleteSMPolicy",
 			Method:  http.MethodPost,
 			Pattern: "/sm-policies/:smPolicyId/delete",
-			APIFunc: s.HTTPSmPoliciesSmPolicyIdDeletePost,
+			APIFunc: s.HTTPDeleteSMPolicy,
 		},
 		{
+			Name:    "GetSMPolicy",
 			Method:  http.MethodGet,
 			Pattern: "/sm-policies/:smPolicyId",
-			APIFunc: s.HTTPSmPoliciesSmPolicyIDGet,
+			APIFunc: s.HTTPGetSMPolicy,
 		},
 		{
+			Name:    "UpdateSMPolicy",
 			Method:  http.MethodPost,
 			Pattern: "/sm-policies/:smPolicyId/update",
-			APIFunc: s.HTTPSmPoliciesSmPolicyIdUpdatePost,
+			APIFunc: s.HTTPUpdateSMPolicy,
 		},
 	}
 }
 
 // SmPoliciesPost -
-func (s *Server) HTTPSmPoliciesPost(c *gin.Context) {
+func (s *Server) HTTPCreateSMPolicy(c *gin.Context) {
 	var smPolicyContextData models.SmPolicyContextData
 	// step 1: retrieve http request body
 	requestBody, err := c.GetRawData()
@@ -80,7 +84,7 @@ func (s *Server) HTTPSmPoliciesPost(c *gin.Context) {
 }
 
 // SmPoliciesSmPolicyIdDeletePost -
-func (s *Server) HTTPSmPoliciesSmPolicyIdDeletePost(c *gin.Context) {
+func (s *Server) HTTPDeleteSMPolicy(c *gin.Context) {
 	smPolicyId := c.Params.ByName("smPolicyId")
 	if smPolicyId == "" {
 		problemDetails := &models.ProblemDetails{
@@ -94,7 +98,7 @@ func (s *Server) HTTPSmPoliciesSmPolicyIdDeletePost(c *gin.Context) {
 }
 
 // SmPoliciesSmPolicyIdGet -
-func (s *Server) HTTPSmPoliciesSmPolicyIDGet(c *gin.Context) {
+func (s *Server) HTTPGetSMPolicy(c *gin.Context) {
 	smPolicyId := c.Params.ByName("smPolicyId")
 	if smPolicyId == "" {
 		problemDetails := &models.ProblemDetails{
@@ -107,7 +111,7 @@ func (s *Server) HTTPSmPoliciesSmPolicyIDGet(c *gin.Context) {
 	s.Processor().HandleGetSmPolicyContextRequest(c, smPolicyId)
 }
 
-func (s *Server) HTTPSmPoliciesSmPolicyIdUpdatePost(c *gin.Context) {
+func (s *Server) HTTPUpdateSMPolicy(c *gin.Context) {
 	var smPolicyUpdateContextData models.SmPolicyUpdateContextData
 	// step 1: retrieve http request body
 	requestBody, err := c.GetRawData()
