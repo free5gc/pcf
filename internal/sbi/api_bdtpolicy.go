@@ -26,16 +26,19 @@ import (
 func (s *Server) getBdtPolicyRoutes() []Route {
 	return []Route{
 		{
+			Name:    "CreateBDTPolicy",
 			Method:  http.MethodPost,
 			Pattern: "/bdtpolicies",
 			APIFunc: s.HTTPCreateBDTPolicy,
 		},
 		{
+			Name:    "GetBDTPolicy",
 			Method:  http.MethodGet,
 			Pattern: "/bdtpolicies/:bdtPolicyId",
 			APIFunc: s.HTTPGetBDTPolicy,
 		},
 		{
+			Name:    "UpdateBDTPolicy",
 			Method:  http.MethodPatch,
 			Pattern: "/bdtpolicies/:bdtPolicyId",
 			APIFunc: s.HTTPUpdateBDTPolicy,
