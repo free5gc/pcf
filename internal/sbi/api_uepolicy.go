@@ -18,44 +18,44 @@ import (
 func (s *Server) getUePolicyRoutes() []Route {
 	return []Route{
 		{
+			Name:    "DeleteIndividualUEPolicyAssociation",
 			Method:  http.MethodDelete,
-			Pattern: "/policies/{polAssoId}",
-			APIFunc: s.PoliciesPolAssoIdDelete,
+			Pattern: "/policies/:polAssoId",
+			APIFunc: s.HTTPDeleteIndividualUEPolicyAssociation,
 		},
 		{
+			Name:    "ReadIndividualUEPolicyAssociation",
 			Method:  http.MethodGet,
-			Pattern: "/policies/{polAssoId}",
-			APIFunc: s.PoliciesPolAssoIdGet,
+			Pattern: "/policies/:polAssoId",
+			APIFunc: s.HTTPReadIndividualUEPolicyAssociation,
 		},
 		{
+			Name:    "ReportObservedEventTriggersForIndividualUEPolicyAssociation",
 			Method:  http.MethodPost,
-			Pattern: "/policies/{polAssoId}/update",
-			APIFunc: s.PoliciesPolAssoIdUpdatePost,
+			Pattern: "/policies/:polAssoId/update",
+			APIFunc: s.HTTPReportObservedEventTriggersForIndividualUEPolicyAssociation,
 		},
 		{
+			Name:    "CreateIndividualUEPolicyAssociation",
 			Method:  http.MethodPost,
 			Pattern: "/policies",
-			APIFunc: s.PoliciesPost,
+			APIFunc: s.HTTPCreateIndividualUEPolicyAssociation,
 		},
 	}
 }
 
-// PoliciesPolAssoIdDelete -
-func (s *Server) PoliciesPolAssoIdDelete(c *gin.Context) {
+func (s *Server) HTTPDeleteIndividualUEPolicyAssociation(c *gin.Context) {
 	c.JSON(http.StatusNotImplemented, nil)
 }
 
-// PoliciesPolAssoIdGet -
-func (s *Server) PoliciesPolAssoIdGet(c *gin.Context) {
+func (s *Server) HTTPReadIndividualUEPolicyAssociation(c *gin.Context) {
 	c.JSON(http.StatusNotImplemented, nil)
 }
 
-// PoliciesPolAssoIdUpdatePost -
-func (s *Server) PoliciesPolAssoIdUpdatePost(c *gin.Context) {
+func (s *Server) HTTPReportObservedEventTriggersForIndividualUEPolicyAssociation(c *gin.Context) {
 	c.JSON(http.StatusNotImplemented, nil)
 }
 
-// PoliciesPost -
-func (s *Server) PoliciesPost(c *gin.Context) {
+func (s *Server) HTTPCreateIndividualUEPolicyAssociation(c *gin.Context) {
 	c.JSON(http.StatusNotImplemented, nil)
 }
