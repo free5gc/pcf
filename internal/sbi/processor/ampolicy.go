@@ -10,6 +10,8 @@ import (
 
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/models"
+	"github.com/free5gc/openapi/pcf/AMPolicyControl"
+	"github.com/free5gc/openapi/udr/DataRepository"
 	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/internal/util"
@@ -226,22 +228,20 @@ func (p *Processor) PostPoliciesProcedure(polAssoId string,
 
 	if amPolicy == nil || amPolicy.AmPolicyData == nil {
 		client := util.GetNudrClient(udrUri)
-		var response *http.Response
-		amData, response, err := client.DefaultApi.PolicyDataUesUeIdAmDataGet(ctx, ue.Supi)
-		if err != nil || response == nil || response.StatusCode != http.StatusOK {
+		// var response *http.Response
+		request := DataRepository.ReadAccessAndMobilityPolicyDataRequest{
+			UeId: &ue.Supi,
+		}
+		response, err := client.AccessAndMobilityPolicyDataDocumentApi.ReadAccessAndMobilityPolicyData(ctx, &request)
+		if err != nil {
 			problemDetail := util.GetProblemDetail("Can't find UE AM Policy Data in UDR", util.USER_UNKNOWN)
 			logger.AmPolicyLog.Errorf("Can't find UE[%s] AM Policy Data in UDR", ue.Supi)
 			return nil, "", &problemDetail
 		}
-		defer func() {
-			if rspCloseErr := response.Body.Close(); rspCloseErr != nil {
-				logger.AmPolicyLog.Errorf("PolicyDataUesUeIdAmDataGet response cannot close: %+v", rspCloseErr)
-			}
-		}()
-		if amPolicy == nil {
+		if response == nil {
 			amPolicy = ue.NewUeAMPolicyData(assolId, policyAssociationRequest)
 		}
-		amPolicy.AmPolicyData = &amData
+		amPolicy.AmPolicyData = &response.AmPolicyData
 	}
 
 	// TODO: according to PCF Policy to determine ServAreaRes, Rfsp, SuppFeat
@@ -328,32 +328,16 @@ func (p *Processor) SendAMPolicyUpdateNotification(ue *pcf_context.UeContext,
 	client := util.GetNpcfAMPolicyCallbackClient()
 	uri := amPolicyData.NotificationUri
 	for uri != "" {
-		rsp, err := client.DefaultCallbackApi.PolicyUpdateNotification(ctx, uri, request)
+		req := AMPolicyControl.CreateIndividualAMPolicyAssociationPolicyUpdateNotificationPostRequest{
+			PcfAmPolicyControlPolicyUpdate: &request,
+		}
+		rsp, err := client.AMPolicyAssociationsCollectionApi.CreateIndividualAMPolicyAssociationPolicyUpdateNotificationPost(ctx, uri, &req)
 		if err != nil {
-			if rsp != nil && rsp.StatusCode != http.StatusNoContent {
-				logger.AmPolicyLog.Warnf("Policy Update Notification Error[%s]", rsp.Status)
-			} else {
-				logger.AmPolicyLog.Warnf("Policy Update Notification Failed[%s]", err.Error())
-			}
+			logger.AmPolicyLog.Warnf("Policy Update Notification Error[%s]", err.Error())
 			return
 		} else if rsp == nil {
 			logger.AmPolicyLog.Warnln("Policy Update Notification Failed[HTTP Response is nil]")
 			return
-		}
-		defer func() {
-			if rspCloseErr := rsp.Body.Close(); rspCloseErr != nil {
-				logger.AmPolicyLog.Errorf("PolicyUpdateNotification response cannot close: %+v", rspCloseErr)
-			}
-		}()
-		if rsp.StatusCode == http.StatusTemporaryRedirect {
-			// for redirect case, resend the notification to redirect target
-			uRI, err := rsp.Location()
-			if err != nil {
-				logger.AmPolicyLog.Warnln("Policy Update Notification Redirect Need Supply URI")
-				return
-			}
-			uri = uRI.String()
-			continue
 		}
 
 		logger.AmPolicyLog.Infoln("Policy Update Notification Success")
@@ -384,36 +368,15 @@ func (p *Processor) SendAMPolicyTerminationRequestNotification(ue *pcf_context.U
 	}
 
 	for uri != "" {
-		rsp, err := client.DefaultCallbackApi.PolicyAssocitionTerminationRequestNotification(
-			ctx, uri, request)
+		req := AMPolicyControl.CreateIndividualAMPolicyAssociationPolicyAssocitionTerminationRequestNotificationPostRequest{
+			PcfAmPolicyControlTerminationNotification: &request,
+		}
+		_, err := client.AMPolicyAssociationsCollectionApi.CreateIndividualAMPolicyAssociationPolicyAssocitionTerminationRequestNotificationPost(
+			ctx, uri, &req)
 		if err != nil {
-			if rsp != nil && rsp.StatusCode != http.StatusNoContent {
-				logger.AmPolicyLog.Warnf("Policy Assocition Termination Request Notification Error[%s]", rsp.Status)
-			} else {
-				logger.AmPolicyLog.Warnf("Policy Assocition Termination Request Notification Failed[%s]", err.Error())
-			}
-			return
-		} else if rsp == nil {
-			logger.AmPolicyLog.Warnln("Policy Assocition Termination Request Notification Failed[HTTP Response is nil]")
-			return
+			logger.AmPolicyLog.Warnf("Policy Assocition Termination Request Notification Error[%s]", err.Error())
 		}
-		defer func() {
-			if rspCloseErr := rsp.Body.Close(); rspCloseErr != nil {
-				logger.AmPolicyLog.Errorf(
-					"PolicyAssociationTerminationRequestNotification response body cannot close: %+v",
-					rspCloseErr)
-			}
-		}()
-		if rsp.StatusCode == http.StatusTemporaryRedirect {
-			// for redirect case, resend the notification to redirect target
-			uRI, err := rsp.Location()
-			if err != nil {
-				logger.AmPolicyLog.Warnln("Policy Assocition Termination Request Notification Redirect Need Supply URI")
-				return
-			}
-			uri = uRI.String()
-			continue
-		}
+
 		return
 	}
 }
