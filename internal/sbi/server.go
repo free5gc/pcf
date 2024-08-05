@@ -24,6 +24,7 @@ import (
 )
 
 type Route struct {
+	Name    string
 	Method  string
 	Pattern string
 	APIFunc gin.HandlerFunc
