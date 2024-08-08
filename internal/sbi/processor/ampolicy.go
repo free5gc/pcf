@@ -174,8 +174,10 @@ func (p *Processor) HandlePostPolicies(
 		// TODO: set gin header
 		c.Header("Location", locationHeader)
 		c.JSON(http.StatusCreated, response)
+		return
 	} else if problemDetails != nil {
 		c.JSON(int(problemDetails.Status), problemDetails)
+		return
 	}
 
 	problemDetails = &models.ProblemDetails{
