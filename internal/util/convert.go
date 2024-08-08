@@ -44,6 +44,7 @@ var policyTriggerArray = []models.PolicyControlRequestTrigger{
 // }
 
 // Convert Snssai form models to hexString(sst(2)+sd(6))
+// TODO: In R17 openapi, it's would be replace by openapi.SnssaiModelsToHex
 func SnssaiModelsToHex(snssai models.Snssai) string {
 	sst := fmt.Sprintf("%02x", snssai.Sst)
 	return sst + snssai.Sd

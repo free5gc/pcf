@@ -36,12 +36,13 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 	queryStrength := 2 // 2: case-insensitive, 3: case-sensitive
 	logger.SmPolicyLog.Tracef("Handle Create SM Policy Request")
 
-	if request.Supi == "" || request.SliceInfo == nil || len(request.SliceInfo.Sd) != 6 {
+	if request.Supi == "" || request.SliceInfo == nil {
 		problemDetail := util.GetProblemDetail("Errorneous/Missing Mandotory IE", util.ERROR_INITIAL_PARAMETERS)
 		logger.SmPolicyLog.Warnln("Errorneous/Missing Mandotory IE", util.ERROR_INITIAL_PARAMETERS)
 		c.JSON(int(problemDetail.Status), problemDetail)
 		return
 	}
+	logger.ProcLog.Debugf("Request SUPI:[%s], SNSSAI:[%v]", request.Supi, request.SliceInfo)
 
 	pcfSelf := p.Context()
 	var ue *pcf_context.UeContext
