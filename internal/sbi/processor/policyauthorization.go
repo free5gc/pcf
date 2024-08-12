@@ -11,6 +11,8 @@ import (
 
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/models"
+	"github.com/free5gc/openapi/pcf/PolicyAuthorization"
+	"github.com/free5gc/openapi/udr/DataRepository"
 	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/internal/util"
@@ -39,7 +41,7 @@ func transferAfRoutReqRmToAfRoutReq(AfRoutReqRm *models.AfRoutingRequirementRm) 
 func transferMedCompRmToMedComp(medCompRm *models.MediaComponentRm) *models.MediaComponent {
 	medSubComps := make(map[string]models.MediaSubComponent)
 	for id, medSubCompRm := range medCompRm.MedSubComps {
-		medSubComps[id] = models.MediaSubComponent(medSubCompRm)
+		medSubComps[id] = models.MediaSubComponent(*medSubCompRm)
 	}
 	medComp := models.MediaComponent{
 		AfAppId:     medCompRm.AfAppId,
@@ -306,7 +308,7 @@ func (p *Processor) postAppSessCtxProcedure(appSessCtx *models.AppSessionContext
 	}
 
 	// Event Subscription
-	eventSubs := make(map[models.AfEvent]models.AfNotifMethod)
+	eventSubs := make(map[models.PcfPolicyAuthorizationAfEvent]models.AfNotifMethod)
 	if ascReqData.EvSubsc != nil {
 		for _, subs := range ascReqData.EvSubsc.Events {
 			if subs.NotifMethod == "" {
@@ -316,14 +318,14 @@ func (p *Processor) postAppSessCtxProcedure(appSessCtx *models.AppSessionContext
 			eventSubs[subs.Event] = subs.NotifMethod
 			var trig models.PolicyControlRequestTrigger
 			switch subs.Event {
-			case models.AfEvent_ACCESS_TYPE_CHANGE:
+			case models.PcfPolicyAuthorizationAfEvent_ACCESS_TYPE_CHANGE:
 				trig = models.PolicyControlRequestTrigger_AC_TY_CH
 			// case models.AfEvent_FAILED_RESOURCES_ALLOCATION:
 			// 	// Subscription to Service Data Flow Deactivation
 			// 	trig = models.PolicyControlRequestTrigger_RES_RELEASE
-			case models.AfEvent_PLMN_CHG:
+			case models.PcfPolicyAuthorizationAfEvent_PLMN_CHG:
 				trig = models.PolicyControlRequestTrigger_PLMN_CH
-			case models.AfEvent_QOS_NOTIF:
+			case models.PcfPolicyAuthorizationAfEvent_QOS_NOTIF:
 				// Subscriptions to Service Data Flow QoS notification control
 				for _, pccRuleID := range relatedPccRuleIds {
 					pccRule := smPolicy.PolicyDecision.PccRules[pccRuleID]
@@ -334,10 +336,10 @@ func (p *Processor) postAppSessCtxProcedure(appSessCtx *models.AppSessionContext
 					}
 				}
 				trig = models.PolicyControlRequestTrigger_QOS_NOTIF
-			case models.AfEvent_SUCCESSFUL_RESOURCES_ALLOCATION:
+			case models.PcfPolicyAuthorizationAfEvent_SUCCESSFUL_RESOURCES_ALLOCATION:
 				// Subscription to resources allocation outcome
 				trig = models.PolicyControlRequestTrigger_SUCC_RES_ALLO
-			case models.AfEvent_USAGE_REPORT:
+			case models.PcfPolicyAuthorizationAfEvent_USAGE_REPORT:
 				trig = models.PolicyControlRequestTrigger_US_RE
 			default:
 				logger.PolicyAuthLog.Warn("AF Event is unknown")
@@ -389,27 +391,27 @@ func (p *Processor) postAppSessCtxProcedure(appSessCtx *models.AppSessionContext
 		data.RelatedPccRuleIds = relatedPccRuleIds
 		data.PccRuleIdMapToCompId = reverseStringMap(relatedPccRuleIds)
 	}
-	appSessCtx.EvsNotif = &models.EventsNotification{}
+	appSessCtx.EvsNotif = &models.PcfPolicyAuthorizationEventsNotification{}
 	// Set Event Subsciption related Data
 	if len(eventSubs) > 0 {
 		data.Events = eventSubs
 		data.EventUri = ascReqData.EvSubsc.NotifUri
-		if _, exist := eventSubs[models.AfEvent_PLMN_CHG]; exist {
-			afNotif := models.AfEventNotification{
-				Event: models.AfEvent_PLMN_CHG,
+		if _, exist := eventSubs[models.PcfPolicyAuthorizationAfEvent_PLMN_CHG]; exist {
+			afNotif := models.PcfPolicyAuthorizationAfEventNotification{
+				Event: models.PcfPolicyAuthorizationAfEvent_PLMN_CHG,
 			}
 			appSessCtx.EvsNotif.EvNotifs = append(appSessCtx.EvsNotif.EvNotifs, afNotif)
 			plmnID := smPolicy.PolicyContext.ServingNetwork
 			if plmnID != nil {
-				appSessCtx.EvsNotif.PlmnId = &models.PlmnId{
+				appSessCtx.EvsNotif.PlmnId = &models.PlmnIdNid{
 					Mcc: plmnID.Mcc,
 					Mnc: plmnID.Mnc,
 				}
 			}
 		}
-		if _, exist := eventSubs[models.AfEvent_ACCESS_TYPE_CHANGE]; exist {
-			afNotif := models.AfEventNotification{
-				Event: models.AfEvent_ACCESS_TYPE_CHANGE,
+		if _, exist := eventSubs[models.PcfPolicyAuthorizationAfEvent_ACCESS_TYPE_CHANGE]; exist {
+			afNotif := models.PcfPolicyAuthorizationAfEventNotification{
+				Event: models.PcfPolicyAuthorizationAfEvent_ACCESS_TYPE_CHANGE,
 			}
 			appSessCtx.EvsNotif.EvNotifs = append(appSessCtx.EvsNotif.EvNotifs, afNotif)
 			appSessCtx.EvsNotif.AccessType = smPolicy.PolicyContext.AccessType
@@ -438,7 +440,7 @@ func (p *Processor) postAppSessCtxProcedure(appSessCtx *models.AppSessionContext
 func (p *Processor) HandleDeleteAppSessionContext(
 	c *gin.Context,
 	appSessionId string,
-	eventsSubscReqData *models.EventsSubscReqData,
+	eventsSubscReqData *models.PcfPolicyAuthorizationEventsSubscReqData,
 ) {
 	logger.PolicyAuthLog.Infof("Handle Del AppSessions, AppSessionId[%s]", appSessionId)
 
@@ -472,7 +474,7 @@ func (p *Processor) HandleDeleteAppSessionContext(
 	// if appSession.AccUsage != nil {
 
 	// 	resp := models.AppSessionContext{
-	// 		EvsNotif: &models.EventsNotification{
+	// 		EvsNotif: &models.PcfPolicyAuthorizationEventsNotification{
 	// 			UsgRep: appSession.AccUsage,
 	// 		},
 	// 	}
@@ -558,13 +560,13 @@ func (p *Processor) HandleModAppSessionContext(
 		1) && util.CheckSuppFeat(smPolicy.PolicyDecision.SuppFeat, 1)
 	relatedPccRuleIds := make(map[string]string)
 	// Event Subscription
-	eventSubs := make(map[models.AfEvent]models.AfNotifMethod)
+	eventSubs := make(map[models.PcfPolicyAuthorizationAfEvent]models.AfNotifMethod)
 	updateSMpolicy := false
 
 	if appSessionContextUpdateData.MedComponents != nil {
 		precedence := getAvailablePrecedence(smPolicy.PolicyDecision.PccRules)
 		for compN, medCompRm := range appSessionContextUpdateData.MedComponents {
-			medComp := transferMedCompRmToMedComp(&medCompRm)
+			medComp := transferMedCompRmToMedComp(medCompRm)
 			removeMediaComp(appSession, compN)
 			if zero.IsZero(medComp) {
 				// remove MediaComp(media Comp is null)
@@ -680,14 +682,14 @@ func (p *Processor) HandleModAppSessionContext(
 			eventSubs[subs.Event] = subs.NotifMethod
 			var trig models.PolicyControlRequestTrigger
 			switch subs.Event {
-			case models.AfEvent_ACCESS_TYPE_CHANGE:
+			case models.PcfPolicyAuthorizationAfEvent_ACCESS_TYPE_CHANGE:
 				trig = models.PolicyControlRequestTrigger_AC_TY_CH
 			// case models.AfEvent_FAILED_RESOURCES_ALLOCATION:
 			// 	// Subscription to Service Data Flow Deactivation
 			// 	trig = models.PolicyControlRequestTrigger_SUCC_RES_ALLO
-			case models.AfEvent_PLMN_CHG:
+			case models.PcfPolicyAuthorizationAfEvent_PLMN_CHG:
 				trig = models.PolicyControlRequestTrigger_PLMN_CH
-			case models.AfEvent_QOS_NOTIF:
+			case models.PcfPolicyAuthorizationAfEvent_QOS_NOTIF:
 				// Subscriptions to Service Data Flow QoS notification control
 				for _, pccRuleID := range relatedPccRuleIds {
 					pccRule := smPolicy.PolicyDecision.PccRules[pccRuleID]
@@ -698,10 +700,10 @@ func (p *Processor) HandleModAppSessionContext(
 					}
 				}
 				trig = models.PolicyControlRequestTrigger_QOS_NOTIF
-			case models.AfEvent_SUCCESSFUL_RESOURCES_ALLOCATION:
+			case models.PcfPolicyAuthorizationAfEvent_SUCCESSFUL_RESOURCES_ALLOCATION:
 				// Subscription to resources allocation outcome
 				trig = models.PolicyControlRequestTrigger_SUCC_RES_ALLO
-			case models.AfEvent_USAGE_REPORT:
+			case models.PcfPolicyAuthorizationAfEvent_USAGE_REPORT:
 				trig = models.PolicyControlRequestTrigger_US_RE
 			default:
 				logger.PolicyAuthLog.Warn("AF Event is unknown")
@@ -714,7 +716,7 @@ func (p *Processor) HandleModAppSessionContext(
 		}
 		// update Context
 		if appSessCtx.AscReqData.EvSubsc == nil {
-			appSessCtx.AscReqData.EvSubsc = new(models.EventsSubscReqData)
+			appSessCtx.AscReqData.EvSubsc = new(models.PcfPolicyAuthorizationEventsSubscReqData)
 		}
 		appSessCtx.AscReqData.EvSubsc.Events = appSessionContextUpdateData.EvSubsc.Events
 		if appSessionContextUpdateData.EvSubsc.NotifUri != "" {
@@ -755,26 +757,26 @@ func (p *Processor) HandleModAppSessionContext(
 		appSession.RelatedPccRuleIds = relatedPccRuleIds
 		appSession.PccRuleIdMapToCompId = reverseStringMap(relatedPccRuleIds)
 	}
-	appSessCtx.EvsNotif = &models.EventsNotification{}
+	appSessCtx.EvsNotif = &models.PcfPolicyAuthorizationEventsNotification{}
 	// Set Event Subsciption related Data
 	if len(eventSubs) > 0 {
 		appSession.Events = eventSubs
-		if _, exist := eventSubs[models.AfEvent_PLMN_CHG]; exist {
-			afNotif := models.AfEventNotification{
-				Event: models.AfEvent_PLMN_CHG,
+		if _, exist := eventSubs[models.PcfPolicyAuthorizationAfEvent_PLMN_CHG]; exist {
+			afNotif := models.PcfPolicyAuthorizationAfEventNotification{
+				Event: models.PcfPolicyAuthorizationAfEvent_PLMN_CHG,
 			}
 			appSessCtx.EvsNotif.EvNotifs = append(appSessCtx.EvsNotif.EvNotifs, afNotif)
 			plmnID := smPolicy.PolicyContext.ServingNetwork
 			if plmnID != nil {
-				appSessCtx.EvsNotif.PlmnId = &models.PlmnId{
+				appSessCtx.EvsNotif.PlmnId = &models.PlmnIdNid{
 					Mcc: plmnID.Mcc,
 					Mnc: plmnID.Mnc,
 				}
 			}
 		}
-		if _, exist := eventSubs[models.AfEvent_ACCESS_TYPE_CHANGE]; exist {
-			afNotif := models.AfEventNotification{
-				Event: models.AfEvent_ACCESS_TYPE_CHANGE,
+		if _, exist := eventSubs[models.PcfPolicyAuthorizationAfEvent_ACCESS_TYPE_CHANGE]; exist {
+			afNotif := models.PcfPolicyAuthorizationAfEventNotification{
+				Event: models.PcfPolicyAuthorizationAfEvent_ACCESS_TYPE_CHANGE,
 			}
 			appSessCtx.EvsNotif.EvNotifs = append(appSessCtx.EvsNotif.EvNotifs, afNotif)
 			appSessCtx.EvsNotif.AccessType = smPolicy.PolicyContext.AccessType
@@ -846,7 +848,7 @@ func (p *Processor) HandleDeleteEventsSubscContext(
 func (p *Processor) HandleUpdateEventsSubscContext(
 	c *gin.Context,
 	appSessionId string,
-	eventsSubscReqData models.EventsSubscReqData,
+	eventsSubscReqData models.PcfPolicyAuthorizationEventsSubscReqData,
 ) {
 	logger.PolicyAuthLog.Tracef("Handle Put AppSessions Events Subsc, AppSessionId[%s]", appSessionId)
 
@@ -862,7 +864,7 @@ func (p *Processor) HandleUpdateEventsSubscContext(
 		return
 	}
 	smPolicy := appSession.SmPolicyData
-	eventSubs := make(map[models.AfEvent]models.AfNotifMethod)
+	eventSubs := make(map[models.PcfPolicyAuthorizationAfEvent]models.AfNotifMethod)
 
 	updataSmPolicy := false
 	created := false
@@ -878,14 +880,14 @@ func (p *Processor) HandleUpdateEventsSubscContext(
 		eventSubs[subs.Event] = subs.NotifMethod
 		var trig models.PolicyControlRequestTrigger
 		switch subs.Event {
-		case models.AfEvent_ACCESS_TYPE_CHANGE:
+		case models.PcfPolicyAuthorizationAfEvent_ACCESS_TYPE_CHANGE:
 			trig = models.PolicyControlRequestTrigger_AC_TY_CH
 		// case models.AfEvent_FAILED_RESOURCES_ALLOCATION:
 		// 	// Subscription to Service Data Flow Deactivation
 		// 	trig = models.PolicyControlRequestTrigger_SUCC_RES_ALLO
-		case models.AfEvent_PLMN_CHG:
+		case models.PcfPolicyAuthorizationAfEvent_PLMN_CHG:
 			trig = models.PolicyControlRequestTrigger_PLMN_CH
-		case models.AfEvent_QOS_NOTIF:
+		case models.PcfPolicyAuthorizationAfEvent_QOS_NOTIF:
 			// Subscriptions to Service Data Flow QoS notification control
 			for _, pccRuleID := range appSession.RelatedPccRuleIds {
 				pccRule := smPolicy.PolicyDecision.PccRules[pccRuleID]
@@ -896,10 +898,10 @@ func (p *Processor) HandleUpdateEventsSubscContext(
 				}
 			}
 			trig = models.PolicyControlRequestTrigger_QOS_NOTIF
-		case models.AfEvent_SUCCESSFUL_RESOURCES_ALLOCATION:
+		case models.PcfPolicyAuthorizationAfEvent_SUCCESSFUL_RESOURCES_ALLOCATION:
 			// Subscription to resources allocation outcome
 			trig = models.PolicyControlRequestTrigger_SUCC_RES_ALLO
-		case models.AfEvent_USAGE_REPORT:
+		case models.PcfPolicyAuthorizationAfEvent_USAGE_REPORT:
 			trig = models.PolicyControlRequestTrigger_US_RE
 		default:
 			logger.PolicyAuthLog.Warn("AF Event is unknown")
@@ -913,7 +915,7 @@ func (p *Processor) HandleUpdateEventsSubscContext(
 	appSessCtx := appSession.AppSessionContext
 	// update Context
 	if appSessCtx.AscReqData.EvSubsc == nil {
-		appSessCtx.AscReqData.EvSubsc = new(models.EventsSubscReqData)
+		appSessCtx.AscReqData.EvSubsc = new(models.PcfPolicyAuthorizationEventsSubscReqData)
 	}
 	appSessCtx.AscReqData.EvSubsc.Events = eventsSubscReqData.Events
 	appSessCtx.AscReqData.EvSubsc.UsgThres = eventsSubscReqData.UsgThres
@@ -923,30 +925,27 @@ func (p *Processor) HandleUpdateEventsSubscContext(
 	appSession.EventUri = eventsSubscReqData.NotifUri
 	appSession.Events = eventSubs
 
-	resp := models.UpdateEventsSubscResponse{
-		EvSubsc: eventsSubscReqData,
-	}
-	appSessCtx.EvsNotif = &models.EventsNotification{
+	appSessCtx.EvsNotif = &models.PcfPolicyAuthorizationEventsNotification{
 		EvSubsUri: eventsSubscReqData.NotifUri,
 	}
 	// Set Event Subsciption related Data
 	if len(eventSubs) > 0 {
-		if _, exist := eventSubs[models.AfEvent_PLMN_CHG]; exist {
-			afNotif := models.AfEventNotification{
-				Event: models.AfEvent_PLMN_CHG,
+		if _, exist := eventSubs[models.PcfPolicyAuthorizationAfEvent_PLMN_CHG]; exist {
+			afNotif := models.PcfPolicyAuthorizationAfEventNotification{
+				Event: models.PcfPolicyAuthorizationAfEvent_PLMN_CHG,
 			}
 			appSessCtx.EvsNotif.EvNotifs = append(appSessCtx.EvsNotif.EvNotifs, afNotif)
 			plmnID := smPolicy.PolicyContext.ServingNetwork
 			if plmnID != nil {
-				appSessCtx.EvsNotif.PlmnId = &models.PlmnId{
+				appSessCtx.EvsNotif.PlmnId = &models.PlmnIdNid{
 					Mcc: plmnID.Mcc,
 					Mnc: plmnID.Mnc,
 				}
 			}
 		}
-		if _, exist := eventSubs[models.AfEvent_ACCESS_TYPE_CHANGE]; exist {
-			afNotif := models.AfEventNotification{
-				Event: models.AfEvent_ACCESS_TYPE_CHANGE,
+		if _, exist := eventSubs[models.PcfPolicyAuthorizationAfEvent_ACCESS_TYPE_CHANGE]; exist {
+			afNotif := models.PcfPolicyAuthorizationAfEventNotification{
+				Event: models.PcfPolicyAuthorizationAfEvent_ACCESS_TYPE_CHANGE,
 			}
 			appSessCtx.EvsNotif.EvNotifs = append(appSessCtx.EvsNotif.EvNotifs, afNotif)
 			appSessCtx.EvsNotif.AccessType = smPolicy.PolicyContext.AccessType
@@ -957,7 +956,27 @@ func (p *Processor) HandleUpdateEventsSubscContext(
 		appSessCtx.EvsNotif = nil
 	}
 
-	resp.EvsNotif = appSessCtx.EvsNotif
+	//r15 : UpdateEventsSubscResponse => EvsNotif和eventsSubscReqData裡面的東西被拆出來放在 r17 : EventsSubscPutData裡面，
+	resp := models.EventsSubscPutData{
+		Events:                    eventsSubscReqData.Events,
+		NotifUri:                  eventsSubscReqData.NotifUri,
+		ReqQosMonParams:           eventsSubscReqData.ReqQosMonParams,
+		QosMon:                    eventsSubscReqData.QosMon,
+		ReqAnis:                   eventsSubscReqData.ReqAnis,
+		UsgThres:                  eventsSubscReqData.UsgThres,
+		NotifCorreId:              eventsSubscReqData.NotifCorreId,
+		AfAppIds:                  eventsSubscReqData.AfAppIds,
+		DirectNotifInd:            eventsSubscReqData.DirectNotifInd,
+		AccessType:                appSessCtx.EvsNotif.AccessType,
+		AnGwAddr:                  appSessCtx.EvsNotif.AnGwAddr,
+		EvSubsUri:                 appSessCtx.EvsNotif.EvSubsUri,
+		EvNotifs:                  appSessCtx.EvsNotif.EvNotifs,
+		FailedResourcAllocReports: appSessCtx.EvsNotif.FailedResourcAllocReports,
+		PlmnId:                    appSessCtx.EvsNotif.PlmnId,
+		QncReports:                appSessCtx.EvsNotif.QncReports,
+		RatType:                   appSessCtx.EvsNotif.RatType,
+		UsgRep:                    appSessCtx.EvsNotif.UsgRep,
+	}
 
 	changed := appSession.SmPolicyData.ArrangeExistEventSubscription()
 
@@ -977,7 +996,7 @@ func (p *Processor) HandleUpdateEventsSubscContext(
 		logger.PolicyAuthLog.Tracef("App Session Id[%s] Create Subscription", appSessionId)
 		c.Header("Location", locationHeader)
 		c.JSON(http.StatusCreated, resp)
-	} else if resp.EvsNotif != nil {
+	} else if appSessCtx.EvsNotif != nil {
 		logger.PolicyAuthLog.Tracef("App Session Id[%s] Modify Subscription", appSessionId)
 		c.JSON(http.StatusOK, resp)
 	} else {
@@ -987,7 +1006,7 @@ func (p *Processor) HandleUpdateEventsSubscContext(
 }
 
 func (p *Processor) SendAppSessionEventNotification(appSession *pcf_context.AppSessionData,
-	request models.EventsNotification,
+	request models.PcfPolicyAuthorizationEventsNotification,
 ) {
 	logger.PolicyAuthLog.Tracef("Send App Session Event Notification")
 	if appSession == nil {
@@ -997,7 +1016,7 @@ func (p *Processor) SendAppSessionEventNotification(appSession *pcf_context.AppS
 	uri := appSession.EventUri
 
 	if uri != "" {
-		ctx, _, err := p.Context().GetTokenCtx(models.ServiceName_NPCF_POLICYAUTHORIZATION, models.NfType_PCF)
+		ctx, _, err := p.Context().GetTokenCtx(models.ServiceName_NPCF_POLICYAUTHORIZATION, models.NrfNfManagementNfType_PCF)
 		if err != nil {
 			return
 		}
@@ -1005,11 +1024,14 @@ func (p *Processor) SendAppSessionEventNotification(appSession *pcf_context.AppS
 		request.EvSubsUri = fmt.Sprintf("%s/events-subscription",
 			util.GetResourceUri(models.ServiceName_NPCF_POLICYAUTHORIZATION, appSession.AppSessionId))
 		client := util.GetNpcfPolicyAuthorizationCallbackClient()
-		httpResponse, err := client.PolicyAuthorizationEventNotificationApi.PolicyAuthorizationEventNotification(
-			ctx, uri, request)
+		req := PolicyAuthorization.UpdateEventsSubscEventNotificationPostRequest{
+			PcfPolicyAuthorizationEventsNotification: &request,
+		}
+		httpResponse, err := client.EventsSubscriptionDocumentApi.UpdateEventsSubscEventNotificationPost(
+			ctx, uri, &req)
 		if err != nil {
-			if httpResponse != nil {
-				logger.PolicyAuthLog.Warnf("Send App Session Event Notification Error[%s]", httpResponse.Status)
+			if httpResponse == nil {
+				logger.PolicyAuthLog.Warnf("Send App Session Event Notification Error")
 			} else {
 				logger.PolicyAuthLog.Warnf("Send App Session Event Notification Failed[%s]", err.Error())
 			}
@@ -1017,18 +1039,6 @@ func (p *Processor) SendAppSessionEventNotification(appSession *pcf_context.AppS
 		} else if httpResponse == nil {
 			logger.PolicyAuthLog.Warnln("Send App Session Event Notification Failed[HTTP Response is nil]")
 			return
-		}
-		defer func() {
-			if rspCloseErr := httpResponse.Body.Close(); rspCloseErr != nil {
-				logger.PolicyAuthLog.Errorf(
-					"PolicyAuthorizationEventNotification response body cannot close: %+v",
-					rspCloseErr)
-			}
-		}()
-		if httpResponse.StatusCode != http.StatusOK && httpResponse.StatusCode != http.StatusNoContent {
-			logger.PolicyAuthLog.Warnf("Send App Session Event Notification Failed")
-		} else {
-			logger.PolicyAuthLog.Tracef("Send App Session Event Notification Success")
 		}
 	}
 }
@@ -1042,18 +1052,21 @@ func (p *Processor) SendAppSessionTermination(appSession *pcf_context.AppSession
 	uri := appSession.AppSessionContext.AscReqData.NotifUri
 
 	if uri != "" {
-		ctx, _, err := p.Context().GetTokenCtx(models.ServiceName_NPCF_POLICYAUTHORIZATION, models.NfType_PCF)
+		ctx, _, err := p.Context().GetTokenCtx(models.ServiceName_NPCF_POLICYAUTHORIZATION, models.NrfNfManagementNfType_PCF)
 		if err != nil {
 			return
 		}
 
 		request.ResUri = util.GetResourceUri(models.ServiceName_NPCF_POLICYAUTHORIZATION, appSession.AppSessionId)
 		client := util.GetNpcfPolicyAuthorizationCallbackClient()
-		httpResponse, err := client.PolicyAuthorizationTerminateRequestApi.PolicyAuthorizationTerminateRequest(
-			ctx, uri, request)
+		req := PolicyAuthorization.PostAppSessionsTerminationRequestPostRequest{
+			TerminationInfo: &request,
+		}
+		httpResponse, err := client.ApplicationSessionsCollectionApi.PostAppSessionsTerminationRequestPost(
+			ctx, uri, &req)
 		if err != nil {
 			if httpResponse != nil {
-				logger.PolicyAuthLog.Warnf("Send App Session Termination Error[%s]", httpResponse.Status)
+				logger.PolicyAuthLog.Warnf("Send App Session Termination Error")
 			} else {
 				logger.PolicyAuthLog.Warnf("Send App Session Termination Failed[%s]", err.Error())
 			}
@@ -1061,17 +1074,6 @@ func (p *Processor) SendAppSessionTermination(appSession *pcf_context.AppSession
 		} else if httpResponse == nil {
 			logger.PolicyAuthLog.Warnln("Send App Session Termination Failed[HTTP Response is nil]")
 			return
-		}
-		defer func() {
-			if rspCloseErr := httpResponse.Body.Close(); rspCloseErr != nil {
-				logger.PolicyAuthLog.Errorf(
-					"PolicyAuthorizationTerminateRequest response body cannot close: %+v", rspCloseErr)
-			}
-		}()
-		if httpResponse.StatusCode != http.StatusOK && httpResponse.StatusCode != http.StatusNoContent {
-			logger.PolicyAuthLog.Warnf("Send App Session Termination Failed")
-		} else {
-			logger.PolicyAuthLog.Tracef("Send App Session Termination Success")
 		}
 	}
 }
@@ -1089,41 +1091,31 @@ func (p *Processor) handleBDTPolicyInd(pcfSelf *pcf_context.PCFContext,
 		requestSuppFeat = tempRequestSuppFeat
 	}
 	respData := models.AppSessionContextRespData{
-		ServAuthInfo: models.ServAuthInfo_NOT_KNOWN,
+		ServAuthInfo: models.ServAuthInfo_TP_NOT_KNOWN,
 		SuppFeat: pcfSelf.PcfSuppFeats[models.ServiceName_NPCF_POLICYAUTHORIZATION].NegotiateWith(
 			requestSuppFeat).String(),
 	}
 
-	ctx, _, err := p.Context().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
+	ctx, _, err := p.Context().GetTokenCtx(models.ServiceName_NUDR_DR, models.NrfNfManagementNfType_UDR)
 	if err != nil {
 		return err
 	}
 
 	client := util.GetNudrClient(p.getDefaultUdrUri(pcfSelf))
-	bdtData, resp, err1 := client.DefaultApi.PolicyDataBdtDataBdtReferenceIdGet(ctx, req.BdtRefId)
+	readBdtDataReq := DataRepository.ReadIndividualBdtDataRequest{
+		BdtReferenceId: &req.BdtRefId,
+	}
+	resp, err1 := client.IndividualBdtDataDocumentApi.ReadIndividualBdtData(ctx, &readBdtDataReq)
+	bdtData := resp.BdtData
 	if err1 != nil {
 		return fmt.Errorf("UDR Get BdtData error[%s]", err1.Error())
-	} else if resp == nil || resp.StatusCode != http.StatusOK {
+	} else if resp == nil {
 		return fmt.Errorf("UDR Get BdtData error")
 	} else {
-		defer func() {
-			if rspCloseErr := resp.Body.Close(); rspCloseErr != nil {
-				logger.PolicyAuthLog.Errorf(
-					"PolicyDataBdtDataBdtReferenceIdGet response body cannot close: %+v", rspCloseErr)
-			}
-		}()
-		startTime, err1 := time.Parse(util.TimeFormat, bdtData.TransPolicy.RecTimeInt.StartTime)
-		if err1 != nil {
-			return err1
-		}
-		stopTime, err1 := time.Parse(util.TimeFormat, bdtData.TransPolicy.RecTimeInt.StopTime)
-		if err1 != nil {
-			return err1
-		}
-		if startTime.After(time.Now()) {
-			respData.ServAuthInfo = models.ServAuthInfo_NOT_YET_OCURRED
-		} else if stopTime.Before(time.Now()) {
-			respData.ServAuthInfo = models.ServAuthInfo_EXPIRED
+		if bdtData.TransPolicy.RecTimeInt.StartTime.After(time.Now()) {
+			respData.ServAuthInfo = models.ServAuthInfo_TP_NOT_YET_OCURRED
+		} else if bdtData.TransPolicy.RecTimeInt.StopTime.Before(time.Now()) {
+			respData.ServAuthInfo = models.ServAuthInfo_TP_EXPIRED
 		}
 	}
 	appSessCtx.AscRespData = &respData
@@ -1298,7 +1290,7 @@ func getFlowInfos(subComp *models.MediaSubComponent) ([]models.FlowInformation, 
 		}
 		flowInfo := models.FlowInformation{
 			FlowDescription:   flowDesc,
-			FlowDirection:     models.FlowDirectionRm(flowDir),
+			FlowDirection:     models.FlowDirection(flowDir),
 			PacketFilterUsage: statusUsage[flowDir],
 			TosTrafficClass:   subComp.TosTrCl,
 		}
@@ -1647,10 +1639,10 @@ func threshRmToThresh(threshrm *models.UsageThresholdRm) *models.UsageThreshold 
 	}
 }
 
-func extractUmData(umID string, eventSubs map[models.AfEvent]models.AfNotifMethod,
+func extractUmData(umID string, eventSubs map[models.PcfPolicyAuthorizationAfEvent]models.AfNotifMethod,
 	threshold *models.UsageThreshold,
 ) (umData *models.UsageMonitoringData, err error) {
-	if _, umExist := eventSubs[models.AfEvent_USAGE_REPORT]; umExist {
+	if _, umExist := eventSubs[models.PcfPolicyAuthorizationAfEvent_USAGE_REPORT]; umExist {
 		if threshold == nil {
 			return nil, fmt.Errorf("UsageThreshold is nil in USAGE REPORT Subscription")
 		} else {
