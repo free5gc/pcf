@@ -94,7 +94,7 @@ func (s *Server) HTTPGetBDTPolicy(c *gin.Context) {
 
 // UpdateBDTPolicy - Update an Individual BDT policy
 func (s *Server) HTTPUpdateBDTPolicy(c *gin.Context) {
-	var bdtPolicyDataPatch models.BdtPolicyDataPatch
+	var bdtPolicyDataPatch models.PcfBdtPolicyControlBdtPolicyDataPatch
 	// step 1: retrieve http request body
 	requestBody, err := c.GetRawData()
 	if err != nil {
