@@ -239,12 +239,21 @@ func (p *Processor) getDefaultUdrUri(context *pcf_context.PCFContext) string {
 	param := NFDiscovery.SearchNFInstancesRequest{
 		ServiceNames: []models.ServiceName{models.ServiceName_NUDR_DR},
 	}
-	resp, err := p.Consumer().SendSearchNFInstances(context.NrfUri, models.NrfNfManagementNfType_UDR, models.NrfNfManagementNfType_PCF, param)
+	resp, err := p.Consumer().SendSearchNFInstances(
+		context.NrfUri,
+		models.NrfNfManagementNfType_UDR,
+		models.NrfNfManagementNfType_PCF,
+		param,
+	)
 	if err != nil {
 		return ""
 	}
 	for _, nfProfile := range resp.NfInstances {
-		udruri := util.SearchNFServiceUri(nfProfile, models.ServiceName_NUDR_DR, models.NfServiceStatus_REGISTERED)
+		udruri := util.SearchNFServiceUri(
+			nfProfile,
+			models.ServiceName_NUDR_DR,
+			models.NfServiceStatus_REGISTERED,
+		)
 		if udruri != "" {
 			return udruri
 		}
@@ -253,7 +262,10 @@ func (p *Processor) getDefaultUdrUri(context *pcf_context.PCFContext) string {
 }
 
 // get default background data transfer policy
-func getDefaultTransferPolicy(transferPolicyId int32, timeWindow models.TimeWindow) *models.PcfBdtPolicyControlTransferPolicy {
+func getDefaultTransferPolicy(
+	transferPolicyId int32,
+	timeWindow models.TimeWindow,
+) *models.PcfBdtPolicyControlTransferPolicy {
 	return &models.PcfBdtPolicyControlTransferPolicy{
 		TransPolicyId: transferPolicyId,
 		RecTimeInt:    &timeWindow,
