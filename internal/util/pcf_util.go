@@ -104,13 +104,19 @@ func GetDefaultDataRate() models.UsageThreshold {
 
 func GetDefaultTime() models.TimeWindow {
 	var timeWindow models.TimeWindow
-	startTime, _ := time.Parse(time.RFC3339, time.Now().Format(time.RFC3339))
+	startTime, err := time.Parse(time.RFC3339, time.Now().Format(time.RFC3339))
+	if err != nil {
+		logger.UtilLog.Errorf("startTime parsing error: %+v", err)
+	}
 	timeWindow.StartTime = &startTime
 	lease, err := time.ParseDuration("720h")
 	if err != nil {
 		logger.UtilLog.Errorf("ParseDuration error: %+v", err)
 	}
-	stopTime, _ := time.Parse(time.RFC3339, time.Now().Add(lease).Format(time.RFC3339))
+	stopTime, err := time.Parse(time.RFC3339, time.Now().Add(lease).Format(time.RFC3339))
+	if err != nil {
+		logger.UtilLog.Errorf("stopTime parsing error: %+v", err)
+	}
 	timeWindow.StopTime = &stopTime
 	return timeWindow
 }

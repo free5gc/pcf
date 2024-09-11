@@ -956,7 +956,7 @@ func (p *Processor) HandleUpdateEventsSubscContext(
 		appSessCtx.EvsNotif = nil
 	}
 
-	//r15 : UpdateEventsSubscResponse => EvsNotif和eventsSubscReqData裡面的東西被拆出來放在 r17 : EventsSubscPutData裡面，
+	// r15 : UpdateEventsSubscResponse => EvsNotif和eventsSubscReqData裡面的東西被拆出來放在 r17 : EventsSubscPutData裡面，
 	resp := models.EventsSubscPutData{
 		Events:                    eventsSubscReqData.Events,
 		NotifUri:                  eventsSubscReqData.NotifUri,
@@ -1290,7 +1290,7 @@ func getFlowInfos(subComp *models.MediaSubComponent) ([]models.FlowInformation, 
 		}
 		flowInfo := models.FlowInformation{
 			FlowDescription:   flowDesc,
-			FlowDirection:     models.FlowDirection(flowDir),
+			FlowDirection:     flowDir,
 			PacketFilterUsage: statusUsage[flowDir],
 			TosTrafficClass:   subComp.TosTrCl,
 		}

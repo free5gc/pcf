@@ -131,7 +131,7 @@ func ConvertPacketInfoToFlowInformation(infos []models.PacketFilterInfo) (flowIn
 			TosTrafficClass:   info.TosTrafficClass,
 			Spi:               info.Spi,
 			FlowLabel:         info.FlowLabel,
-			FlowDirection:     models.FlowDirection(info.FlowDirection),
+			FlowDirection:     info.FlowDirection,
 		}
 		flowInfos = append(flowInfos, flowInfo)
 	}

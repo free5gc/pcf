@@ -240,8 +240,11 @@ func (p *Processor) PostPoliciesProcedure(polAssoId string,
 		}
 		if response == nil {
 			amPolicy = ue.NewUeAMPolicyData(assolId, policyAssociationRequest)
+		} else {
+			if response.AmPolicyData.PraInfos != nil || response.AmPolicyData.SubscCats != nil {
+				amPolicy.AmPolicyData = &response.AmPolicyData
+			}
 		}
-		amPolicy.AmPolicyData = &response.AmPolicyData
 	}
 
 	// TODO: according to PCF Policy to determine ServAreaRes, Rfsp, SuppFeat
@@ -327,11 +330,14 @@ func (p *Processor) SendAMPolicyUpdateNotification(ue *pcf_context.UeContext,
 
 	client := util.GetNpcfAMPolicyCallbackClient()
 	uri := amPolicyData.NotificationUri
-	for uri != "" {
+	if uri != "" {
 		req := AMPolicyControl.CreateIndividualAMPolicyAssociationPolicyUpdateNotificationPostRequest{
 			PcfAmPolicyControlPolicyUpdate: &request,
 		}
-		rsp, err := client.AMPolicyAssociationsCollectionApi.CreateIndividualAMPolicyAssociationPolicyUpdateNotificationPost(ctx, uri, &req)
+		rsp, err := client.AMPolicyAssociationsCollectionApi.
+			CreateIndividualAMPolicyAssociationPolicyUpdateNotificationPost(
+				ctx, uri, &req,
+			)
 		if err != nil {
 			logger.AmPolicyLog.Warnf("Policy Update Notification Error[%s]", err.Error())
 			return
@@ -367,12 +373,14 @@ func (p *Processor) SendAMPolicyTerminationRequestNotification(ue *pcf_context.U
 		return
 	}
 
-	for uri != "" {
-		req := AMPolicyControl.CreateIndividualAMPolicyAssociationPolicyAssocitionTerminationRequestNotificationPostRequest{
+	if uri != "" {
+		req := AMPolicyControl.
+			CreateIndividualAMPolicyAssociationPolicyAssocitionTerminationRequestNotificationPostRequest{
 			PcfAmPolicyControlTerminationNotification: &request,
 		}
-		_, err := client.AMPolicyAssociationsCollectionApi.CreateIndividualAMPolicyAssociationPolicyAssocitionTerminationRequestNotificationPost(
-			ctx, uri, &req)
+		_, err := client.AMPolicyAssociationsCollectionApi.
+			CreateIndividualAMPolicyAssociationPolicyAssocitionTerminationRequestNotificationPost(
+				ctx, uri, &req)
 		if err != nil {
 			logger.AmPolicyLog.Warnf("Policy Assocition Termination Request Notification Error[%s]", err.Error())
 		}
