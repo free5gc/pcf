@@ -103,7 +103,10 @@ type UeSmPolicyData struct {
 }
 
 // NewUeAMPolicyData returns created UeAMPolicyData data and insert this data to Ue.AMPolicyData with assolId as key
-func (ue *UeContext) NewUeAMPolicyData(assolId string, req models.PcfAmPolicyControlPolicyAssociationRequest) *UeAMPolicyData {
+func (ue *UeContext) NewUeAMPolicyData(
+	assolId string,
+	req models.PcfAmPolicyControlPolicyAssociationRequest,
+) *UeAMPolicyData {
 	ue.Gpsi = req.Gpsi
 	ue.Pei = req.Pei
 	ue.GroupIds = req.GroupIds

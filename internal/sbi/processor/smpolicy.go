@@ -363,7 +363,8 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 	smPolicyData.PolicyDecision = &decision
 	// TODO: PCC rule, PraInfo ...
 	// Get Application Data Influence Data from UDR
-	// r15: ApplicationDataInfluenceDataGetParamOpts, r17: CreateOrReplaceIndividualInfluenceDataRequest || ReadInfluenceDataRequest
+	// r15: ApplicationDataInfluenceDataGetParamOpts
+	// r17: CreateOrReplaceIndividualInfluenceDataRequest || ReadInfluenceDataRequest
 	reqParam := DataRepository.ReadInfluenceDataRequest{
 		Dnns:             []string{request.Dnn},
 		Snssais:          []models.Snssai{*request.SliceInfo},
@@ -637,8 +638,6 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 	errCause := ""
 
 	// For App Session Notification
-	//SmPolicyUpdateContextData?
-	// models.PcfPolicyAuthorizationEventsNotification?
 	afEventsNotification := models.PcfPolicyAuthorizationEventsNotification{}
 	for _, trigger := range request.RepPolicyCtrlReqTriggers {
 		switch trigger {
@@ -904,9 +903,11 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 			}
 			afEventsNotification.EvNotifs = append(afEventsNotification.EvNotifs, afNotif)
 			for _, report := range request.QncReports {
-				afEventsNotification.QncReports = append(afEventsNotification.QncReports, models.PcfPolicyAuthorizationQosNotificationControlInfo{
-					NotifType: report.NotifType,
-				})
+				afEventsNotification.QncReports = append(
+					afEventsNotification.QncReports,
+					models.PcfPolicyAuthorizationQosNotificationControlInfo{
+						NotifType: report.NotifType,
+					})
 			}
 		case models.PolicyControlRequestTrigger_NO_CREDIT: // Out of Credit
 		case models.PolicyControlRequestTrigger_PRA_CH: // Presence Reporting (subsclause 4.2.6.5.6, 4.2.4.16, 5.8 in TS29512)
@@ -1193,10 +1194,10 @@ func (p *Processor) SendSMPolicyUpdateNotification(
 	_, err = client.SMPoliciesCollectionApi.SMPolicyUpdateNotification(ctx, uri, &req)
 
 	switch err.(type) {
-	case error:
-		logger.SmPolicyLog.Warnf("SM Policy Update Notification Failed[%s]", err.Error())
 	case openapi.GenericOpenAPIError:
 		logger.SmPolicyLog.Warnf("SM Policy Update Notification Error[%s]", err.Error())
+	case error:
+		logger.SmPolicyLog.Warnf("SM Policy Update Notification Failed[%s]", err.Error())
 	case nil:
 		logger.SmPolicyLog.Tracef("SM Policy Update Notification Success")
 	default:
@@ -1225,10 +1226,10 @@ func (p *Processor) SendSMPolicyTerminationRequestNotification(
 		SMPolicyTerminationRequestNotification(ctx, uri, &req)
 
 	switch err.(type) {
-	case error:
-		logger.SmPolicyLog.Warnf("SM Policy Termination Request Notification Failed[%s]", err.Error())
 	case openapi.GenericOpenAPIError:
 		logger.SmPolicyLog.Warnf("SM Policy Termination Request Notification Error[%s]", err.Error())
+	case error:
+		logger.SmPolicyLog.Warnf("SM Policy Termination Request Notification Failed[%s]", err.Error())
 	case nil:
 		logger.SmPolicyLog.Tracef("SM Policy Termination Request Notification Success")
 	default:

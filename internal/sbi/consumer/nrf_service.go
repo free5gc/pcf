@@ -149,7 +149,9 @@ func (s *nnrfService) SendNFInstancesAMF(nrfUri string, guami models.Guami, serv
 }
 
 // management
-func (s *nnrfService) BuildNFInstance(context *pcf_context.PCFContext) (profile models.NrfNfManagementNfProfile, err error) {
+func (s *nnrfService) BuildNFInstance(
+	context *pcf_context.PCFContext,
+) (profile models.NrfNfManagementNfProfile, err error) {
 	profile.NfInstanceId = context.NfId
 	profile.NfType = models.NrfNfManagementNfType_PCF
 	profile.NfStatus = models.NrfNfManagementNfStatus_REGISTERED
@@ -179,7 +181,7 @@ func (s *nnrfService) BuildNFInstance(context *pcf_context.PCFContext) (profile 
 	if context.Locality != "" {
 		profile.Locality = context.Locality
 	}
-	return
+	return profile, nil
 }
 
 func (s *nnrfService) SendRegisterNFInstance(ctx context.Context) (
@@ -202,7 +204,6 @@ func (s *nnrfService) SendRegisterNFInstance(ctx context.Context) (
 		NrfNfManagementNfProfile: &nfProfile,
 	}
 	for {
-
 		res, err = client.NFInstanceIDDocumentApi.RegisterNFInstance(ctx, req)
 		if err != nil || res == nil {
 			logger.ConsumerLog.Errorf("PCF register to NRF Error[%v]", err)
