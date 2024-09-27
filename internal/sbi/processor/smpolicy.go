@@ -206,6 +206,7 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 	}
 
 	chargingInterface, err := mongoapi.RestfulAPIGetOne(chargingDataColl, filterCharging, queryStrength)
+	var defaultChgData *models.ChargingData
 
 	if err != nil {
 		logger.SmPolicyLog.Errorf("Fail to get charging data to mongoDB err: %+v", err)
@@ -225,6 +226,7 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 			ReportingLevel: models.ReportingLevel_RAT_GR_LEVEL,
 			MeteringMethod: models.MeteringMethod_VOLUME,
 		}
+		defaultChgData = chgData
 
 		switch chargingInterface["chargingMethod"].(string) {
 		case "Online":
@@ -249,6 +251,8 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 
 		smPolicyData.ChargingIdGenerator++
 	}
+
+	chgDataMap := map[string]*models.ChargingData{}
 
 	logger.SmPolicyLog.Traceln("FlowRules for ueId:", ue.Supi, "snssai:", util.SnssaiModelsToHex(*request.SliceInfo))
 	for i, flowRule := range flowRulesInterface {
@@ -321,6 +325,7 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 					ReportingLevel: models.ReportingLevel_RAT_GR_LEVEL,
 					MeteringMethod: models.MeteringMethod_VOLUME,
 				}
+				chgDataMap[val] = chgData
 
 				switch chargingInterface["chargingMethod"].(string) {
 				case "Online":
@@ -386,6 +391,8 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 		var precedence int32 = 23
 		for _, tiData := range trafficInfluDatas {
 			pccRule := util.CreatePccRule(smPolicyData.PccRuleIdGenerator, precedence, nil, tiData.AfAppId)
+			// TODO: select charging data based on the filter (see chgDataMap)
+			util.SetPccRuleRelatedData(&decision, pccRule, nil, nil, defaultChgData, nil)
 			util.SetSmPolicyDecisionByTrafficInfluData(&decision, pccRule, tiData)
 			influenceID := getInfluenceID(tiData.ResUri)
 			if influenceID != "" {
