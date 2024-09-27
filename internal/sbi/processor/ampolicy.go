@@ -421,8 +421,8 @@ func (p *Processor) SendAMPolicyTerminationRequestNotification(ue *pcf_context.U
 
 // returns UDR Uri of Ue, if ue.UdrUri dose not exist, query NRF to get supported Udr Uri
 func (p *Processor) getUdrUri(ue *pcf_context.UeContext) string {
-	if ue.UdrUri != "" {
-		return ue.UdrUri
+	if ue.UdrUri == "" {
+		ue.UdrUri = p.Consumer().SendNFInstancesUDR(p.Context().NrfUri, ue.Supi)
 	}
-	return p.Consumer().SendNFInstancesUDR(p.Context().NrfUri, ue.Supi)
+	return ue.UdrUri
 }
