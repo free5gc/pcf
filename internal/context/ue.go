@@ -51,7 +51,7 @@ type UeAMPolicyData struct {
 	// TODO: AMF Status Change
 	AmfStatusUri string
 	Guami        *models.Guami
-	ServiveName  models.ServiceName
+	ServiceName  models.ServiceName
 	// TraceReq *TraceData
 	// Policy Association
 	Triggers    []models.PcfAmPolicyControlRequestTrigger
@@ -122,7 +122,7 @@ func (ue *UeContext) NewUeAMPolicyData(
 		Rfsp:              req.Rfsp,
 		Guami:             req.Guami,
 		UserLoc:           req.UserLoc,
-		ServiveName:       req.ServiveName,
+		ServiceName:       req.ServiveName,
 		PcfUe:             ue,
 	}
 	ue.AMPolicyData[assolId].Pras = make(map[string]models.PresenceInfo)
