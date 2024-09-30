@@ -226,7 +226,6 @@ func (p *Processor) PostPoliciesProcedure(polAssoId string,
 
 	if amPolicy == nil || amPolicy.AmPolicyData == nil {
 		client := util.GetNudrClient(udrUri)
-		// var response *http.Response
 		request := DataRepository.ReadAccessAndMobilityPolicyDataRequest{
 			UeId: &ue.Supi,
 		}

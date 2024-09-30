@@ -212,11 +212,10 @@ func (s *nnrfService) SendRegisterNFInstance(ctx context.Context) (
 		}
 		nf = res.NrfNfManagementNfProfile
 
-		// http.StatusOK
 		if res.Location == "" {
 			// NFUpdate
 			break
-		} else { // http.StatusCreated
+		} else {
 			// NFRegister
 			resourceUri := res.Location
 			resouceNrfUri = resourceUri[:strings.Index(resourceUri, "/nnrf-nfm/")]
