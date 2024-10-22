@@ -54,7 +54,7 @@ func (p *Processor) HandleUpdateBDTPolicyContextProcedure(
 	pcfSelf := p.Context()
 
 	var bdtPolicy *models.BdtPolicy
-	if value, ok := p.Context().BdtPolicyPool.Load(bdtPolicyID); ok {
+	if value, ok := pcfSelf.BdtPolicyPool.Load(bdtPolicyID); ok {
 		bdtPolicy = value.(*models.BdtPolicy)
 	} else {
 		// not found
@@ -77,18 +77,27 @@ func (p *Processor) HandleUpdateBDTPolicyContextProcedure(
 			if polReq.NwAreaInfo != nil {
 				bdtData.NwAreaInfo = polReq.NwAreaInfo
 			}
-			param := DataRepository.CreateIndividualBdtDataRequest{
-				BdtData: &bdtData,
-			}
-			client := util.GetNudrClient(p.getDefaultUdrUri(pcfSelf))
-			ctx, pd, err := p.Context().GetTokenCtx(models.ServiceName_NUDR_DR, models.NrfNfManagementNfType_UDR)
-			if err != nil {
+
+			udrUri := p.getDefaultUdrUri(pcfSelf)
+			if udrUri == "" {
+				// Can't find any UDR support this Ue
+				pd := &models.ProblemDetails{
+					Status: http.StatusServiceUnavailable,
+					Detail: "Can't find any UDR which supported to this PCF",
+				}
+				logger.BdtPolicyLog.Warnf(pd.Detail)
 				c.JSON(int(pd.Status), pd)
 				return
 			}
-			_, err = client.IndividualBdtDataDocumentApi.CreateIndividualBdtData(ctx, &param)
+			pd, err := p.Consumer().CreateBdtData(udrUri, &bdtData)
 			if err != nil {
 				logger.BdtPolicyLog.Warnf("UDR Put BdtDate error[%s]", err.Error())
+				c.JSON(http.StatusInternalServerError, err.Error())
+				return
+			} else if pd != nil {
+				logger.BdtPolicyLog.Warnf("UDR Put BdtDate fault[%s]", pd.Detail)
+				c.JSON(int(pd.Status), pd)
+				return
 			}
 
 			logger.BdtPolicyLog.Tracef("bdtPolicyID[%s] has Updated with SelTransPolicyId[%d]",
@@ -111,7 +120,7 @@ func (p *Processor) HandleCreateBDTPolicyContextRequest(
 	requestMsg models.BdtReqData,
 ) {
 	// step 1: log
-	logger.BdtPolicyLog.Infof("Handle CreateBDTPolicyContext")
+	logger.BdtPolicyLog.Infof("Handle CreateBdtPolicyContext")
 
 	var problemDetails *models.ProblemDetails
 
@@ -141,20 +150,10 @@ func (p *Processor) HandleCreateBDTPolicyContextRequest(
 		return
 	}
 	pcfSelf.DefaultUdrURI = udrUri
-	pcfSelf.SetDefaultUdrURI(udrUri)
 
 	// Query BDT DATA array from UDR
-	ctx, pd, err := p.Context().GetTokenCtx(models.ServiceName_NUDR_DR, models.NrfNfManagementNfType_UDR)
-	if err != nil {
-		c.JSON(int(pd.Status), pd)
-		return
-	}
-
-	client := util.GetNudrClient(udrUri)
 	req := DataRepository.ReadBdtDataRequest{}
-	resp, err := client.BdtDataStoreApi.ReadBdtData(ctx, &req)
-	bdtDatas := resp.BdtData
-
+	resp, problemDetails, err := p.Consumer().CreateBdtPolicyContext(udrUri, &req)
 	if err != nil {
 		problemDetails = &models.ProblemDetails{
 			Status: http.StatusServiceUnavailable,
@@ -163,7 +162,12 @@ func (p *Processor) HandleCreateBDTPolicyContextRequest(
 		logger.BdtPolicyLog.Warnf("Query to UDR failed")
 		c.JSON(int(problemDetails.Status), problemDetails)
 		return
+	} else if problemDetails != nil {
+		c.JSON(int(problemDetails.Status), problemDetails)
+		return
 	}
+
+	bdtDatas := resp.BdtData
 	// TODO: decide BDT Policy from other bdt policy data
 	response.BdtReqData = deepcopy.Copy(requestMsg).(*models.BdtReqData)
 	var bdtData *models.BdtData
@@ -210,22 +214,20 @@ func (p *Processor) HandleCreateBDTPolicyContextRequest(
 	pcfSelf.BdtPolicyPool.Store(bdtPolicyID, response)
 
 	// Update UDR BDT Data(PUT)
-	param := DataRepository.CreateIndividualBdtDataRequest{
-		BdtData: bdtData,
-	}
-
-	if _, rspErr := client.IndividualBdtDataDocumentApi.CreateIndividualBdtData(ctx,
-		&param); rspErr != nil {
-		logger.BdtPolicyLog.Warnf("UDR Put BdtDate error[%s]", rspErr.Error())
+	problemDetails, err = p.Consumer().CreateBdtData(udrUri, bdtData)
+	if err != nil {
+		logger.BdtPolicyLog.Warnf("UDR Put BdtDate error[%s]", err.Error())
+		c.JSON(http.StatusInternalServerError, err.Error())
+		return
+	} else if problemDetails != nil {
+		logger.BdtPolicyLog.Warnf("UDR Put BdtDate fault[%s]", problemDetails.Detail)
+		c.JSON(int(problemDetails.Status), problemDetails)
+		return
 	}
 
 	locationHeader := util.GetResourceUri(models.ServiceName_NPCF_BDTPOLICYCONTROL, bdtPolicyID)
 	logger.BdtPolicyLog.Tracef("BDT Policy Id[%s] Create", bdtPolicyID)
 
-	if problemDetails != nil {
-		c.JSON(int(problemDetails.Status), problemDetails)
-		return
-	}
 	c.Header("Location", locationHeader)
 	c.JSON(http.StatusCreated, response)
 }

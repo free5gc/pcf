@@ -246,9 +246,7 @@ func (s *nnrfService) SendRegisterNFInstance(ctx context.Context) (
 				}
 
 				finish = true
-
 			}
-
 		}
 	}
 
