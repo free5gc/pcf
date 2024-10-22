@@ -11,7 +11,6 @@ import (
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/openapi/pcf/AMPolicyControl"
-	"github.com/free5gc/openapi/udr/DataRepository"
 	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/internal/util"
@@ -221,22 +220,19 @@ func (p *Processor) PostPoliciesProcedure(polAssoId string,
 	assolId := fmt.Sprintf("%s-%d", ue.Supi, ue.PolAssociationIDGenerator)
 	amPolicy := ue.AMPolicyData[assolId]
 
-	ctx, pd, err := p.Context().GetTokenCtx(models.ServiceName_NUDR_DR, models.NrfNfManagementNfType_UDR)
-	if err != nil {
-		return nil, "", pd
-	}
-
 	if amPolicy == nil || amPolicy.AmPolicyData == nil {
-		client := util.GetNudrClient(udrUri)
-		request := DataRepository.ReadAccessAndMobilityPolicyDataRequest{
-			UeId: &ue.Supi,
-		}
-		response, err := client.AccessAndMobilityPolicyDataDocumentApi.ReadAccessAndMobilityPolicyData(ctx, &request)
+		response, problemDetail, err := p.Consumer().GetAccessAndMobilityPolicyData(ue)
+
 		if err != nil {
-			problemDetail := util.GetProblemDetail("Can't find UE AM Policy Data in UDR", util.USER_UNKNOWN)
-			logger.AmPolicyLog.Errorf("Can't find UE[%s] AM Policy Data in UDR", ue.Supi)
+			logger.AmPolicyLog.Errorf("Get Access And Mobility Policy Data Error Problem[%+v]", err)
+			problemDetail := util.GetProblemDetail("Get Access And Mobility Policy Data error[%+v]", err.Error())
+			return nil, "", &problemDetail
+		} else if problemDetail != nil {
+			logger.AmPolicyLog.Errorf("Get Access And Mobility Policy Data Failed Problem[%+v]", problemDetail)
+			problemDetail := util.GetProblemDetail("Get Access And Mobility Policy Data Failed[%+v]", problemDetail.Cause)
 			return nil, "", &problemDetail
 		}
+
 		if response == nil {
 			amPolicy = ue.NewUeAMPolicyData(assolId, policyAssociationRequest)
 		} else {

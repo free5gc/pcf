@@ -12,7 +12,6 @@ import (
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/openapi/pcf/PolicyAuthorization"
-	"github.com/free5gc/openapi/udr/DataRepository"
 	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/internal/util"
@@ -956,7 +955,6 @@ func (p *Processor) HandleUpdateEventsSubscContext(
 		appSessCtx.EvsNotif = nil
 	}
 
-	// r15 : UpdateEventsSubscResponse => EvsNotif和eventsSubscReqData裡面的東西被拆出來放在 r17 : EventsSubscPutData裡面，
 	resp := models.EventsSubscPutData{
 		Events:                    eventsSubscReqData.Events,
 		NotifUri:                  eventsSubscReqData.NotifUri,
@@ -1027,16 +1025,16 @@ func (p *Processor) SendAppSessionEventNotification(appSession *pcf_context.AppS
 		req := PolicyAuthorization.UpdateEventsSubscEventNotificationPostRequest{
 			PcfPolicyAuthorizationEventsNotification: &request,
 		}
-		httpResponse, err := client.EventsSubscriptionDocumentApi.UpdateEventsSubscEventNotificationPost(
+		rsp, err := client.EventsSubscriptionDocumentApi.UpdateEventsSubscEventNotificationPost(
 			ctx, uri, &req)
 		if err != nil {
-			if httpResponse == nil {
+			if rsp == nil {
 				logger.PolicyAuthLog.Warnf("Send App Session Event Notification Error")
 			} else {
 				logger.PolicyAuthLog.Warnf("Send App Session Event Notification Failed[%s]", err.Error())
 			}
 			return
-		} else if httpResponse == nil {
+		} else if rsp == nil {
 			logger.PolicyAuthLog.Warnln("Send App Session Event Notification Failed[HTTP Response is nil]")
 			return
 		}
@@ -1062,16 +1060,16 @@ func (p *Processor) SendAppSessionTermination(appSession *pcf_context.AppSession
 		req := PolicyAuthorization.PostAppSessionsTerminationRequestPostRequest{
 			TerminationInfo: &request,
 		}
-		httpResponse, err := client.ApplicationSessionsCollectionApi.PostAppSessionsTerminationRequestPost(
+		rsp, err := client.ApplicationSessionsCollectionApi.PostAppSessionsTerminationRequestPost(
 			ctx, uri, &req)
 		if err != nil {
-			if httpResponse != nil {
+			if rsp != nil {
 				logger.PolicyAuthLog.Warnf("Send App Session Termination Error")
 			} else {
 				logger.PolicyAuthLog.Warnf("Send App Session Termination Failed[%s]", err.Error())
 			}
 			return
-		} else if httpResponse == nil {
+		} else if rsp == nil {
 			logger.PolicyAuthLog.Warnln("Send App Session Termination Failed[HTTP Response is nil]")
 			return
 		}
@@ -1096,19 +1094,17 @@ func (p *Processor) handleBDTPolicyInd(pcfSelf *pcf_context.PCFContext,
 			requestSuppFeat).String(),
 	}
 
-	ctx, _, err := p.Context().GetTokenCtx(models.ServiceName_NUDR_DR, models.NrfNfManagementNfType_UDR)
-	if err != nil {
+	udrUri := p.getDefaultUdrUri(pcfSelf)
+	if udrUri == "" {
+		err = fmt.Errorf("Can't find any UDR which supported to this PCF")
 		return err
 	}
-
-	client := util.GetNudrClient(p.getDefaultUdrUri(pcfSelf))
-	readBdtDataReq := DataRepository.ReadIndividualBdtDataRequest{
-		BdtReferenceId: &req.BdtRefId,
-	}
-	resp, err1 := client.IndividualBdtDataDocumentApi.ReadIndividualBdtData(ctx, &readBdtDataReq)
+	resp, pd, err := p.Consumer().GetBdtData(udrUri, req.BdtRefId)
 	bdtData := resp.BdtData
-	if err1 != nil {
-		return fmt.Errorf("UDR Get BdtData error[%s]", err1.Error())
+	if err != nil {
+		return fmt.Errorf("UDR Get BdtData error[%s]", err.Error())
+	} else if pd != nil {
+		return fmt.Errorf("UDR Get BdtData fault[%s]", pd.Detail)
 	} else if resp == nil {
 		return fmt.Errorf("UDR Get BdtData error")
 	} else {

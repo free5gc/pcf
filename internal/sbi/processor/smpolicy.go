@@ -68,25 +68,21 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 	smPolicyID := fmt.Sprintf("%s-%d", ue.Supi, request.PduSessionId)
 	smPolicyData := ue.SmPolicyData[smPolicyID]
 	if smPolicyData == nil || smPolicyData.SmPolicyData == nil {
-		client := util.GetNudrClient(udrUri)
-
-		ctx, pd, err1 := p.Context().GetTokenCtx(models.ServiceName_NUDR_DR, models.NrfNfManagementNfType_UDR)
-		if err1 != nil {
-			c.JSON(int(pd.Status), pd)
-			return
-		}
-		req := DataRepository.ReadSessionManagementPolicyDataRequest{
-			UeId:   &ue.Supi,
-			Snssai: request.SliceInfo,
-			Dnn:    &request.Dnn,
-		}
 		var response *DataRepository.ReadSessionManagementPolicyDataResponse
-		response, err1 = client.SessionManagementPolicyDataDocumentApi.ReadSessionManagementPolicyData(ctx, &req)
+		response, pd, sessionErr := p.Consumer().GetSessionManagementPolicyData(
+			udrUri,
+			ue.Supi,
+			request.SliceInfo,
+			request.Dnn,
+		)
 		smData = response.SmPolicyData
-		if err1 != nil || response == nil {
+		if sessionErr != nil || response == nil {
 			problemDetail := util.GetProblemDetail("Can't find UE SM Policy Data in UDR", util.USER_UNKNOWN)
 			logger.SmPolicyLog.Warnf("Can't find UE[%s] SM Policy Data in UDR", ue.Supi)
 			c.JSON(int(problemDetail.Status), problemDetail)
+			return
+		} else if pd != nil {
+			c.JSON(int(pd.Status), pd)
 			return
 		}
 		// TODO: subscribe to UDR
