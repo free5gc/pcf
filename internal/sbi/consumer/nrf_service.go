@@ -2,6 +2,7 @@ package consumer
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -81,11 +82,15 @@ func (s *nnrfService) SendSearchNFInstances(
 	if err != nil {
 		return nil, err
 	}
+	param.TargetNfType = &targetNfType
+	param.RequesterNfType = &requestNfType
 	res, err := client.NFInstancesStoreApi.SearchNFInstances(ctx, &param)
-	result := res.SearchResult
 	if err != nil {
 		logger.ConsumerLog.Errorf("SearchNFInstances failed: %+v", err)
+		return nil, err
 	}
+
+	result := res.SearchResult
 
 	return &result, nil
 }
@@ -199,44 +204,54 @@ func (s *nnrfService) SendRegisterNFInstance(ctx context.Context) (
 
 	var nf models.NrfNfManagementNfProfile
 	var res *NFManagement.RegisterNFInstanceResponse
-	req := &NFManagement.RegisterNFInstanceRequest{
-		NfInstanceID:             &pcfContext.NfId,
-		NrfNfManagementNfProfile: &nfProfile,
-	}
-	for {
-		res, err = client.NFInstanceIDDocumentApi.RegisterNFInstance(ctx, req)
-		if err != nil || res == nil {
-			logger.ConsumerLog.Errorf("PCF register to NRF Error[%v]", err)
-			time.Sleep(2 * time.Second)
-			continue
-		}
-		nf = res.NrfNfManagementNfProfile
 
-		if res.Location == "" {
-			// NFUpdate
-			break
-		} else {
-			// NFRegister
-			resourceUri := res.Location
-			resouceNrfUri = resourceUri[:strings.Index(resourceUri, "/nnrf-nfm/")]
-			retrieveNfInstanceID = resourceUri[strings.LastIndex(resourceUri, "/")+1:]
+	finish := false
+	for !finish {
+		select {
+		case <-ctx.Done():
+			return "", "", fmt.Errorf("RegisterNFInstance context done")
+		default:
+			req := &NFManagement.RegisterNFInstanceRequest{
+				NfInstanceID:             &pcfContext.NfId,
+				NrfNfManagementNfProfile: &nfProfile,
+			}
+			res, err = client.NFInstanceIDDocumentApi.RegisterNFInstance(ctx, req)
+			if err != nil || res == nil {
+				logger.ConsumerLog.Errorf("PCF register to NRF Error[%v]", err)
+				time.Sleep(2 * time.Second)
+				continue
+			}
+			nf = res.NrfNfManagementNfProfile
 
-			oauth2 := false
-			if nf.CustomInfo != nil {
-				v, ok := nf.CustomInfo["oauth2"].(bool)
-				if ok {
-					oauth2 = v
-					logger.MainLog.Infoln("OAuth2 setting receive from NRF:", oauth2)
+			if res.Location == "" {
+				// NFUpdate
+				finish = true
+			} else {
+				// NFRegister
+				resourceUri := res.Location
+				resouceNrfUri = resourceUri[:strings.Index(resourceUri, "/nnrf-nfm/")]
+				retrieveNfInstanceID = resourceUri[strings.LastIndex(resourceUri, "/")+1:]
+
+				oauth2 := false
+				if nf.CustomInfo != nil {
+					v, ok := nf.CustomInfo["oauth2"].(bool)
+					if ok {
+						oauth2 = v
+						logger.MainLog.Infoln("OAuth2 setting receive from NRF:", oauth2)
+					}
 				}
-			}
-			pcf_context.GetSelf().OAuth2Required = oauth2
-			if oauth2 && pcf_context.GetSelf().NrfCertPem == "" {
-				logger.CfgLog.Error("OAuth2 enable but no nrfCertPem provided in config.")
+				pcf_context.GetSelf().OAuth2Required = oauth2
+				if oauth2 && pcf_context.GetSelf().NrfCertPem == "" {
+					logger.CfgLog.Error("OAuth2 enable but no nrfCertPem provided in config.")
+				}
+
+				finish = true
+
 			}
 
-			break
 		}
 	}
+
 	return resouceNrfUri, retrieveNfInstanceID, err
 }
 
