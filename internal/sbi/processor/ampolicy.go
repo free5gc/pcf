@@ -220,8 +220,7 @@ func (p *Processor) PostPoliciesProcedure(polAssoId string,
 	amPolicy := ue.AMPolicyData[assolId]
 
 	if amPolicy == nil || amPolicy.AmPolicyData == nil {
-		response, problemDetail, err := p.Consumer().GetAccessAndMobilityPolicyData(ue)
-
+		rsp, problemDetail, err := p.Consumer().GetAccessAndMobilityPolicyData(ue)
 		if err != nil {
 			logger.AmPolicyLog.Errorf("Get Access And Mobility Policy Data Error Problem[%+v]", err)
 			problemDetail := util.GetProblemDetail("Get Access And Mobility Policy Data error[%+v]", err.Error())
@@ -232,13 +231,10 @@ func (p *Processor) PostPoliciesProcedure(polAssoId string,
 			return nil, "", &problemDetail
 		}
 
-		if response == nil {
+		if amPolicy == nil {
 			amPolicy = ue.NewUeAMPolicyData(assolId, policyAssociationRequest)
-		} else {
-			if response.AmPolicyData.PraInfos != nil || response.AmPolicyData.SubscCats != nil {
-				amPolicy.AmPolicyData = &response.AmPolicyData
-			}
 		}
+		amPolicy.AmPolicyData = &rsp.AmPolicyData
 	}
 
 	// TODO: according to PCF Policy to determine ServAreaRes, Rfsp, SuppFeat
