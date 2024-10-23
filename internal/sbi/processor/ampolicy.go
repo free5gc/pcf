@@ -10,7 +10,6 @@ import (
 
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/models"
-	"github.com/free5gc/openapi/pcf/AMPolicyControl"
 	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/internal/util"
@@ -318,23 +317,14 @@ func (p *Processor) SendAMPolicyUpdateNotification(ue *pcf_context.UeContext,
 		return
 	}
 
-	ctx, _, err := p.Context().GetTokenCtx(models.ServiceName_NPCF_AM_POLICY_CONTROL, models.NrfNfManagementNfType_PCF)
-	if err != nil {
-		return
-	}
-
-	client := util.GetNpcfAMPolicyCallbackClient()
 	uri := amPolicyData.NotificationUri
 	if uri != "" {
-		req := AMPolicyControl.CreateIndividualAMPolicyAssociationPolicyUpdateNotificationPostRequest{
-			PcfAmPolicyControlPolicyUpdate: &request,
-		}
-		rsp, err := client.AMPolicyAssociationsCollectionApi.
-			CreateIndividualAMPolicyAssociationPolicyUpdateNotificationPost(
-				ctx, uri, &req,
-			)
+		rsp, pd, err := p.Consumer().SendAMPolicyUpdateNotification(uri, &request)
 		if err != nil {
 			logger.AmPolicyLog.Warnf("Policy Update Notification Error[%s]", err.Error())
+			return
+		} else if pd != nil {
+			logger.AmPolicyLog.Warnf("Policy Update Notification Fault[%s]", pd.Detail)
 			return
 		} else if rsp == nil {
 			logger.AmPolicyLog.Warnln("Policy Update Notification Failed[HTTP Response is nil]")
@@ -360,26 +350,18 @@ func (p *Processor) SendAMPolicyTerminationRequestNotification(ue *pcf_context.U
 			"Policy Assocition Termination Request Notification Error[Can't find polAssoId[%s] in UE(%s)]", PolId, ue.Supi)
 		return
 	}
-	client := util.GetNpcfAMPolicyCallbackClient()
+
 	uri := amPolicyData.NotificationUri
 
-	ctx, _, err := p.Context().GetTokenCtx(models.ServiceName_NPCF_AM_POLICY_CONTROL, models.NrfNfManagementNfType_PCF)
-	if err != nil {
-		return
-	}
-
 	if uri != "" {
-		req := AMPolicyControl.
-			CreateIndividualAMPolicyAssociationPolicyAssocitionTerminationRequestNotificationPostRequest{
-			PcfAmPolicyControlTerminationNotification: &request,
-		}
-		_, err := client.AMPolicyAssociationsCollectionApi.
-			CreateIndividualAMPolicyAssociationPolicyAssocitionTerminationRequestNotificationPost(
-				ctx, uri, &req)
+		pd, err := p.Consumer().SendAMPolicyAssociationPolicyAssocitionTerminationRequestNotification(uri, &request)
 		if err != nil {
 			logger.AmPolicyLog.Warnf("Policy Assocition Termination Request Notification Error[%s]", err.Error())
+			return
+		} else if pd != nil {
+			logger.AmPolicyLog.Warnf("Policy Assocition Termination Request Notification Fault[%s]", pd.Detail)
+			return
 		}
-
 		return
 	}
 }

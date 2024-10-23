@@ -6,6 +6,7 @@ import (
 	"github.com/free5gc/openapi/amf/Communication"
 	"github.com/free5gc/openapi/nrf/NFDiscovery"
 	"github.com/free5gc/openapi/nrf/NFManagement"
+	"github.com/free5gc/openapi/pcf/AMPolicyControl"
 	"github.com/free5gc/openapi/udr/DataRepository"
 	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/pkg/factory"
@@ -24,6 +25,7 @@ type Consumer struct {
 	*nnrfService
 	*namfService
 	*nudrService
+	*npcfService
 }
 
 func NewConsumer(pcf pcf) (*Consumer, error) {
@@ -45,6 +47,11 @@ func NewConsumer(pcf pcf) (*Consumer, error) {
 	c.nudrService = &nudrService{
 		consumer:         c,
 		nfDataSubClients: make(map[string]*DataRepository.APIClient),
+	}
+
+	c.npcfService = &npcfService{
+		consumer:                c,
+		nfAMPolicyControlClient: make(map[string]*AMPolicyControl.APIClient),
 	}
 
 	return c, nil
