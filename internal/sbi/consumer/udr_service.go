@@ -185,7 +185,7 @@ func (s *nudrService) GetBdtData(uri string, bdtRefId string) (
 }
 
 func (s *nudrService) GetAccessAndMobilityPolicyData(ue *pcf_context.UeContext) (
-	resp *DataRepository.ReadAccessAndMobilityPolicyDataResponse,
+	amPolicyData *models.AmPolicyData,
 	problemDetails *models.ProblemDetails, err error,
 ) {
 	if ue.Supi == "" {
@@ -211,9 +211,9 @@ func (s *nudrService) GetAccessAndMobilityPolicyData(ue *pcf_context.UeContext) 
 	param := DataRepository.ReadAccessAndMobilityPolicyDataRequest{
 		UeId: &ue.Supi,
 	}
-	resp, err = client.AccessAndMobilityPolicyDataDocumentApi.ReadAccessAndMobilityPolicyData(ctx, &param)
+	resp, err := client.AccessAndMobilityPolicyDataDocumentApi.ReadAccessAndMobilityPolicyData(ctx, &param)
 	if err == nil {
-		return resp, nil, nil
+		return &resp.AmPolicyData, nil, nil
 	}
 	problem := err.(openapi.GenericOpenAPIError).Model().(models.ProblemDetails)
 	problemDetails = &problem

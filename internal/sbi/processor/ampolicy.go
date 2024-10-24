@@ -234,7 +234,7 @@ func (p *Processor) PostPoliciesProcedure(polAssoId string,
 		if amPolicy == nil {
 			amPolicy = ue.NewUeAMPolicyData(assolId, policyAssociationRequest)
 		}
-		amPolicy.AmPolicyData = &rsp.AmPolicyData
+		amPolicy.AmPolicyData = rsp
 	}
 
 	// TODO: according to PCF Policy to determine ServAreaRes, Rfsp, SuppFeat
