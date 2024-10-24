@@ -122,7 +122,7 @@ func (ue *UeContext) NewUeAMPolicyData(
 		Rfsp:              req.Rfsp,
 		Guami:             req.Guami,
 		UserLoc:           req.UserLoc,
-		ServiceName:       req.ServiveName,
+		ServiceName:       req.ServiceName,
 		PcfUe:             ue,
 	}
 	ue.AMPolicyData[assolId].Pras = make(map[string]models.PresenceInfo)
