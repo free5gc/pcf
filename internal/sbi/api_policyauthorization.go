@@ -69,7 +69,7 @@ func (s *Server) getPolicyAuthorizationRoutes() []Route {
 
 // PcscfRestoration - Indicates P-CSCF restoration and does not create an Individual Application Session Context
 func (s *Server) HTTPPcscfRestoration(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, nil)
+	c.JSON(http.StatusNotImplemented, gin.H{})
 }
 
 // api_application_session

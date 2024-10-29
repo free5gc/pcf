@@ -45,17 +45,17 @@ func (s *Server) getUePolicyRoutes() []Route {
 }
 
 func (s *Server) HTTPDeleteIndividualUEPolicyAssociation(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, nil)
+	c.JSON(http.StatusNotImplemented, gin.H{})
 }
 
 func (s *Server) HTTPReadIndividualUEPolicyAssociation(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, nil)
+	c.JSON(http.StatusNotImplemented, gin.H{})
 }
 
 func (s *Server) HTTPReportObservedEventTriggersForIndividualUEPolicyAssociation(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, nil)
+	c.JSON(http.StatusNotImplemented, gin.H{})
 }
 
 func (s *Server) HTTPCreateIndividualUEPolicyAssociation(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, nil)
+	c.JSON(http.StatusNotImplemented, gin.H{})
 }
