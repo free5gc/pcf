@@ -85,13 +85,20 @@ func (s *nudrService) GetSessionManagementPolicyData(uri string,
 		Snssai: sliceInfo,
 		Dnn:    &dnn,
 	}
-	resp, err = client.SessionManagementPolicyDataDocumentApi.ReadSessionManagementPolicyData(ctx, &param)
-	if err == nil {
+	resp, localErr := client.SessionManagementPolicyDataDocumentApi.ReadSessionManagementPolicyData(ctx, &param)
+	if localErr == nil {
 		return resp, nil, nil
 	}
-	problem := err.(openapi.GenericOpenAPIError).Model().(models.ProblemDetails)
-	problemDetails = &problem
-	return nil, problemDetails, nil
+	if genericErr, ok := localErr.(openapi.GenericOpenAPIError); ok {
+		if problemDetails, ok := genericErr.Model().(models.ProblemDetails); ok {
+			return nil, &problemDetails, nil
+		}
+
+		logger.ConsumerLog.Errorf("openapi error: %+v", localErr)
+		return nil, nil, localErr
+	}
+
+	return nil, nil, localErr
 }
 
 func (s *nudrService) CreateBdtData(uri string, bdtData *models.BdtData) (
@@ -114,13 +121,20 @@ func (s *nudrService) CreateBdtData(uri string, bdtData *models.BdtData) (
 	param := DataRepository.CreateIndividualBdtDataRequest{
 		BdtData: bdtData,
 	}
-	_, err = client.IndividualBdtDataDocumentApi.CreateIndividualBdtData(ctx, &param)
-	if err == nil {
+	_, localErr := client.IndividualBdtDataDocumentApi.CreateIndividualBdtData(ctx, &param)
+	if localErr == nil {
 		return nil, nil
 	}
-	problem := err.(openapi.GenericOpenAPIError).Model().(models.ProblemDetails)
-	problemDetails = &problem
-	return problemDetails, nil
+	if genericErr, ok := localErr.(openapi.GenericOpenAPIError); ok {
+		if problemDetails, ok := genericErr.Model().(models.ProblemDetails); ok {
+			return &problemDetails, nil
+		}
+
+		logger.ConsumerLog.Errorf("openapi error: %+v", localErr)
+		return nil, localErr
+	}
+
+	return nil, localErr
 }
 
 func (s *nudrService) CreateBdtPolicyContext(uri string, req *DataRepository.ReadBdtDataRequest) (
@@ -139,13 +153,20 @@ func (s *nudrService) CreateBdtPolicyContext(uri string, req *DataRepository.Rea
 	}
 
 	client := s.getDataSubscription(uri)
-	resp, err = client.BdtDataStoreApi.ReadBdtData(ctx, req)
-	if err == nil {
+	resp, localErr := client.BdtDataStoreApi.ReadBdtData(ctx, req)
+	if localErr == nil {
 		return resp, nil, nil
 	}
-	problem := err.(openapi.GenericOpenAPIError).Model().(models.ProblemDetails)
-	problemDetails = &problem
-	return nil, problemDetails, nil
+	if genericErr, ok := localErr.(openapi.GenericOpenAPIError); ok {
+		if problemDetails, ok := genericErr.Model().(models.ProblemDetails); ok {
+			return nil, &problemDetails, nil
+		}
+
+		logger.ConsumerLog.Errorf("openapi error: %+v", localErr)
+		return nil, nil, localErr
+	}
+
+	return nil, nil, localErr
 }
 
 func (s *nudrService) GetBdtData(uri string, bdtRefId string) (
@@ -175,13 +196,21 @@ func (s *nudrService) GetBdtData(uri string, bdtRefId string) (
 	}
 
 	client := s.getDataSubscription(uri)
-	resp, err = client.IndividualBdtDataDocumentApi.ReadIndividualBdtData(ctx, &readBdtDataReq)
-	if err == nil {
+	resp, localErr := client.IndividualBdtDataDocumentApi.ReadIndividualBdtData(ctx, &readBdtDataReq)
+	if localErr == nil {
 		return resp, nil, nil
 	}
-	problem := err.(openapi.GenericOpenAPIError).Model().(models.ProblemDetails)
-	problemDetails = &problem
-	return nil, problemDetails, nil
+
+	if genericErr, ok := localErr.(openapi.GenericOpenAPIError); ok {
+		if problemDetails, ok := genericErr.Model().(models.ProblemDetails); ok {
+			return nil, &problemDetails, nil
+		}
+
+		logger.ConsumerLog.Errorf("openapi error: %+v", localErr)
+		return nil, nil, localErr
+	}
+
+	return nil, nil, localErr
 }
 
 func (s *nudrService) GetAccessAndMobilityPolicyData(ue *pcf_context.UeContext) (
@@ -211,13 +240,20 @@ func (s *nudrService) GetAccessAndMobilityPolicyData(ue *pcf_context.UeContext) 
 	param := DataRepository.ReadAccessAndMobilityPolicyDataRequest{
 		UeId: &ue.Supi,
 	}
-	resp, err := client.AccessAndMobilityPolicyDataDocumentApi.ReadAccessAndMobilityPolicyData(ctx, &param)
-	if err == nil {
+	resp, localErr := client.AccessAndMobilityPolicyDataDocumentApi.ReadAccessAndMobilityPolicyData(ctx, &param)
+	if localErr == nil {
 		return &resp.AmPolicyData, nil, nil
 	}
-	problem := err.(openapi.GenericOpenAPIError).Model().(models.ProblemDetails)
-	problemDetails = &problem
-	return nil, problemDetails, nil
+	if genericErr, ok := localErr.(openapi.GenericOpenAPIError); ok {
+		if problemDetails, ok := genericErr.Model().(models.ProblemDetails); ok {
+			return nil, &problemDetails, nil
+		}
+
+		logger.ConsumerLog.Errorf("openapi error: %+v", localErr)
+		return nil, nil, localErr
+	}
+
+	return nil, nil, localErr
 }
 
 func (s *nudrService) CreateInfluenceDataSubscription(ue *pcf_context.UeContext, request models.SmPolicyContextData) (
@@ -245,9 +281,16 @@ func (s *nudrService) CreateInfluenceDataSubscription(ue *pcf_context.UeContext,
 		logger.ConsumerLog.Debugf("Influence Data Subscription ID: %s", subscriptionID)
 		return subscriptionID, nil, nil
 	}
-	problem := localErr.(openapi.GenericOpenAPIError).Model().(models.ProblemDetails)
-	problemDetails = &problem
-	return "", problemDetails, err
+	if genericErr, ok := localErr.(openapi.GenericOpenAPIError); ok {
+		if problemDetails, ok := genericErr.Model().(models.ProblemDetails); ok {
+			return "", &problemDetails, nil
+		}
+
+		logger.ConsumerLog.Errorf("openapi error: %+v", localErr)
+		return "", nil, err
+	}
+
+	return "", nil, localErr
 }
 
 func (s *nudrService) buildTrafficInfluSub(request models.SmPolicyContextData) models.TrafficInfluSub {
@@ -285,7 +328,14 @@ func (s *nudrService) RemoveInfluenceDataSubscription(ue *pcf_context.UeContext,
 	if localErr == nil {
 		logger.ConsumerLog.Debugf("DataRepository Remove Influence Data Subscription Status With No Err")
 	}
-	problem := localErr.(openapi.GenericOpenAPIError).Model().(models.ProblemDetails)
-	problemDetails = &problem
-	return problemDetails, err
+	if genericErr, ok := localErr.(openapi.GenericOpenAPIError); ok {
+		if problemDetails, ok := genericErr.Model().(models.ProblemDetails); ok {
+			return &problemDetails, nil
+		}
+
+		logger.ConsumerLog.Errorf("openapi error: %+v", localErr)
+		return nil, localErr
+	}
+
+	return nil, localErr
 }

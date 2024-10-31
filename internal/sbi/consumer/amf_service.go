@@ -76,10 +76,15 @@ func (s *namfService) AmfStatusChangeSubscribe(amfUri string, guamiList []models
 			GuamiList:    res.AmfCommunicationSubscriptionData.GuamiList,
 		}
 		pcfContext.NewAmfStatusSubscription(subscriptionID, amfStatusSubsData)
-	} else {
-		problem := localErr.(openapi.GenericOpenAPIError).Model().(models.ProblemDetails)
-		problemDetails = &problem
-		err = openapi.ReportError("%s: server no response", amfUri)
 	}
-	return problemDetails, err
+
+	if genericErr, ok := localErr.(openapi.GenericOpenAPIError); ok {
+		if problemDetails, ok := genericErr.Model().(models.ProblemDetails); ok {
+			return &problemDetails, nil
+		}
+
+		logger.ConsumerLog.Errorf("openapi error: %+v", localErr)
+		return nil, localErr
+	}
+	return nil, localErr
 }
