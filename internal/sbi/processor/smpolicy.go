@@ -464,7 +464,6 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 	}
 	smPolicyData.SubscriptionID = subscriptionID
 
-	// TODO: implement Nbsf service
 	// Create PCF binding data to BSF
 	policyAuthorizationService := p.Context().NfService[models.ServiceName_NPCF_POLICYAUTHORIZATION]
 	pcfBinding := models.PcfBinding{
@@ -1073,7 +1072,10 @@ func (p *Processor) sendSmPolicyRelatedAppSessionNotification(smPolicy *pcf_cont
 					case models.PcfPolicyAuthorizationAfEvent_PLMN_CHG:
 						sessionNotif.PlmnId = notification.PlmnId
 					case models.PcfPolicyAuthorizationAfEvent_QOS_NOTIF:
-						// TODO:
+						// TODO: Send Qos Notification to AF
+						// SMF notify PCF : 29.512 4.2.4.20 Notification about Service Data Flow QoS target enforcement
+						// PCF notify AF : 29.514  4.2.5.4 Notification about Service Data Flow QoS notification control
+
 						// for _, report := range sessionNotif.QncReports {
 						// 	for _, pccRuleId := range report.RefPccRuleIds {
 						// 		if _, exist := appSession.PccRuleIdMapToCompId[pccRuleId]; exist {
