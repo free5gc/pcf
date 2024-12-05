@@ -1,10 +1,12 @@
 package consumer
 
 import (
+	"reflect"
 	"sync"
 
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/openapi/pcf/AMPolicyControl"
+	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/internal/util"
 )
@@ -39,48 +41,57 @@ func (s *npcfService) getAMPolicyControl(uri string) *AMPolicyControl.APIClient 
 	return client
 }
 
-func (s *npcfService) SendAMPolicyUpdateNotification(uri string, request *models.PcfAmPolicyControlPolicyUpdate) (
-	rsp *AMPolicyControl.CreateIndividualAMPolicyAssociationPolicyUpdateNotificationPostResponse,
-	problemDetail *models.ProblemDetails, err error,
+// Send AM Policy Update to AMF if policy has changed
+func (s *npcfService) SendAMPolicyUpdateNotification(ue *pcf_context.UeContext,
+	PolId string, request models.PcfAmPolicyControlPolicyUpdate,
 ) {
-	if uri == "" {
-		problemDetail := util.GetProblemDetail("NPcf client can't find call back uri",
-			"SendAMPolicyAssociationPolicyAssocitionTerminationRequestNotification Can't find URI")
-		return nil, &problemDetail, nil
+	if ue == nil {
+		logger.ConsumerLog.Warnln("Policy Update Notification Error[Ue is nil]")
+		return
+	}
+	amPolicyData := ue.AMPolicyData[PolId]
+	if amPolicyData == nil {
+		logger.ConsumerLog.Warnf("Policy Update Notification Error[Can't find polAssoId[%s] in UE(%s)]", PolId, ue.Supi)
+		return
 	}
 
-	if request == nil {
-		problemDetail := util.GetProblemDetail("SendAMPolicyUpdateNotification request is nil",
-			"SendAMPolicyUpdateNotification function in consumer request is nil")
-		return nil, &problemDetail, nil
+	uri := amPolicyData.NotificationUri
+
+	if uri == "" {
+		logger.ConsumerLog.Warnln("NPcf client can't find call back uri")
+		return
+	}
+
+	if reflect.DeepEqual(request, models.PcfAmPolicyControlPolicyUpdate{}) {
+		logger.ConsumerLog.Warnln("SendAMPolicyUpdateNotification request is nil")
+		return
 	}
 
 	ctx, problemDetails, err := s.consumer.Context().GetTokenCtx(models.ServiceName_NPCF_AM_POLICY_CONTROL,
 		models.NrfNfManagementNfType_PCF)
 	if err != nil {
-		return nil, nil, err
+		logger.ConsumerLog.Warnf("Policy Update Notification Error[%s]", err.Error())
+		return
 	} else if problemDetails != nil {
-		return nil, problemDetails, nil
+		logger.ConsumerLog.Warnf("Policy Update Notification Fault[%s]", problemDetails.Detail)
+		return
 	}
 
 	client := s.getAMPolicyControl(uri)
 	param := AMPolicyControl.CreateIndividualAMPolicyAssociationPolicyUpdateNotificationPostRequest{
-		PcfAmPolicyControlPolicyUpdate: request,
+		PcfAmPolicyControlPolicyUpdate: &request,
 	}
-	rsp, err = client.AMPolicyAssociationsCollectionApi.
+	rsp, err := client.AMPolicyAssociationsCollectionApi.
 		CreateIndividualAMPolicyAssociationPolicyUpdateNotificationPost(
 			ctx, uri, &param)
 	if err != nil {
-		logger.AmPolicyLog.Warnf("SendAMPolicyUpdateNotification function in consumer Error[%s]",
+		logger.ConsumerLog.Warnf("SendAMPolicyUpdateNotification function in consumer Error[%s]",
 			err.Error())
-		return nil, nil, err
+		return
 	} else if rsp == nil {
-		logger.AmPolicyLog.Warnln("SendAMPolicyUpdateNotification function in consumer Failed[Response is nil]")
-		problemDetail := util.GetProblemDetail("SendAMPolicyUpdateNotification function in consumer Fault[%s]",
-			"Response is nil")
-		return nil, &problemDetail, nil
+		logger.ConsumerLog.Warnf("SendAMPolicyUpdateNotification function in consumer Failed[Response is nil]")
+		return
 	}
-	return rsp, nil, nil
 }
 
 func (s *npcfService) SendAMPolicyAssociationPolicyAssocitionTerminationRequestNotification(

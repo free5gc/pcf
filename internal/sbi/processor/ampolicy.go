@@ -299,38 +299,6 @@ func (p *Processor) PostPoliciesProcedure(polAssoId string,
 	return &response, locationHeader, nil
 }
 
-// Send AM Policy Update to AMF if policy has changed
-func (p *Processor) AMPolicyUpdateNotification(ue *pcf_context.UeContext,
-	PolId string, request models.PcfAmPolicyControlPolicyUpdate,
-) {
-	if ue == nil {
-		logger.AmPolicyLog.Warnln("Policy Update Notification Error[Ue is nil]")
-		return
-	}
-	amPolicyData := ue.AMPolicyData[PolId]
-	if amPolicyData == nil {
-		logger.AmPolicyLog.Warnf("Policy Update Notification Error[Can't find polAssoId[%s] in UE(%s)]", PolId, ue.Supi)
-		return
-	}
-
-	uri := amPolicyData.NotificationUri
-	if uri != "" {
-		rsp, pd, err := p.Consumer().SendAMPolicyUpdateNotification(uri, &request)
-		if err != nil {
-			logger.AmPolicyLog.Warnf("Policy Update Notification Error[%s]", err.Error())
-			return
-		} else if pd != nil {
-			logger.AmPolicyLog.Warnf("Policy Update Notification Fault[%s]", pd.Detail)
-			return
-		} else if rsp == nil {
-			logger.AmPolicyLog.Warnln("Policy Update Notification Failed[HTTP Response is nil]")
-			return
-		}
-		logger.AmPolicyLog.Infoln("Policy Update Notification Success")
-		return
-	}
-}
-
 // Send AM Policy Update to AMF if policy has been terminated
 func (p *Processor) SendAMPolicyTerminationRequestNotification(ue *pcf_context.UeContext,
 	PolId string, request models.PcfAmPolicyControlTerminationNotification,
