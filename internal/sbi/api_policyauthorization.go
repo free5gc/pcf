@@ -23,36 +23,53 @@ import (
 func (s *Server) getPolicyAuthorizationRoutes() []Route {
 	return []Route{
 		{
+			Name:    "PostAppSessions",
 			Method:  http.MethodPost,
 			Pattern: "/app-sessions",
 			APIFunc: s.HTTPPostAppSessions,
 		},
 		{
+			Name:    "DeleteEventsSubsc",
 			Method:  http.MethodDelete,
 			Pattern: "/app-sessions/:appSessionId/events-subscription",
 			APIFunc: s.HTTPDeleteEventsSubsc,
 		},
 		{
+			Name:    "UpdateEventsSubsc",
 			Method:  http.MethodPut,
 			Pattern: "/app-sessions/:appSessionId/events-subscription",
 			APIFunc: s.HTTPUpdateEventsSubsc,
 		},
 		{
+			Name:    "DeleteAppSession",
 			Method:  http.MethodPost,
 			Pattern: "/app-sessions/:appSessionId/delete",
 			APIFunc: s.HTTPDeleteAppSession,
 		},
 		{
+			Name:    "GetAppSession",
 			Method:  http.MethodGet,
 			Pattern: "/app-sessions/:appSessionId",
 			APIFunc: s.HTTPGetAppSession,
 		},
 		{
+			Name:    "ModAppSession",
 			Method:  http.MethodPatch,
 			Pattern: "/app-sessions/:appSessionId",
 			APIFunc: s.HTTPModAppSession,
 		},
+		{
+			Name:    "PcscfRestoration",
+			Method:  http.MethodPost,
+			Pattern: "/app-sessions/pcscf-restoration",
+			APIFunc: s.HTTPPcscfRestoration,
+		},
 	}
+}
+
+// PcscfRestoration - Indicates P-CSCF restoration and does not create an Individual Application Session Context
+func (s *Server) HTTPPcscfRestoration(c *gin.Context) {
+	c.JSON(http.StatusNotImplemented, gin.H{})
 }
 
 // api_application_session
@@ -116,7 +133,7 @@ func (s *Server) HTTPDeleteEventsSubsc(c *gin.Context) {
 
 // HTTPUpdateEventsSubsc - creates or modifies an Events Subscription subresource
 func (s *Server) HTTPUpdateEventsSubsc(c *gin.Context) {
-	var eventsSubscReqData models.EventsSubscReqData
+	var eventsSubscReqData models.PcfPolicyAuthorizationEventsSubscReqData
 
 	requestBody, err := c.GetRawData()
 	if err != nil {
@@ -165,7 +182,7 @@ func (s *Server) HTTPUpdateEventsSubsc(c *gin.Context) {
 }
 
 func (s *Server) HTTPDeleteAppSession(c *gin.Context) {
-	var eventsSubscReqData *models.EventsSubscReqData
+	var eventsSubscReqData *models.PcfPolicyAuthorizationEventsSubscReqData
 
 	requestBody, err := c.GetRawData()
 	if err != nil {

@@ -11,7 +11,7 @@ import (
 	"github.com/free5gc/pcf/internal/util"
 )
 
-func (s *Server) HTTPPoliciesPolAssoIdDelete(c *gin.Context) {
+func (s *Server) HTTPDeleteIndividualAMPolicyAssociation(c *gin.Context) {
 	polAssoId, _ := c.Params.Get("polAssoId")
 
 	if polAssoId == "" {
@@ -26,8 +26,7 @@ func (s *Server) HTTPPoliciesPolAssoIdDelete(c *gin.Context) {
 	s.Processor().HandleDeletePoliciesPolAssoId(c, polAssoId)
 }
 
-// HTTPPoliciesPolAssoIdGet -
-func (s *Server) HTTPPoliciesPolAssoIdGet(c *gin.Context) {
+func (s *Server) HTTPReadIndividualAMPolicyAssociation(c *gin.Context) {
 	polAssoId, _ := c.Params.Get("polAssoId")
 
 	if polAssoId == "" {
@@ -42,9 +41,8 @@ func (s *Server) HTTPPoliciesPolAssoIdGet(c *gin.Context) {
 	s.Processor().HandleGetPoliciesPolAssoId(c, polAssoId)
 }
 
-// HTTPPoliciesPolAssoIdUpdatePost -
-func (s *Server) HTTPPoliciesPolAssoIdUpdatePost(c *gin.Context) {
-	var policyAssociationUpdateRequest models.PolicyAssociationUpdateRequest
+func (s *Server) HTTPReportObservedEventTriggersForIndividualAMPolicyAssociation(c *gin.Context) {
+	var policyAssociationUpdateRequest models.PcfAmPolicyControlPolicyAssociationUpdateRequest
 
 	requestBody, err := c.GetRawData()
 	if err != nil {
@@ -86,8 +84,8 @@ func (s *Server) HTTPPoliciesPolAssoIdUpdatePost(c *gin.Context) {
 	s.Processor().HandleUpdatePostPoliciesPolAssoId(c, polAssoId, policyAssociationUpdateRequest)
 }
 
-func (s *Server) HTTPPoliciesPost(c *gin.Context) {
-	var policyAssociationRequest models.PolicyAssociationRequest
+func (s *Server) HTTPCreateIndividualAMPolicyAssociation(c *gin.Context) {
+	var policyAssociationRequest models.PcfAmPolicyControlPolicyAssociationRequest
 	requestBody, err := c.GetRawData()
 	if err != nil {
 		problemDetail := models.ProblemDetails{
@@ -115,7 +113,7 @@ func (s *Server) HTTPPoliciesPost(c *gin.Context) {
 	}
 
 	if policyAssociationRequest.Supi == "" || policyAssociationRequest.NotificationUri == "" {
-		rsp := util.GetProblemDetail("Miss Mandotory IE", util.ERROR_REQUEST_PARAMETERS)
+		rsp := util.GetProblemDetail("Missing Mandatory IE", util.ERROR_REQUEST_PARAMETERS)
 		logger.AmPolicyLog.Errorln(rsp.Detail)
 		c.JSON(int(rsp.Status), rsp)
 		return
@@ -129,24 +127,28 @@ func (s *Server) HTTPPoliciesPost(c *gin.Context) {
 func (s *Server) getAmPolicyRoutes() []Route {
 	return []Route{
 		{
+			Name:    "ReadIndividualAMPolicyAssociation",
 			Method:  http.MethodGet,
 			Pattern: "/policies/:polAssoId",
-			APIFunc: s.HTTPPoliciesPolAssoIdGet,
+			APIFunc: s.HTTPReadIndividualAMPolicyAssociation,
 		},
 		{
+			Name:    "DeleteIndividualAMPolicyAssociation",
 			Method:  http.MethodDelete,
 			Pattern: "/policies/:polAssoId",
-			APIFunc: s.HTTPPoliciesPolAssoIdDelete,
+			APIFunc: s.HTTPDeleteIndividualAMPolicyAssociation,
 		},
 		{
+			Name:    "ReportObservedEventTriggersForIndividualAMPolicyAssociation",
 			Method:  http.MethodPost,
 			Pattern: "/policies/:polAssoId/update",
-			APIFunc: s.HTTPPoliciesPolAssoIdUpdatePost,
+			APIFunc: s.HTTPReportObservedEventTriggersForIndividualAMPolicyAssociation,
 		},
 		{
+			Name:    "CreateIndividualAMPolicyAssociation",
 			Method:  http.MethodPost,
 			Pattern: "/policies",
-			APIFunc: s.HTTPPoliciesPost,
+			APIFunc: s.HTTPCreateIndividualAMPolicyAssociation,
 		},
 	}
 }
