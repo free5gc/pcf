@@ -26,16 +26,19 @@ import (
 func (s *Server) getBdtPolicyRoutes() []Route {
 	return []Route{
 		{
+			Name:    "CreateBDTPolicy",
 			Method:  http.MethodPost,
 			Pattern: "/bdtpolicies",
 			APIFunc: s.HTTPCreateBDTPolicy,
 		},
 		{
+			Name:    "GetBDTPolicy",
 			Method:  http.MethodGet,
 			Pattern: "/bdtpolicies/:bdtPolicyId",
 			APIFunc: s.HTTPGetBDTPolicy,
 		},
 		{
+			Name:    "UpdateBDTPolicy",
 			Method:  http.MethodPatch,
 			Pattern: "/bdtpolicies/:bdtPolicyId",
 			APIFunc: s.HTTPUpdateBDTPolicy,
@@ -91,7 +94,7 @@ func (s *Server) HTTPGetBDTPolicy(c *gin.Context) {
 
 // UpdateBDTPolicy - Update an Individual BDT policy
 func (s *Server) HTTPUpdateBDTPolicy(c *gin.Context) {
-	var bdtPolicyDataPatch models.BdtPolicyDataPatch
+	var bdtPolicyDataPatch models.PcfBdtPolicyControlBdtPolicyDataPatch
 	// step 1: retrieve http request body
 	requestBody, err := c.GetRawData()
 	if err != nil {

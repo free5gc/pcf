@@ -9,13 +9,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/free5gc/openapi/Namf_Communication"
-	"github.com/free5gc/openapi/Nbsf_Management"
-	"github.com/free5gc/openapi/Npcf_AMPolicy"
-	"github.com/free5gc/openapi/Npcf_PolicyAuthorization"
-	"github.com/free5gc/openapi/Npcf_SMPolicyControl"
-	"github.com/free5gc/openapi/Nudr_DataRepository"
+	"github.com/free5gc/openapi/amf/Communication"
+	"github.com/free5gc/openapi/bsf/Management"
 	"github.com/free5gc/openapi/models"
+	"github.com/free5gc/openapi/pcf/AMPolicyControl"
+	"github.com/free5gc/openapi/pcf/PolicyAuthorization"
+	"github.com/free5gc/openapi/pcf/SMPolicyControl"
+	"github.com/free5gc/openapi/udr/DataRepository"
 	"github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
 )
@@ -55,42 +55,43 @@ var (
 	}
 )
 
-func GetNpcfAMPolicyCallbackClient() *Npcf_AMPolicy.APIClient {
-	configuration := Npcf_AMPolicy.NewConfiguration()
-	client := Npcf_AMPolicy.NewAPIClient(configuration)
+func GetNpcfAMPolicyCallbackClient() *AMPolicyControl.APIClient {
+	configuration := AMPolicyControl.NewConfiguration()
+	client := AMPolicyControl.NewAPIClient(configuration)
 	return client
 }
 
-func GetNpcfSMPolicyCallbackClient() *Npcf_SMPolicyControl.APIClient {
-	configuration := Npcf_SMPolicyControl.NewConfiguration()
-	client := Npcf_SMPolicyControl.NewAPIClient(configuration)
+func GetNpcfSMPolicyCallbackClient() *SMPolicyControl.APIClient {
+	configuration := SMPolicyControl.NewConfiguration()
+	client := SMPolicyControl.NewAPIClient(configuration)
 	return client
 }
 
-func GetNpcfPolicyAuthorizationCallbackClient() *Npcf_PolicyAuthorization.APIClient {
-	configuration := Npcf_PolicyAuthorization.NewConfiguration()
-	client := Npcf_PolicyAuthorization.NewAPIClient(configuration)
+func GetNpcfPolicyAuthorizationCallbackClient() *PolicyAuthorization.APIClient {
+	configuration := PolicyAuthorization.NewConfiguration()
+	client := PolicyAuthorization.NewAPIClient(configuration)
 	return client
 }
 
-func GetNudrClient(uri string) *Nudr_DataRepository.APIClient {
-	configuration := Nudr_DataRepository.NewConfiguration()
+func GetNudrClient(uri string) *DataRepository.APIClient {
+	configuration := DataRepository.NewConfiguration()
 	configuration.SetBasePath(uri)
-	client := Nudr_DataRepository.NewAPIClient(configuration)
+	client := DataRepository.NewAPIClient(configuration)
 	return client
 }
 
-func GetNbsfClient(uri string) *Nbsf_Management.APIClient {
-	configuration := Nbsf_Management.NewConfiguration()
+// TODO: implement Nbsf
+func GetNbsfClient(uri string) *Management.APIClient {
+	configuration := Management.NewConfiguration()
 	configuration.SetBasePath(uri)
-	client := Nbsf_Management.NewAPIClient(configuration)
+	client := Management.NewAPIClient(configuration)
 	return client
 }
 
-func GetNamfClient(uri string) *Namf_Communication.APIClient {
-	configuration := Namf_Communication.NewConfiguration()
+func GetNamfClient(uri string) *Communication.APIClient {
+	configuration := Communication.NewConfiguration()
 	configuration.SetBasePath(uri)
-	client := Namf_Communication.NewAPIClient(configuration)
+	client := Communication.NewAPIClient(configuration)
 	return client
 }
 
@@ -103,12 +104,20 @@ func GetDefaultDataRate() models.UsageThreshold {
 
 func GetDefaultTime() models.TimeWindow {
 	var timeWindow models.TimeWindow
-	timeWindow.StartTime = time.Now().Format(time.RFC3339)
+	startTime, err := time.Parse(time.RFC3339, time.Now().Format(time.RFC3339))
+	if err != nil {
+		logger.UtilLog.Errorf("startTime parsing error: %+v", err)
+	}
+	timeWindow.StartTime = &startTime
 	lease, err := time.ParseDuration("720h")
 	if err != nil {
 		logger.UtilLog.Errorf("ParseDuration error: %+v", err)
 	}
-	timeWindow.StopTime = time.Now().Add(lease).Format(time.RFC3339)
+	stopTime, err := time.Parse(time.RFC3339, time.Now().Add(lease).Format(time.RFC3339))
+	if err != nil {
+		logger.UtilLog.Errorf("stopTime parsing error: %+v", err)
+	}
+	timeWindow.StopTime = &stopTime
 	return timeWindow
 }
 

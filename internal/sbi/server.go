@@ -24,6 +24,7 @@ import (
 )
 
 type Route struct {
+	Name    string
 	Method  string
 	Pattern string
 	APIFunc gin.HandlerFunc
@@ -50,6 +51,7 @@ type pcf interface {
 	app.App
 	Processor() *processor.Processor
 	Consumer() *consumer.Consumer
+	CancelContext() context.Context
 }
 
 type Server struct {
@@ -125,7 +127,7 @@ func NewServer(pcf pcf, tlsKeyLogPath string) (*Server, error) {
 
 func (s *Server) Run(traceCtx context.Context, wg *sync.WaitGroup) error {
 	var err error
-	_, s.Context().NfId, err = s.Consumer().SendRegisterNFInstance(context.Background())
+	_, s.Context().NfId, err = s.Consumer().SendRegisterNFInstance(s.CancelContext())
 	if err != nil {
 		logger.InitLog.Errorf("PCF register to NRF Error[%s]", err.Error())
 	}
