@@ -206,6 +206,7 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 	}
 
 	chargingInterface, err := mongoapi.RestfulAPIGetOne(chargingDataColl, filterCharging, queryStrength)
+	var defaultChgData *models.ChargingData
 
 	if err != nil {
 		logger.SmPolicyLog.Errorf("Fail to get charging data to mongoDB err: %+v", err)
@@ -225,6 +226,7 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 			ReportingLevel: models.ReportingLevel_RAT_GR_LEVEL,
 			MeteringMethod: models.MeteringMethod_VOLUME,
 		}
+		defaultChgData = chgData
 
 		switch chargingInterface["chargingMethod"].(string) {
 		case "Online":
@@ -249,6 +251,8 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 
 		smPolicyData.ChargingIdGenerator++
 	}
+
+	chgDataMap := map[string]*models.ChargingData{}
 
 	logger.SmPolicyLog.Traceln("FlowRules for ueId:", ue.Supi, "snssai:", util.SnssaiModelsToHex(*request.SliceInfo))
 	for i, flowRule := range flowRulesInterface {
@@ -321,6 +325,7 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 					ReportingLevel: models.ReportingLevel_RAT_GR_LEVEL,
 					MeteringMethod: models.MeteringMethod_VOLUME,
 				}
+				chgDataMap[val] = chgData
 
 				switch chargingInterface["chargingMethod"].(string) {
 				case "Online":
@@ -367,35 +372,27 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 	smPolicyData.PolicyDecision = &decision
 	// TODO: PCC rule, PraInfo ...
 	// Get Application Data Influence Data from UDR
-	reqParam := Nudr_DataRepository.ApplicationDataInfluenceDataGetParamOpts{
-		Dnns:             optional.NewInterface([]string{request.Dnn}),
-		Snssais:          optional.NewInterface(util.MarshToJsonString([]models.Snssai{*request.SliceInfo})),
-		InternalGroupIds: optional.NewInterface(request.InterGrpIds),
-		Supis:            optional.NewInterface([]string{request.Supi}),
-	}
 
-	ctx, pd, err := p.Context().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
+	trafficInfluDatas, pd, err := p.Consumer().GetAfInfluenceData(
+		ue,
+		request.Supi,
+		request.Dnn,
+		request.InterGrpIds,
+		request.SliceInfo,
+	)
 	if err != nil {
 		c.JSON(int(pd.Status), pd)
 		return
 	}
 
-	udrClient := util.GetNudrClient(udrUri)
-	var resp *http.Response
-	trafficInfluDatas, resp, err := udrClient.InfluenceDataApi.
-		ApplicationDataInfluenceDataGet(ctx, &reqParam)
-	if err != nil || resp == nil || resp.StatusCode != http.StatusOK {
-		logger.SmPolicyLog.Warnf("Error response from UDR Application Data Influence Data Get")
-	}
-	if err = resp.Body.Close(); err != nil {
-		logger.SmPolicyLog.Warnf("failed to close response of Application Data Influence Data Get")
-	}
 	logger.SmPolicyLog.Infof("Matched [%d] trafficInfluDatas from UDR", len(trafficInfluDatas))
 	if len(trafficInfluDatas) != 0 {
 		// UE identity in UDR appData and apply appData to sm poliocy
 		var precedence int32 = 23
 		for _, tiData := range trafficInfluDatas {
 			pccRule := util.CreatePccRule(smPolicyData.PccRuleIdGenerator, precedence, nil, tiData.AfAppId)
+			// TODO: select charging data based on the filter (see chgDataMap)
+			util.SetPccRuleRelatedData(&decision, pccRule, nil, nil, defaultChgData, nil)
 			util.SetSmPolicyDecisionByTrafficInfluData(&decision, pccRule, tiData)
 			influenceID := getInfluenceID(tiData.ResUri)
 			if influenceID != "" {
@@ -436,13 +433,13 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 	if bsfUri != "" {
 		bsfClient := util.GetNbsfClient(bsfUri)
 
-		ctx, pd, err = p.Context().GetTokenCtx(models.ServiceName_NBSF_MANAGEMENT, models.NfType_BSF)
+		ctx, pd, err := p.Context().GetTokenCtx(models.ServiceName_NBSF_MANAGEMENT, models.NfType_BSF)
 		if err != nil {
 			c.JSON(int(pd.Status), pd)
 			return
 		}
 
-		_, resp, err = bsfClient.PCFBindingsCollectionApi.CreatePCFBinding(ctx, pcfBinding)
+		_, resp, err := bsfClient.PCFBindingsCollectionApi.CreatePCFBinding(ctx, pcfBinding)
 		if err != nil || resp == nil || resp.StatusCode != http.StatusCreated {
 			logger.SmPolicyLog.Warnf("Create PCF binding data in BSF error[%+v]", err)
 			// Uncomment the following to return error response --> PDU SessEstReq will fail
