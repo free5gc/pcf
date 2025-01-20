@@ -195,61 +195,6 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 		logger.SmPolicyLog.Errorf("createSMPolicyProcedure error: %+v", err)
 	}
 
-	pcc := util.CreateDefaultPccRules(smPolicyData.PccRuleIdGenerator)
-	smPolicyData.PccRuleIdGenerator++
-
-	filterCharging := bson.M{
-		"ueId":   ue.Supi,
-		"snssai": util.SnssaiModelsToHex(*request.SliceInfo),
-		"dnn":    "",
-		"filter": "",
-	}
-
-	chargingInterface, err := mongoapi.RestfulAPIGetOne(chargingDataColl, filterCharging, queryStrength)
-
-	if err != nil {
-		logger.SmPolicyLog.Errorf("Fail to get charging data to mongoDB err: %+v", err)
-		logger.SmPolicyLog.Errorf("chargingInterface %+v", chargingInterface)
-		util.SetPccRuleRelatedData(&decision, pcc, nil, nil, nil, nil)
-	} else if chargingInterface != nil {
-		rg, err1 := p.Context().RatingGroupIdGenerator.Allocate()
-		if err1 != nil {
-			logger.SmPolicyLog.Error("rating group allocate error")
-			problemDetails := util.GetProblemDetail("rating group allocate error", util.ERROR_IDGENERATOR)
-			c.JSON(int(problemDetails.Status), problemDetails)
-			return
-		}
-		chgData := &models.ChargingData{
-			ChgId:          util.GetChgId(smPolicyData.ChargingIdGenerator),
-			RatingGroup:    int32(rg),
-			ReportingLevel: models.ReportingLevel_RAT_GR_LEVEL,
-			MeteringMethod: models.MeteringMethod_VOLUME,
-		}
-
-		switch chargingInterface["chargingMethod"].(string) {
-		case "Online":
-			chgData.Online = true
-			chgData.Offline = false
-		case "Offline":
-			chgData.Online = false
-			chgData.Offline = true
-		}
-		util.SetPccRuleRelatedData(&decision, pcc, nil, nil, chgData, nil)
-
-		chargingInterface["ratingGroup"] = chgData.RatingGroup
-		logger.SmPolicyLog.Tracef("put ratingGroup[%+v] for [%+v] to MongoDB", chgData.RatingGroup, ue.Supi)
-		if _, err = mongoapi.RestfulAPIPutOne(
-			chargingDataColl, chargingInterface, chargingInterface, queryStrength); err != nil {
-			logger.SmPolicyLog.Errorf("Fail to put charging data to mongoDB err: %+v", err)
-		}
-		if ue.RatingGroupData == nil {
-			ue.RatingGroupData = make(map[string][]int32)
-		}
-		ue.RatingGroupData[smPolicyID] = append(ue.RatingGroupData[smPolicyID], chgData.RatingGroup)
-
-		smPolicyData.ChargingIdGenerator++
-	}
-
 	logger.SmPolicyLog.Traceln("FlowRules for ueId:", ue.Supi, "snssai:", util.SnssaiModelsToHex(*request.SliceInfo))
 	for i, flowRule := range flowRulesInterface {
 		logger.SmPolicyLog.Tracef("flowRule %d: %s\n", i, openapi.MarshToJsonString(flowRule))
