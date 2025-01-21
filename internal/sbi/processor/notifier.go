@@ -78,12 +78,12 @@ func (p *Processor) HandleInfluenceDataUpdateNotify(
 			if pccRuleID, ok := influenceDataToPccRule[influenceID]; ok {
 				// notifying Individual Influence Data update
 				pccRule := decision.PccRules[pccRuleID]
-				util.SetSmPolicyDecisionByTrafficInfluData(decision, pccRule, trafficInfluData)
+				util.SetSmPolicyDecisionByTrafficInfluData(decision, pccRule, trafficInfluData, nil)
 			} else {
 				// notifying Individual Influence Data creation
 
 				pccRule := util.CreatePccRule(smPolicy.PccRuleIdGenerator, precedence, nil, trafficInfluData.AfAppId)
-				util.SetSmPolicyDecisionByTrafficInfluData(decision, pccRule, trafficInfluData)
+				util.SetSmPolicyDecisionByTrafficInfluData(decision, pccRule, trafficInfluData, nil)
 				influenceDataToPccRule[influenceID] = pccRule.PccRuleId
 				smPolicy.PccRuleIdGenerator++
 				if precedence < Precedence_Maximum {

@@ -229,13 +229,13 @@ func SetSmPolicyDecisionByDefault(decision *models.SmPolicyDecision, id int32) {
 
 // Set SMpilicy decision with the PCC rule generated from the trafficInfluData
 func SetSmPolicyDecisionByTrafficInfluData(decision *models.SmPolicyDecision,
-	pccRule *models.PccRule, trafficInfluData models.TrafficInfluData,
+	pccRule *models.PccRule, trafficInfluData models.TrafficInfluData, chgData *models.ChargingData,
 ) {
 	tcData := convertToTrafficControlData(&trafficInfluData)
 	tcData.TcId = strings.ReplaceAll(pccRule.PccRuleId, "PccRuleId", "TcId")
 	flowInfos := convertToFlowinfos(&trafficInfluData)
 	pccRule.FlowInfos = flowInfos
-	SetPccRuleRelatedData(decision, pccRule, tcData, nil, nil, nil)
+	SetPccRuleRelatedData(decision, pccRule, tcData, nil, chgData, nil)
 }
 
 func convertToFlowinfos(trafficInfluData *models.TrafficInfluData) []models.FlowInformation {
