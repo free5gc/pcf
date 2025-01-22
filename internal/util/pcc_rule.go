@@ -25,7 +25,7 @@ func CreateDefaultPccRules(id int32) *models.PccRule {
 	flowInfo := []models.FlowInformation{
 		{
 			FlowDescription:   "permit out ip from any to assigned",
-			FlowDirection:     models.FlowDirectionRm_BIDIRECTIONAL,
+			FlowDirection:     models.FlowDirection_DOWNLINK,
 			PacketFilterUsage: true,
 			PackFiltId:        "PackFiltId-0",
 		},
