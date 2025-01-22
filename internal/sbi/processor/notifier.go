@@ -6,8 +6,10 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"go.mongodb.org/mongo-driver/bson"
 
 	"github.com/free5gc/openapi/models"
+	"github.com/free5gc/util/mongoapi"
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/internal/util"
 )
@@ -74,16 +76,72 @@ func (p *Processor) HandleInfluenceDataUpdateNotify(
 			}
 			delete(influenceDataToPccRule, influenceID)
 		} else {
+			var chgData *models.ChargingData
+			var chargingInterface map[string]interface{}
+
 			trafficInfluData := *notification.TrafficInfluData
+
+			filterCharging := bson.M{
+				"ueId":   ue.Supi,
+				"snssai": util.SnssaiModelsToHex(*trafficInfluData.Snssai),
+				"dnn":    "",
+				"filter": "",
+			}
+			chargingInterface, err := mongoapi.RestfulAPIGetOne(chargingDataColl, filterCharging, 2)
+			if err != nil {
+				logger.SmPolicyLog.Errorf("Fail to get charging data to mongoDB err: %+v", err)
+				chgData = nil
+			} else if chargingInterface != nil {
+				rg, err1 := p.Context().RatingGroupIdGenerator.Allocate()
+				if err1 != nil {
+					logger.SmPolicyLog.Error("rating group allocate error")
+					problemDetails := util.GetProblemDetail("rating group allocate error", util.ERROR_IDGENERATOR)
+					c.JSON(int(problemDetails.Status), problemDetails)
+					return
+				}
+				chgData = &models.ChargingData{
+					ChgId:          util.GetChgId(smPolicy.ChargingIdGenerator),
+					RatingGroup:    int32(rg),
+					ReportingLevel: models.ReportingLevel_RAT_GR_LEVEL,
+					MeteringMethod: models.MeteringMethod_VOLUME,
+				}
+
+				switch chargingInterface["chargingMethod"].(string) {
+				case "Online":
+					chgData.Online = true
+					chgData.Offline = false
+				case "Offline":
+					chgData.Online = false
+					chgData.Offline = true
+				}
+
+				if decision.ChgDecs == nil {
+					decision.ChgDecs = make(map[string]*models.ChargingData)
+				}
+
+				chargingInterface["ratingGroup"] = chgData.RatingGroup
+				logger.SmPolicyLog.Tracef("put ratingGroup[%+v] for [%+v] to MongoDB", chgData.RatingGroup, ue.Supi)
+				if _, err = mongoapi.RestfulAPIPutOne(
+					chargingDataColl, chargingInterface, chargingInterface, 2); err != nil {
+					logger.SmPolicyLog.Errorf("Fail to put charging data to mongoDB err: %+v", err)
+				} else {
+					smPolicy.ChargingIdGenerator++
+				}
+				if ue.RatingGroupData == nil {
+					ue.RatingGroupData = make(map[string][]int32)
+				}
+				ue.RatingGroupData[smPolicyID] = append(ue.RatingGroupData[smPolicyID], chgData.RatingGroup)
+			}
+
 			if pccRuleID, ok := influenceDataToPccRule[influenceID]; ok {
 				// notifying Individual Influence Data update
 				pccRule := decision.PccRules[pccRuleID]
-				util.SetSmPolicyDecisionByTrafficInfluData(decision, pccRule, trafficInfluData, nil)
+				util.SetSmPolicyDecisionByTrafficInfluData(decision, pccRule, trafficInfluData, chgData)
 			} else {
 				// notifying Individual Influence Data creation
 
 				pccRule := util.CreatePccRule(smPolicy.PccRuleIdGenerator, precedence, nil, trafficInfluData.AfAppId)
-				util.SetSmPolicyDecisionByTrafficInfluData(decision, pccRule, trafficInfluData, nil)
+				util.SetSmPolicyDecisionByTrafficInfluData(decision, pccRule, trafficInfluData, chgData)
 				influenceDataToPccRule[influenceID] = pccRule.PccRuleId
 				smPolicy.PccRuleIdGenerator++
 				if precedence < Precedence_Maximum {
