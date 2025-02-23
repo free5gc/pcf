@@ -404,7 +404,7 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 				"dnn":    "",
 				"filter": "",
 			}
-			chargingInterface, err := mongoapi.RestfulAPIGetOne(chargingDataColl, filterCharging, queryStrength)
+			chargingInterface, err = mongoapi.RestfulAPIGetOne(chargingDataColl, filterCharging, queryStrength)
 			if err != nil {
 				logger.SmPolicyLog.Errorf("Fail to get charging data to mongoDB err: %+v", err)
 				chgData = nil
