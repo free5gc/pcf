@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"github.com/free5gc/openapi"
-	"github.com/free5gc/openapi/Namf_Communication"
+	"github.com/free5gc/openapi/amf/Communication"
 	"github.com/free5gc/openapi/models"
 	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
@@ -18,10 +18,10 @@ type namfService struct {
 
 	nfComMu sync.RWMutex
 
-	nfComClients map[string]*Namf_Communication.APIClient
+	nfComClients map[string]*Communication.APIClient
 }
 
-func (s *namfService) getNFCommunicationClient(uri string) *Namf_Communication.APIClient {
+func (s *namfService) getNFCommunicationClient(uri string) *Communication.APIClient {
 	if uri == "" {
 		return nil
 	}
@@ -32,9 +32,9 @@ func (s *namfService) getNFCommunicationClient(uri string) *Namf_Communication.A
 		return client
 	}
 
-	configuration := Namf_Communication.NewConfiguration()
+	configuration := Communication.NewConfiguration()
 	configuration.SetBasePath(uri)
-	client = Namf_Communication.NewAPIClient(configuration)
+	client = Communication.NewAPIClient(configuration)
 
 	s.nfComMu.RUnlock()
 	s.nfComMu.Lock()
@@ -52,42 +52,39 @@ func (s *namfService) AmfStatusChangeSubscribe(amfUri string, guamiList []models
 	// Set client and set url
 	client := s.getNFCommunicationClient(amfUri)
 
-	subscriptionData := models.SubscriptionData{
+	subscriptionData := models.AmfCommunicationSubscriptionData{
 		AmfStatusUri: fmt.Sprintf("%s"+factory.PcfCallbackResUriPrefix+"/amfstatus", pcfContext.GetIPv4Uri()),
 		GuamiList:    guamiList,
 	}
-	ctx, pd, err := pcfContext.GetTokenCtx(models.ServiceName_NAMF_COMM, models.NfType_AMF)
+	amfStausChangeRequest := &Communication.AMFStatusChangeSubscribeRequest{}
+	amfStausChangeRequest.SetAmfCommunicationSubscriptionData(subscriptionData)
+	ctx, pd, err := pcfContext.GetTokenCtx(models.ServiceName_NAMF_COMM, models.NrfNfManagementNfType_AMF)
 	if err != nil {
 		return pd, err
 	}
-	res, httpResp, localErr := client.SubscriptionsCollectionDocumentApi.AMFStatusChangeSubscribe(
-		ctx, subscriptionData)
-	defer func() {
-		if rspCloseErr := httpResp.Body.Close(); rspCloseErr != nil {
-			logger.ConsumerLog.Errorf("AMFStatusChangeSubscribe response body cannot close: %+v",
-				rspCloseErr)
-		}
-	}()
+	res, localErr := client.SubscriptionsCollectionCollectionApi.AMFStatusChangeSubscribe(
+		ctx, amfStausChangeRequest)
+
 	if localErr == nil {
-		locationHeader := httpResp.Header.Get("Location")
+		locationHeader := res.Location
 		logger.ConsumerLog.Debugf("location header: %+v", locationHeader)
 
 		subscriptionID := locationHeader[strings.LastIndex(locationHeader, "/")+1:]
 		amfStatusSubsData := pcf_context.AMFStatusSubscriptionData{
 			AmfUri:       amfUri,
-			AmfStatusUri: res.AmfStatusUri,
-			GuamiList:    res.GuamiList,
+			AmfStatusUri: res.AmfCommunicationSubscriptionData.AmfStatusUri,
+			GuamiList:    res.AmfCommunicationSubscriptionData.GuamiList,
 		}
 		pcfContext.NewAmfStatusSubscription(subscriptionID, amfStatusSubsData)
-	} else if httpResp != nil {
-		if httpResp.Status != localErr.Error() {
-			err = localErr
-			return nil, err
-		}
-		problem := localErr.(openapi.GenericOpenAPIError).Model().(models.ProblemDetails)
-		problemDetails = &problem
-	} else {
-		err = openapi.ReportError("%s: server no response", amfUri)
 	}
-	return problemDetails, err
+
+	if genericErr, ok := localErr.(openapi.GenericOpenAPIError); ok {
+		if problemDetails, ok := genericErr.Model().(models.ProblemDetails); ok {
+			return &problemDetails, nil
+		}
+
+		logger.ConsumerLog.Errorf("openapi error: %+v", localErr)
+		return nil, localErr
+	}
+	return nil, localErr
 }

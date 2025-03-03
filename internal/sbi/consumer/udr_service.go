@@ -6,8 +6,8 @@ import (
 	"sync"
 
 	"github.com/free5gc/openapi"
-	"github.com/free5gc/openapi/Nudr_DataRepository"
 	"github.com/free5gc/openapi/models"
+	"github.com/free5gc/openapi/udr/DataRepository"
 	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/internal/util"
@@ -18,10 +18,10 @@ type nudrService struct {
 
 	nfDataSubMu sync.RWMutex
 
-	nfDataSubClients map[string]*Nudr_DataRepository.APIClient
+	nfDataSubClients map[string]*DataRepository.APIClient
 }
 
-func (s *nudrService) getDataSubscription(uri string) *Nudr_DataRepository.APIClient {
+func (s *nudrService) getDataSubscription(uri string) *DataRepository.APIClient {
 	if uri == "" {
 		return nil
 	}
@@ -32,15 +32,228 @@ func (s *nudrService) getDataSubscription(uri string) *Nudr_DataRepository.APICl
 		return client
 	}
 
-	configuration := Nudr_DataRepository.NewConfiguration()
+	configuration := DataRepository.NewConfiguration()
 	configuration.SetBasePath(uri)
-	client = Nudr_DataRepository.NewAPIClient(configuration)
+	client = DataRepository.NewAPIClient(configuration)
 
 	s.nfDataSubMu.RUnlock()
 	s.nfDataSubMu.Lock()
 	defer s.nfDataSubMu.Unlock()
 	s.nfDataSubClients[uri] = client
 	return client
+}
+
+func (s *nudrService) GetSessionManagementPolicyData(uri string,
+	ueId string, sliceInfo *models.Snssai, dnn string) (
+	resp *DataRepository.ReadSessionManagementPolicyDataResponse,
+	problemDetails *models.ProblemDetails, err error,
+) {
+	if uri == "" {
+		problemDetail := util.GetProblemDetail("Can't find any UDR which supported to this PCF",
+			"GetSessionManagementPolicyData Can't find UDR URI")
+		return nil, &problemDetail, nil
+	}
+
+	if ueId == "" {
+		problemDetail := util.GetProblemDetail("Can't find any UDR which supported to this PCF",
+			"GetSessionManagementPolicyData Can't find UE ID")
+		return nil, &problemDetail, nil
+	}
+
+	if sliceInfo == nil {
+		problemDetails := util.GetProblemDetail("Can't find any UDR which supported to this PCF",
+			"GetSessionManagementPolicyData Can't find Slice Info")
+		return nil, &problemDetails, nil
+	}
+
+	if dnn == "" {
+		problemDetails := util.GetProblemDetail("Can't find any UDR which supported to this PCF",
+			"GetSessionManagementPolicyData Can't find DNN")
+		return nil, &problemDetails, nil
+	}
+
+	ctx, pd, err := s.consumer.Context().GetTokenCtx(models.ServiceName_NUDR_DR, models.NrfNfManagementNfType_UDR)
+	if err != nil {
+		return nil, nil, err
+	} else if pd != nil {
+		return nil, pd, nil
+	}
+
+	client := s.getDataSubscription(uri)
+	param := DataRepository.ReadSessionManagementPolicyDataRequest{
+		UeId:   &ueId,
+		Snssai: sliceInfo,
+		Dnn:    &dnn,
+	}
+	resp, localErr := client.SessionManagementPolicyDataDocumentApi.ReadSessionManagementPolicyData(ctx, &param)
+	if localErr == nil {
+		return resp, nil, nil
+	}
+	if genericErr, ok := localErr.(openapi.GenericOpenAPIError); ok {
+		if problemDetails, ok := genericErr.Model().(models.ProblemDetails); ok {
+			return nil, &problemDetails, nil
+		}
+
+		logger.ConsumerLog.Errorf("openapi error: %+v", localErr)
+		return nil, nil, localErr
+	}
+
+	return nil, nil, localErr
+}
+
+func (s *nudrService) CreateBdtData(uri string, bdtData *models.BdtData) (
+	problemDetails *models.ProblemDetails, err error,
+) {
+	if uri == "" {
+		problemDetail := util.GetProblemDetail("Can't find any UDR which supported to this PCF",
+			"CreateBdtData Can't find UDR URI")
+		return &problemDetail, nil
+	}
+
+	ctx, pd, err := s.consumer.Context().GetTokenCtx(models.ServiceName_NUDR_DR, models.NrfNfManagementNfType_UDR)
+	if err != nil {
+		return nil, err
+	} else if pd != nil {
+		return pd, nil
+	}
+
+	client := s.getDataSubscription(uri)
+	param := DataRepository.CreateIndividualBdtDataRequest{
+		BdtData: bdtData,
+	}
+	_, localErr := client.IndividualBdtDataDocumentApi.CreateIndividualBdtData(ctx, &param)
+	if localErr == nil {
+		return nil, nil
+	}
+	if genericErr, ok := localErr.(openapi.GenericOpenAPIError); ok {
+		if problemDetails, ok := genericErr.Model().(models.ProblemDetails); ok {
+			return &problemDetails, nil
+		}
+
+		logger.ConsumerLog.Errorf("openapi error: %+v", localErr)
+		return nil, localErr
+	}
+
+	return nil, localErr
+}
+
+func (s *nudrService) CreateBdtPolicyContext(uri string, req *DataRepository.ReadBdtDataRequest) (
+	resp *DataRepository.ReadBdtDataResponse, problemDetails *models.ProblemDetails, err error,
+) {
+	if uri == "" {
+		problemDetail := util.GetProblemDetail("Can't find any UDR which supported to this PCF",
+			"CreateBdtData Can't find UDR URI")
+		return nil, &problemDetail, nil
+	}
+	ctx, pd, err := s.consumer.Context().GetTokenCtx(models.ServiceName_NUDR_DR, models.NrfNfManagementNfType_UDR)
+	if err != nil {
+		return nil, nil, err
+	} else if pd != nil {
+		return nil, pd, nil
+	}
+
+	client := s.getDataSubscription(uri)
+	resp, localErr := client.BdtDataStoreApi.ReadBdtData(ctx, req)
+	if localErr == nil {
+		return resp, nil, nil
+	}
+	if genericErr, ok := localErr.(openapi.GenericOpenAPIError); ok {
+		if problemDetails, ok := genericErr.Model().(models.ProblemDetails); ok {
+			return nil, &problemDetails, nil
+		}
+
+		logger.ConsumerLog.Errorf("openapi error: %+v", localErr)
+		return nil, nil, localErr
+	}
+
+	return nil, nil, localErr
+}
+
+func (s *nudrService) GetBdtData(uri string, bdtRefId string) (
+	resp *DataRepository.ReadIndividualBdtDataResponse, problemDetails *models.ProblemDetails, err error,
+) {
+	if uri == "" {
+		problemDetail := util.GetProblemDetail("Can't find any UDR which supported to this PCF",
+			"GetBdtData Can't find UDR URI")
+		return nil, &problemDetail, nil
+	}
+
+	if bdtRefId == "" {
+		problemDetail := util.GetProblemDetail("Can't find any UDR which supported to this PCF",
+			"GetBdtData Can't find BdtRefId")
+		return nil, &problemDetail, nil
+	}
+
+	ctx, pd, err := s.consumer.Context().GetTokenCtx(models.ServiceName_NUDR_DR, models.NrfNfManagementNfType_UDR)
+	if err != nil {
+		return nil, nil, err
+	} else if pd != nil {
+		return nil, pd, nil
+	}
+
+	readBdtDataReq := DataRepository.ReadIndividualBdtDataRequest{
+		BdtReferenceId: &bdtRefId,
+	}
+
+	client := s.getDataSubscription(uri)
+	resp, localErr := client.IndividualBdtDataDocumentApi.ReadIndividualBdtData(ctx, &readBdtDataReq)
+	if localErr == nil {
+		return resp, nil, nil
+	}
+
+	if genericErr, ok := localErr.(openapi.GenericOpenAPIError); ok {
+		if problemDetails, ok := genericErr.Model().(models.ProblemDetails); ok {
+			return nil, &problemDetails, nil
+		}
+
+		logger.ConsumerLog.Errorf("openapi error: %+v", localErr)
+		return nil, nil, localErr
+	}
+
+	return nil, nil, localErr
+}
+
+func (s *nudrService) GetAccessAndMobilityPolicyData(ue *pcf_context.UeContext) (
+	amPolicyData *models.AmPolicyData,
+	problemDetails *models.ProblemDetails, err error,
+) {
+	if ue.Supi == "" {
+		problemDetail := util.GetProblemDetail("Can't find corresponding SUPI with UE", util.USER_UNKNOWN)
+		logger.ConsumerLog.Warn("Can't find corresponding SUPI with UE")
+		return nil, &problemDetail, nil
+	}
+
+	if ue.UdrUri == "" {
+		problemDetail := util.GetProblemDetail("Can't find corresponding UDR with UE", util.USER_UNKNOWN)
+		logger.ConsumerLog.Warnf("Can't find corresponding UDR with UE[%s]", ue.Supi)
+		return nil, &problemDetail, nil
+	}
+
+	ctx, pd, err := s.consumer.Context().GetTokenCtx(models.ServiceName_NUDR_DR, models.NrfNfManagementNfType_UDR)
+	if err != nil {
+		return nil, nil, err
+	} else if pd != nil {
+		return nil, pd, nil
+	}
+
+	client := s.getDataSubscription(ue.UdrUri)
+	param := DataRepository.ReadAccessAndMobilityPolicyDataRequest{
+		UeId: &ue.Supi,
+	}
+	resp, localErr := client.AccessAndMobilityPolicyDataDocumentApi.ReadAccessAndMobilityPolicyData(ctx, &param)
+	if localErr == nil {
+		return &resp.AmPolicyData, nil, nil
+	}
+	if genericErr, ok := localErr.(openapi.GenericOpenAPIError); ok {
+		if problemDetails, ok := genericErr.Model().(models.ProblemDetails); ok {
+			return nil, &problemDetails, nil
+		}
+
+		logger.ConsumerLog.Errorf("openapi error: %+v", localErr)
+		return nil, nil, localErr
+	}
+
+	return nil, nil, localErr
 }
 
 func (s *nudrService) CreateInfluenceDataSubscription(ue *pcf_context.UeContext, request models.SmPolicyContextData) (
@@ -51,36 +264,33 @@ func (s *nudrService) CreateInfluenceDataSubscription(ue *pcf_context.UeContext,
 		logger.ConsumerLog.Warnf("Can't find corresponding UDR with UE[%s]", ue.Supi)
 		return "", &problemDetail, nil
 	}
-	ctx, pd, err := s.consumer.Context().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
+	ctx, pd, err := s.consumer.Context().GetTokenCtx(models.ServiceName_NUDR_DR, models.NrfNfManagementNfType_UDR)
 	if err != nil {
 		return "", pd, err
 	}
 	client := s.getDataSubscription(ue.UdrUri)
 	trafficInfluSub := s.buildTrafficInfluSub(request)
-	_, httpResp, localErr := client.InfluenceDataSubscriptionsCollectionApi.
-		ApplicationDataInfluenceDataSubsToNotifyPost(ctx, trafficInfluSub)
+	individualInfluenceDataSubscReq := DataRepository.CreateIndividualInfluenceDataSubscriptionRequest{
+		TrafficInfluSub: &trafficInfluSub,
+	}
+	httpResp, localErr := client.InfluenceDataSubscriptionsCollectionApi.
+		CreateIndividualInfluenceDataSubscription(ctx, &individualInfluenceDataSubscReq)
 	if localErr == nil {
-		locationHeader := httpResp.Header.Get("Location")
+		locationHeader := httpResp.Location
 		subscriptionID = locationHeader[strings.LastIndex(locationHeader, "/")+1:]
 		logger.ConsumerLog.Debugf("Influence Data Subscription ID: %s", subscriptionID)
 		return subscriptionID, nil, nil
-	} else if httpResp != nil {
-		defer func() {
-			if rspCloseErr := httpResp.Body.Close(); rspCloseErr != nil {
-				logger.ConsumerLog.Errorf("CreateInfluenceDataSubscription response body cannot close: %+v",
-					rspCloseErr)
-			}
-		}()
-		if httpResp.Status != localErr.Error() {
-			err = localErr
-			return subscriptionID, problemDetails, err
-		}
-		problem := localErr.(openapi.GenericOpenAPIError).Model().(models.ProblemDetails)
-		problemDetails = &problem
-	} else {
-		err = openapi.ReportError("server no response")
 	}
-	return "", problemDetails, err
+	if genericErr, ok := localErr.(openapi.GenericOpenAPIError); ok {
+		if problemDetails, ok := genericErr.Model().(models.ProblemDetails); ok {
+			return "", &problemDetails, nil
+		}
+
+		logger.ConsumerLog.Errorf("openapi error: %+v", localErr)
+		return "", nil, err
+	}
+
+	return "", nil, localErr
 }
 
 func (s *nudrService) buildTrafficInfluSub(request models.SmPolicyContextData) models.TrafficInfluSub {
@@ -105,31 +315,27 @@ func (s *nudrService) RemoveInfluenceDataSubscription(ue *pcf_context.UeContext,
 		logger.ConsumerLog.Warnf("Can't find corresponding UDR with UE[%s]", ue.Supi)
 		return &problemDetail, nil
 	}
-	ctx, pd, err := s.consumer.Context().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
+	ctx, pd, err := s.consumer.Context().GetTokenCtx(models.ServiceName_NUDR_DR, models.NrfNfManagementNfType_UDR)
 	if err != nil {
 		return pd, err
 	}
 	client := s.getDataSubscription(ue.UdrUri)
-	httpResp, localErr := client.IndividualInfluenceDataSubscriptionDocumentApi.
-		ApplicationDataInfluenceDataSubsToNotifySubscriptionIdDelete(ctx, subscriptionID)
-	if localErr == nil {
-		logger.ConsumerLog.Debugf("Nudr_DataRepository Remove Influence Data Subscription Status %s",
-			httpResp.Status)
-	} else if httpResp != nil {
-		defer func() {
-			if rspCloseErr := httpResp.Body.Close(); rspCloseErr != nil {
-				logger.ConsumerLog.Errorf("RemoveInfluenceDataSubscription response body cannot close: %+v",
-					rspCloseErr)
-			}
-		}()
-		if httpResp.Status != localErr.Error() {
-			err = localErr
-			return problemDetails, err
-		}
-		problem := localErr.(openapi.GenericOpenAPIError).Model().(models.ProblemDetails)
-		problemDetails = &problem
-	} else {
-		err = openapi.ReportError("server no response")
+	deleteIndividualInfluenceDataSubscriptionReq := DataRepository.DeleteIndividualInfluenceDataSubscriptionRequest{
+		SubscriptionId: &subscriptionID,
 	}
-	return problemDetails, err
+	_, localErr := client.IndividualInfluenceDataSubscriptionDocumentApi.
+		DeleteIndividualInfluenceDataSubscription(ctx, &deleteIndividualInfluenceDataSubscriptionReq)
+	if localErr == nil {
+		logger.ConsumerLog.Debugf("DataRepository Remove Influence Data Subscription Status With No Err")
+	}
+	if genericErr, ok := localErr.(openapi.GenericOpenAPIError); ok {
+		if problemDetails, ok := genericErr.Model().(models.ProblemDetails); ok {
+			return &problemDetails, nil
+		}
+
+		logger.ConsumerLog.Errorf("openapi error: %+v", localErr)
+		return nil, localErr
+	}
+
+	return nil, localErr
 }

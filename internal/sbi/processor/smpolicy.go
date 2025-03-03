@@ -6,13 +6,14 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/antihax/optional"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 
 	"github.com/free5gc/openapi"
-	"github.com/free5gc/openapi/Nudr_DataRepository"
+	"github.com/free5gc/openapi/bsf/Management"
 	"github.com/free5gc/openapi/models"
+	"github.com/free5gc/openapi/pcf/SMPolicyControl"
+	"github.com/free5gc/openapi/udr/DataRepository"
 	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/internal/util"
@@ -67,32 +68,23 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 	smPolicyID := fmt.Sprintf("%s-%d", ue.Supi, request.PduSessionId)
 	smPolicyData := ue.SmPolicyData[smPolicyID]
 	if smPolicyData == nil || smPolicyData.SmPolicyData == nil {
-		client := util.GetNudrClient(udrUri)
-		param := Nudr_DataRepository.PolicyDataUesUeIdSmDataGetParamOpts{
-			Snssai: optional.NewInterface(util.MarshToJsonString(*request.SliceInfo)),
-			Dnn:    optional.NewString(request.Dnn),
-		}
-		var response *http.Response
-
-		ctx, pd, err1 := p.Context().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
-		if err1 != nil {
-			c.JSON(int(pd.Status), pd)
-			return
-		}
-
-		smData, response, err1 = client.DefaultApi.PolicyDataUesUeIdSmDataGet(ctx, ue.Supi, &param)
-		if err1 != nil || response == nil || response.StatusCode != http.StatusOK {
+		var response *DataRepository.ReadSessionManagementPolicyDataResponse
+		response, pd, sessionErr := p.Consumer().GetSessionManagementPolicyData(
+			udrUri,
+			ue.Supi,
+			request.SliceInfo,
+			request.Dnn,
+		)
+		smData = response.SmPolicyData
+		if sessionErr != nil || response == nil {
 			problemDetail := util.GetProblemDetail("Can't find UE SM Policy Data in UDR", util.USER_UNKNOWN)
 			logger.SmPolicyLog.Warnf("Can't find UE[%s] SM Policy Data in UDR", ue.Supi)
 			c.JSON(int(problemDetail.Status), problemDetail)
 			return
+		} else if pd != nil {
+			c.JSON(int(pd.Status), pd)
+			return
 		}
-		defer func() {
-			if rspCloseErr := response.Body.Close(); rspCloseErr != nil {
-				logger.SmPolicyLog.Errorf(
-					"PolicyDataUesUeIdSmDataGet response body cannot close: %+v", rspCloseErr)
-			}
-		}()
 		// TODO: subscribe to UDR
 	} else {
 		smData = *smPolicyData.SmPolicyData
@@ -293,7 +285,7 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 			pccRule := util.CreatePccRule(smPolicyData.PccRuleIdGenerator, precedence, []models.FlowInformation{
 				{
 					FlowDescription: FlowDescriptionStr,
-					FlowDirection:   models.FlowDirectionRm_DOWNLINK,
+					FlowDirection:   models.FlowDirection_DOWNLINK,
 				},
 			}, "")
 
@@ -367,28 +359,28 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 	smPolicyData.PolicyDecision = &decision
 	// TODO: PCC rule, PraInfo ...
 	// Get Application Data Influence Data from UDR
-	reqParam := Nudr_DataRepository.ApplicationDataInfluenceDataGetParamOpts{
-		Dnns:             optional.NewInterface([]string{request.Dnn}),
-		Snssais:          optional.NewInterface(util.MarshToJsonString([]models.Snssai{*request.SliceInfo})),
-		InternalGroupIds: optional.NewInterface(request.InterGrpIds),
-		Supis:            optional.NewInterface([]string{request.Supi}),
+	// r15: ApplicationDataInfluenceDataGetParamOpts
+	// r17: CreateOrReplaceIndividualInfluenceDataRequest || ReadInfluenceDataRequest
+	reqParam := DataRepository.ReadInfluenceDataRequest{
+		Dnns:             []string{request.Dnn},
+		Snssais:          []models.Snssai{*request.SliceInfo},
+		InternalGroupIds: request.InterGrpIds,
+		Supis:            []string{request.Supi},
 	}
 
-	ctx, pd, err := p.Context().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
+	ctx, pd, err := p.Context().GetTokenCtx(models.ServiceName_NUDR_DR, models.NrfNfManagementNfType_UDR)
 	if err != nil {
 		c.JSON(int(pd.Status), pd)
 		return
 	}
 
 	udrClient := util.GetNudrClient(udrUri)
-	var resp *http.Response
-	trafficInfluDatas, resp, err := udrClient.InfluenceDataApi.
-		ApplicationDataInfluenceDataGet(ctx, &reqParam)
-	if err != nil || resp == nil || resp.StatusCode != http.StatusOK {
+	// var resp *http.Response
+	resp, err := udrClient.InfluenceDataStoreApi.
+		ReadInfluenceData(ctx, &reqParam)
+	trafficInfluDatas := resp.TrafficInfluData
+	if err != nil || resp == nil {
 		logger.SmPolicyLog.Warnf("Error response from UDR Application Data Influence Data Get")
-	}
-	if err = resp.Body.Close(); err != nil {
-		logger.SmPolicyLog.Warnf("failed to close response of Application Data Influence Data Get")
 	}
 	logger.SmPolicyLog.Infof("Matched [%d] trafficInfluDatas from UDR", len(trafficInfluDatas))
 	if len(trafficInfluDatas) != 0 {
@@ -483,7 +475,7 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 		Dnn:            request.Dnn,
 		Snssai:         request.SliceInfo,
 		PcfFqdn:        policyAuthorizationService.ApiPrefix,
-		PcfIpEndPoints: *policyAuthorizationService.IpEndPoints,
+		PcfIpEndPoints: policyAuthorizationService.IpEndPoints,
 	}
 
 	// TODO: Record BSF URI instead of discovering from NRF every time
@@ -491,23 +483,20 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 	if bsfUri != "" {
 		bsfClient := util.GetNbsfClient(bsfUri)
 
-		ctx, pd, err = p.Context().GetTokenCtx(models.ServiceName_NBSF_MANAGEMENT, models.NfType_BSF)
+		ctx, pd, err = p.Context().GetTokenCtx(models.ServiceName_NBSF_MANAGEMENT, models.NrfNfManagementNfType_BSF)
 		if err != nil {
 			c.JSON(int(pd.Status), pd)
 			return
 		}
-
-		_, resp, err = bsfClient.PCFBindingsCollectionApi.CreatePCFBinding(ctx, pcfBinding)
-		if err != nil || resp == nil || resp.StatusCode != http.StatusCreated {
+		req := Management.CreatePCFBindingRequest{
+			PcfBinding: &pcfBinding,
+		}
+		resp, err := bsfClient.PCFBindingsCollectionApi.CreatePCFBinding(ctx, &req)
+		if err != nil || resp == nil {
 			logger.SmPolicyLog.Warnf("Create PCF binding data in BSF error[%+v]", err)
 			// Uncomment the following to return error response --> PDU SessEstReq will fail
 			// problemDetail := util.GetProblemDetail("Cannot create PCF binding data in BSF", "")
 			// return nil, nil, &problemDetail
-		}
-		if resp != nil {
-			if err := resp.Body.Close(); err != nil {
-				logger.SmPolicyLog.Warnf("failed to close response of Create PCF binding")
-			}
 		}
 	}
 	locationHeader := util.GetResourceUri(models.ServiceName_NPCF_SMPOLICYCONTROL, smPolicyID)
@@ -572,7 +561,7 @@ func (p *Processor) HandleDeleteSmPolicyContextRequest(
 
 	// Release related App Session
 	terminationInfo := models.TerminationInfo{
-		TermCause: models.TerminationCause_PDU_SESSION_TERMINATION,
+		TermCause: models.PcfPolicyAuthorizationTerminationCause_PDU_SESSION_TERMINATION,
 	}
 	for appSessionID := range smPolicy.AppSessions {
 		if val, exist := pcfSelf.AppSessionPool.Load(appSessionID); exist {
@@ -644,7 +633,7 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 	errCause := ""
 
 	// For App Session Notification
-	afEventsNotification := models.EventsNotification{}
+	afEventsNotification := models.PcfPolicyAuthorizationEventsNotification{}
 	for _, trigger := range request.RepPolicyCtrlReqTriggers {
 		switch trigger {
 		case models.PolicyControlRequestTrigger_PLMN_CH: // PLMN Change
@@ -653,12 +642,12 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 				break
 			}
 			smPolicyContext.ServingNetwork = request.ServingNetwork
-			afEventsNotification.PlmnId = &models.PlmnId{
+			afEventsNotification.PlmnId = &models.PlmnIdNid{
 				Mcc: request.ServingNetwork.Mcc,
 				Mnc: request.ServingNetwork.Mnc,
 			}
-			afNotif := models.AfEventNotification{
-				Event: models.AfEvent_PLMN_CHG,
+			afNotif := models.PcfPolicyAuthorizationAfEventNotification{
+				Event: models.PcfPolicyAuthorizationAfEvent_PLMN_CHG,
 			}
 			afEventsNotification.EvNotifs = append(afEventsNotification.EvNotifs, afNotif)
 
@@ -822,8 +811,8 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 				smPolicyContext.RatType = request.RatType
 				afEventsNotification.RatType = request.RatType
 			}
-			afNotif := models.AfEventNotification{
-				Event: models.AfEvent_ACCESS_TYPE_CHANGE,
+			afNotif := models.PcfPolicyAuthorizationAfEventNotification{
+				Event: models.PcfPolicyAuthorizationAfEvent_ACCESS_TYPE_CHANGE,
 			}
 			afEventsNotification.EvNotifs = append(afEventsNotification.EvNotifs, afNotif)
 			logger.SmPolicyLog.Tracef("SM Policy Update(%s) Successfully", trigger)
@@ -847,8 +836,8 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 		// Access Network Charging Correlation Info (subsclause 4.2.6.5.1, 4.2.4.13 in TS29512)
 		// request.AccNetChIds
 		case models.PolicyControlRequestTrigger_US_RE: // UMC (subsclause 4.2.4.10, 5.8 in TS29512)
-			afNotif := models.AfEventNotification{
-				Event: models.AfEvent_USAGE_REPORT,
+			afNotif := models.PcfPolicyAuthorizationAfEventNotification{
+				Event: models.PcfPolicyAuthorizationAfEvent_USAGE_REPORT,
 			}
 			afEventsNotification.EvNotifs = append(afEventsNotification.EvNotifs, afNotif)
 		case models.PolicyControlRequestTrigger_APP_STA: // ADC (subsclause 4.2.4.6, 5.8 in TS29512)
@@ -904,11 +893,17 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 		case models.PolicyControlRequestTrigger_QOS_NOTIF:
 			// SMF notify PCF when receiving from RAN that QoS can/can't be guaranteed (subsclause 4.2.4.20 in TS29512) (always)
 			// request.QncReports
-			afNotif := models.AfEventNotification{
-				Event: models.AfEvent_QOS_NOTIF,
+			afNotif := models.PcfPolicyAuthorizationAfEventNotification{
+				Event: models.PcfPolicyAuthorizationAfEvent_QOS_NOTIF,
 			}
 			afEventsNotification.EvNotifs = append(afEventsNotification.EvNotifs, afNotif)
-			afEventsNotification.QncReports = request.QncReports
+			for _, report := range request.QncReports {
+				afEventsNotification.QncReports = append(
+					afEventsNotification.QncReports,
+					models.PcfPolicyAuthorizationQosNotificationControlInfo{
+						NotifType: report.NotifType,
+					})
+			}
 		case models.PolicyControlRequestTrigger_NO_CREDIT: // Out of Credit
 		case models.PolicyControlRequestTrigger_PRA_CH: // Presence Reporting (subsclause 4.2.6.5.6, 4.2.4.16, 5.8 in TS29512)
 			// request.RepPraInfos
@@ -938,8 +933,8 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 			// Outcome of request Pcc rule removal (subsclause 4.2.6.5.2, 5.8 in TS29512)
 		case models.PolicyControlRequestTrigger_SUCC_RES_ALLO:
 			// Successful resource allocation (subsclause 4.2.6.5.5, 4.2.4.14 in TS29512)
-			afNotif := models.AfEventNotification{
-				Event: models.AfEvent_SUCCESSFUL_RESOURCES_ALLOCATION,
+			afNotif := models.PcfPolicyAuthorizationAfEventNotification{
+				Event: models.PcfPolicyAuthorizationAfEvent_SUCCESSFUL_RESOURCES_ALLOCATION,
 			}
 			afEventsNotification.EvNotifs = append(afEventsNotification.EvNotifs, afNotif)
 		case models.PolicyControlRequestTrigger_RAT_TY_CH: // Change of RatType
@@ -982,8 +977,8 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 		}
 	}
 	if len(failRules) > 0 {
-		afNotif := models.AfEventNotification{
-			Event: models.AfEvent_FAILED_RESOURCES_ALLOCATION,
+		afNotif := models.PcfPolicyAuthorizationAfEventNotification{
+			Event: models.PcfPolicyAuthorizationAfEvent_FAILED_RESOURCES_ALLOCATION,
 		}
 		afEventsNotification.EvNotifs = append(afEventsNotification.EvNotifs, afNotif)
 	}
@@ -1003,7 +998,7 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 }
 
 func (p *Processor) sendSmPolicyRelatedAppSessionNotification(smPolicy *pcf_context.UeSmPolicyData,
-	notification models.EventsNotification, usageReports []models.AccuUsageReport,
+	notification models.PcfPolicyAuthorizationEventsNotification, usageReports []models.AccuUsageReport,
 	successRules, failRules []models.RuleReport,
 ) {
 	for appSessionId := range smPolicy.AppSessions {
@@ -1012,14 +1007,14 @@ func (p *Processor) sendSmPolicyRelatedAppSessionNotification(smPolicy *pcf_cont
 			if len(appSession.Events) == 0 {
 				continue
 			}
-			sessionNotif := models.EventsNotification{}
+			sessionNotif := models.PcfPolicyAuthorizationEventsNotification{}
 			for _, notif := range notification.EvNotifs {
 				if _, found := appSession.Events[notif.Event]; found {
 					switch notif.Event {
-					case models.AfEvent_ACCESS_TYPE_CHANGE:
+					case models.PcfPolicyAuthorizationAfEvent_ACCESS_TYPE_CHANGE:
 						sessionNotif.AccessType = notification.AccessType
 						sessionNotif.RatType = notification.RatType
-					case models.AfEvent_FAILED_RESOURCES_ALLOCATION:
+					case models.PcfPolicyAuthorizationAfEvent_FAILED_RESOURCES_ALLOCATION:
 						failItem := models.ResourcesAllocationInfo{
 							McResourcStatus: models.MediaComponentResourcesStatus_INACTIVE,
 						}
@@ -1074,21 +1069,25 @@ func (p *Processor) sendSmPolicyRelatedAppSessionNotification(smPolicy *pcf_cont
 						} else {
 							continue
 						}
-					case models.AfEvent_PLMN_CHG:
+					case models.PcfPolicyAuthorizationAfEvent_PLMN_CHG:
 						sessionNotif.PlmnId = notification.PlmnId
-					case models.AfEvent_QOS_NOTIF:
-						for _, report := range sessionNotif.QncReports {
-							for _, pccRuleId := range report.RefPccRuleIds {
-								if _, exist := appSession.PccRuleIdMapToCompId[pccRuleId]; exist {
-									sessionNotif.QncReports = append(sessionNotif.QncReports, report)
-									break
-								}
-							}
-						}
-						if sessionNotif.QncReports == nil {
-							continue
-						}
-					case models.AfEvent_SUCCESSFUL_RESOURCES_ALLOCATION:
+					case models.PcfPolicyAuthorizationAfEvent_QOS_NOTIF:
+						// TODO: Send Qos Notification to AF
+						// SMF notify PCF : 29.512 4.2.4.20 Notification about Service Data Flow QoS target enforcement
+						// PCF notify AF : 29.514  4.2.5.4 Notification about Service Data Flow QoS notification control
+
+						// for _, report := range sessionNotif.QncReports {
+						// 	for _, pccRuleId := range report.RefPccRuleIds {
+						// 		if _, exist := appSession.PccRuleIdMapToCompId[pccRuleId]; exist {
+						// 			sessionNotif.QncReports = append(sessionNotif.QncReports, report)
+						// 			break
+						// 		}
+						// 	}
+						// }
+						// if sessionNotif.QncReports == nil {
+						// 	continue
+						// }
+					case models.PcfPolicyAuthorizationAfEvent_SUCCESSFUL_RESOURCES_ALLOCATION:
 						// Subscription to resources allocation outcome
 						if successRules == nil {
 							continue
@@ -1138,7 +1137,7 @@ func (p *Processor) sendSmPolicyRelatedAppSessionNotification(smPolicy *pcf_cont
 						if notif.Flows == nil {
 							continue
 						}
-					case models.AfEvent_USAGE_REPORT:
+					case models.PcfPolicyAuthorizationAfEvent_USAGE_REPORT:
 						for _, report := range usageReports {
 							for _, pccRuleId := range appSession.RelatedPccRuleIds {
 								if pccRule, exist := appSession.SmPolicyData.PolicyDecision.PccRules[pccRuleId]; exist {
@@ -1180,78 +1179,58 @@ func (p *Processor) SendSMPolicyUpdateNotification(
 		return
 	}
 
-	ctx, _, err := p.Context().GetTokenCtx(models.ServiceName_NPCF_SMPOLICYCONTROL, models.NfType_PCF)
+	ctx, _, err := p.Context().GetTokenCtx(models.ServiceName_NPCF_SMPOLICYCONTROL, models.NrfNfManagementNfType_PCF)
 	if err != nil {
 		return
 	}
 
 	client := util.GetNpcfSMPolicyCallbackClient()
 	logger.SmPolicyLog.Infof("Send SM Policy Update Notification to SMF")
-	_, httpResponse, err := client.DefaultCallbackApi.SmPolicyUpdateNotification(ctx, uri, *request)
-	defer func() {
-		if httpResponse != nil {
-			if err = httpResponse.Body.Close(); err != nil {
-				logger.SmPolicyLog.Warnf(
-					"failed to close response of SM Policy Update Notification")
-			}
-		}
-	}()
-	if err != nil {
-		if httpResponse != nil {
-			logger.SmPolicyLog.Warnf("SM Policy Update Notification Error[%s]", httpResponse.Status)
-		} else {
-			logger.SmPolicyLog.Warnf("SM Policy Update Notification Failed[%s]", err.Error())
-		}
-		return
-	} else if httpResponse == nil {
-		logger.SmPolicyLog.Warnln("SM Policy Update Notification Failed[HTTP Response is nil]")
-		return
+	req := SMPolicyControl.SMPolicyUpdateNotificationRequest{
+		SmPolicyNotification: request,
 	}
-	if httpResponse.StatusCode != http.StatusOK && httpResponse.StatusCode != http.StatusNoContent {
-		logger.SmPolicyLog.Warnf("SM Policy Update Notification Failed")
-	} else {
+	_, err = client.SMPoliciesCollectionApi.SMPolicyUpdateNotification(ctx, uri, &req)
+
+	switch err.(type) {
+	case openapi.GenericOpenAPIError:
+		logger.SmPolicyLog.Warnf("SM Policy Update Notification Error[%s]", err.Error())
+	case error:
+		logger.SmPolicyLog.Warnf("SM Policy Update Notification Failed[%s]", err.Error())
+	case nil:
 		logger.SmPolicyLog.Tracef("SM Policy Update Notification Success")
+	default:
+		logger.SmPolicyLog.Warnf("SM Policy Update Notification Unknown Error %+v", err)
 	}
 }
 
 func (p *Processor) SendSMPolicyTerminationRequestNotification(
-	uri string, request *models.TerminationNotification,
+	uri string, request *models.PcfSmPolicyControlTerminationNotification,
 ) {
 	if uri == "" {
 		logger.SmPolicyLog.Warnln("SM Policy Termination Request Notification Error[uri is empty]")
 		return
 	}
 
-	ctx, _, err := p.Context().GetTokenCtx(models.ServiceName_NPCF_SMPOLICYCONTROL, models.NfType_PCF)
+	ctx, _, err := p.Context().GetTokenCtx(models.ServiceName_NPCF_SMPOLICYCONTROL, models.NrfNfManagementNfType_PCF)
 	if err != nil {
 		return
 	}
 
 	client := util.GetNpcfSMPolicyCallbackClient()
-	rsp, err := client.DefaultCallbackApi.
-		SmPolicyControlTerminationRequestNotification(ctx, uri, *request)
-	defer func() {
-		if rsp != nil {
-			if err = rsp.Body.Close(); err != nil {
-				logger.SmPolicyLog.Warnf(
-					"failed to close response of SM Policy Termination Request notification")
-			}
-		}
-	}()
-	if err != nil {
-		if rsp != nil {
-			logger.AmPolicyLog.Warnf("SM Policy Termination Request Notification Error[%s]", rsp.Status)
-		} else {
-			logger.AmPolicyLog.Warnf("SM Policy Termination Request Notification Error[%s]", err.Error())
-		}
-		return
-	} else if rsp == nil {
-		logger.AmPolicyLog.Warnln("SM Policy Termination Request Notification Error[HTTP Response is nil]")
-		return
+	req := SMPolicyControl.SMPolicyTerminationRequestNotificationRequest{
+		PcfSmPolicyControlTerminationNotification: request,
 	}
-	if rsp.StatusCode != http.StatusNoContent {
-		logger.SmPolicyLog.Warnf("SM Policy Termination Request Notification  Failed")
-	} else {
+	_, err = client.SMPoliciesCollectionApi.
+		SMPolicyTerminationRequestNotification(ctx, uri, &req)
+
+	switch err.(type) {
+	case openapi.GenericOpenAPIError:
+		logger.SmPolicyLog.Warnf("SM Policy Termination Request Notification Error[%s]", err.Error())
+	case error:
+		logger.SmPolicyLog.Warnf("SM Policy Termination Request Notification Failed[%s]", err.Error())
+	case nil:
 		logger.SmPolicyLog.Tracef("SM Policy Termination Request Notification Success")
+	default:
+		logger.SmPolicyLog.Warnf("SM Policy Termination Request Notification Unknown Error %+v", err)
 	}
 }

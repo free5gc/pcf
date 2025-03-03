@@ -35,7 +35,7 @@ func (p *Processor) HandlePolicyDataChangeNotify(
 
 	PolicyDataChangeNotifyProcedure(supi, policyDataChangeNotification)
 
-	c.JSON(http.StatusNotImplemented, nil)
+	c.JSON(http.StatusNotImplemented, gin.H{})
 }
 
 // TODO: handle Policy Data Change Notify
