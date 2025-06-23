@@ -18,6 +18,7 @@ import (
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/internal/util"
+	"github.com/free5gc/util/metrics/sbi"
 )
 
 func (s *Server) getSmPolicyRoutes() []Route {
@@ -62,6 +63,7 @@ func (s *Server) HTTPCreateSMPolicy(c *gin.Context) {
 			Cause:  "SYSTEM_FAILURE",
 		}
 		logger.SmPolicyLog.Errorf("Get Request Body error: %+v", err)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
 		c.JSON(http.StatusInternalServerError, problemDetail)
 		return
 	}
@@ -76,7 +78,8 @@ func (s *Server) HTTPCreateSMPolicy(c *gin.Context) {
 			Detail: problemDetail,
 		}
 		logger.SmPolicyLog.Errorln(problemDetail)
-		c.JSON(http.StatusBadRequest, rsp)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, http.StatusText(int(rsp.Status)))
+		c.JSON(int(rsp.Status), rsp)
 		return
 	}
 
@@ -91,7 +94,8 @@ func (s *Server) HTTPDeleteSMPolicy(c *gin.Context) {
 			Title:  util.ERROR_INITIAL_PARAMETERS,
 			Status: http.StatusBadRequest,
 		}
-		c.JSON(http.StatusBadRequest, problemDetails)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetails.Title)
+		c.JSON(int(problemDetails.Status), problemDetails)
 		return
 	}
 	s.Processor().HandleDeleteSmPolicyContextRequest(c, smPolicyId)
@@ -105,7 +109,8 @@ func (s *Server) HTTPGetSMPolicy(c *gin.Context) {
 			Title:  util.ERROR_INITIAL_PARAMETERS,
 			Status: http.StatusBadRequest,
 		}
-		c.JSON(http.StatusBadRequest, problemDetails)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetails.Title)
+		c.JSON(int(problemDetails.Status), problemDetails)
 		return
 	}
 	s.Processor().HandleGetSmPolicyContextRequest(c, smPolicyId)
@@ -123,6 +128,7 @@ func (s *Server) HTTPUpdateSMPolicy(c *gin.Context) {
 			Cause:  "SYSTEM_FAILURE",
 		}
 		logger.SmPolicyLog.Errorf("Get Request Body error: %+v", err)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
 		c.JSON(http.StatusInternalServerError, problemDetail)
 		return
 	}
@@ -137,7 +143,8 @@ func (s *Server) HTTPUpdateSMPolicy(c *gin.Context) {
 			Detail: problemDetail,
 		}
 		logger.SmPolicyLog.Errorln(problemDetail)
-		c.JSON(http.StatusBadRequest, rsp)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, http.StatusText(int(rsp.Status)))
+		c.JSON(int(rsp.Status), rsp)
 		return
 	}
 
@@ -147,7 +154,8 @@ func (s *Server) HTTPUpdateSMPolicy(c *gin.Context) {
 			Title:  util.ERROR_INITIAL_PARAMETERS,
 			Status: http.StatusBadRequest,
 		}
-		c.JSON(http.StatusBadRequest, problemDetails)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetails.Title)
+		c.JSON(int(problemDetails.Status), problemDetails)
 		return
 	}
 	s.Processor().HandleUpdateSmPolicyContextRequest(c, smPolicyId, smPolicyUpdateContextData)

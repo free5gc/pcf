@@ -21,6 +21,7 @@ import (
 	"github.com/free5gc/pcf/pkg/factory"
 	"github.com/free5gc/util/httpwrapper"
 	logger_util "github.com/free5gc/util/logger"
+	"github.com/free5gc/util/metrics"
 )
 
 type Route struct {
@@ -66,6 +67,8 @@ func NewServer(pcf pcf, tlsKeyLogPath string) (*Server, error) {
 		pcf:    pcf,
 		router: logger_util.NewGinWithLogrus(logger.GinLog),
 	}
+
+	s.router.Use(metrics.InboundMetrics())
 
 	smPolicyRoutes := s.getSmPolicyRoutes()
 	smPolicyGroup := s.router.Group(factory.PcfSMpolicyCtlResUriPrefix)

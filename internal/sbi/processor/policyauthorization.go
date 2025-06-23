@@ -15,6 +15,7 @@ import (
 	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/internal/util"
+	"github.com/free5gc/util/metrics/sbi"
 )
 
 const (
@@ -142,6 +143,7 @@ func (p *Processor) HandlePostAppSessionsContext(
 		c.JSON(http.StatusCreated, response)
 		return
 	} else if problemDetails != nil {
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetails.Cause)
 		c.JSON(int(problemDetails.Status), problemDetails)
 		return
 	}
@@ -149,6 +151,7 @@ func (p *Processor) HandlePostAppSessionsContext(
 		Status: http.StatusForbidden,
 		Cause:  "UNSPECIFIED",
 	}
+	c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetails.Cause)
 	c.JSON(http.StatusForbidden, problemDetails)
 }
 
@@ -450,6 +453,7 @@ func (p *Processor) HandleDeleteAppSessionContext(
 	}
 	if appSession == nil {
 		problemDetail := util.GetProblemDetail("can't find app session", util.APPLICATION_SESSION_CONTEXT_NOT_FOUND)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
 		c.JSON(int(problemDetail.Status), problemDetail)
 		return
 	}
@@ -511,6 +515,7 @@ func (p *Processor) HandleGetAppSessionContext(
 	}
 	if appSession == nil {
 		problemDetail := util.GetProblemDetail("can't find app session", util.APPLICATION_SESSION_CONTEXT_NOT_FOUND)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
 		c.JSON(int(problemDetail.Status), problemDetail)
 		return
 	}
@@ -533,6 +538,7 @@ func (p *Processor) HandleModAppSessionContext(
 	}
 	if appSession == nil {
 		problemDetail := util.GetProblemDetail("can't find app session", util.APPLICATION_SESSION_CONTEXT_NOT_FOUND)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
 		c.JSON((int)(problemDetail.Status), problemDetail)
 		return
 	}
@@ -541,6 +547,7 @@ func (p *Processor) HandleModAppSessionContext(
 		appSessCtx.AscReqData.BdtRefId = appSessionContextUpdateData.BdtRefId
 		if err := p.handleBDTPolicyInd(pcfSelf, appSessCtx); err != nil {
 			problemDetail := util.GetProblemDetail(err.Error(), util.ERROR_REQUEST_PARAMETERS)
+			c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
 			c.JSON(int(problemDetail.Status), problemDetail)
 			return
 		}
@@ -551,6 +558,7 @@ func (p *Processor) HandleModAppSessionContext(
 	smPolicy := appSession.SmPolicyData
 	if smPolicy == nil {
 		problemDetail := util.GetProblemDetail("Can't find related PDU Session", util.REQUESTED_SERVICE_NOT_AUTHORIZED)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
 		c.JSON(int(problemDetail.Status), problemDetail)
 		return
 	}
@@ -584,6 +592,7 @@ func (p *Processor) HandleModAppSessionContext(
 				for _, medSubComp := range medComp.MedSubComps {
 					if tempPccRule, problemDetail := handleMediaSubComponent(smPolicy, medComp,
 						&medSubComp, var5qi); problemDetail != nil {
+						c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
 						c.JSON(int(problemDetail.Status), problemDetail)
 						return
 					} else {
@@ -604,6 +613,7 @@ func (p *Processor) HandleModAppSessionContext(
 			} else {
 				problemDetail := util.GetProblemDetail("Media Component needs flows of subComp or afAppId",
 					util.REQUESTED_SERVICE_NOT_AUTHORIZED)
+				c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
 				c.JSON(int(problemDetail.Status), problemDetail)
 				return
 			}
@@ -619,6 +629,7 @@ func (p *Processor) HandleModAppSessionContext(
 					var ul, dl bool
 					qosData, ul, dl = updateQosInMedComp(qosData, medComp)
 					if problemDetail := modifyRemainBitRate(smPolicy, &qosData, ul, dl); problemDetail != nil {
+						c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
 						c.JSON(int(problemDetail.Status), problemDetail)
 						return
 					}
@@ -637,6 +648,7 @@ func (p *Processor) HandleModAppSessionContext(
 						var ul, dl bool
 						qosData, ul, dl = updateQosInMedComp(*smPolicy.PolicyDecision.QosDecs[qosID], medComp)
 						if problemDetail := modifyRemainBitRate(smPolicy, &qosData, ul, dl); problemDetail != nil {
+							c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
 							c.JSON(int(problemDetail.Status), problemDetail)
 							return
 						}
@@ -739,6 +751,7 @@ func (p *Processor) HandleModAppSessionContext(
 		if tempUmData, err := extractUmData(umID, eventSubs,
 			threshRmToThresh(appSessionContextUpdateData.EvSubsc.UsgThres)); err != nil {
 			problemDetail := util.GetProblemDetail(err.Error(), util.REQUESTED_SERVICE_NOT_AUTHORIZED)
+			c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
 			c.JSON(int(problemDetail.Status), problemDetail)
 			return
 		} else {
@@ -747,6 +760,7 @@ func (p *Processor) HandleModAppSessionContext(
 		if err := handleSponsoredConnectivityInformation(smPolicy, relatedPccRuleIds, appSessionContextUpdateData.AspId,
 			appSessionContextUpdateData.SponId, appSessionContextUpdateData.SponStatus, umData, &updateSMpolicy); err != nil {
 			problemDetail := util.GetProblemDetail(err.Error(), util.REQUESTED_SERVICE_NOT_AUTHORIZED)
+			c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
 			c.JSON(int(problemDetail.Status), problemDetail)
 			return
 		}
@@ -818,6 +832,7 @@ func (p *Processor) HandleDeleteEventsSubscContext(
 	}
 	if appSession == nil {
 		problemDetail := util.GetProblemDetail("can't find app session", util.APPLICATION_SESSION_CONTEXT_NOT_FOUND)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
 		c.JSON(int(problemDetail.Status), problemDetail)
 		return
 	}
@@ -859,6 +874,7 @@ func (p *Processor) HandleUpdateEventsSubscContext(
 	}
 	if appSession == nil {
 		problemDetail := util.GetProblemDetail("can't find app session", util.APPLICATION_SESSION_CONTEXT_NOT_FOUND)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
 		c.JSON(int(problemDetail.Status), problemDetail)
 		return
 	}

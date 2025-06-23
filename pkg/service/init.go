@@ -74,7 +74,7 @@ func NewApp(
 		return nil, err
 	}
 
-	features := map[utils.MetricTypeEnabled]bool{}
+	features := map[utils.MetricTypeEnabled]bool{utils.SBI: true}
 	customMetrics := make(map[utils.MetricTypeEnabled][]prometheus.Collector)
 	if cfg.AreMetricsEnabled() {
 		if pcf.metricsServer, err = metrics.NewServer(
