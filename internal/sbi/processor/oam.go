@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"github.com/free5gc/util/metrics/sbi"
 	"net/http"
 	"strconv"
 
@@ -61,6 +62,7 @@ func (p *Processor) HandleOAMGetAmPolicyRequest(
 			Status: http.StatusNotFound,
 			Cause:  "CONTEXT_NOT_FOUND",
 		}
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetails.Cause)
 		c.JSON(int(problemDetails.Status), problemDetails)
 		return
 	}

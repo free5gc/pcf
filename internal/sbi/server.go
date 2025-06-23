@@ -3,6 +3,7 @@ package sbi
 import (
 	"context"
 	"fmt"
+	"github.com/free5gc/util/metrics"
 	"log"
 	"net/http"
 	"runtime/debug"
@@ -66,6 +67,8 @@ func NewServer(pcf pcf, tlsKeyLogPath string) (*Server, error) {
 		pcf:    pcf,
 		router: logger_util.NewGinWithLogrus(logger.GinLog),
 	}
+
+	s.router.Use(metrics.InboundMetrics())
 
 	smPolicyRoutes := s.getSmPolicyRoutes()
 	smPolicyGroup := s.router.Group(factory.PcfSMpolicyCtlResUriPrefix)

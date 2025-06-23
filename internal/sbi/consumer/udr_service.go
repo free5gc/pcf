@@ -1,6 +1,7 @@
 package consumer
 
 import (
+	sbi_metrics "github.com/free5gc/util/metrics/sbi"
 	"strconv"
 	"strings"
 	"sync"
@@ -34,6 +35,7 @@ func (s *nudrService) getDataSubscription(uri string) *DataRepository.APIClient 
 
 	configuration := DataRepository.NewConfiguration()
 	configuration.SetBasePath(uri)
+	configuration.SetMetrics(sbi_metrics.SbiMetricHook)
 	client = DataRepository.NewAPIClient(configuration)
 
 	s.nfDataSubMu.RUnlock()
