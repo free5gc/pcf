@@ -13,6 +13,7 @@ import (
 	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/internal/util"
+	"github.com/free5gc/util/metrics/sbi"
 )
 
 func (p *Processor) HandleDeletePoliciesPolAssoId(
@@ -24,6 +25,7 @@ func (p *Processor) HandleDeletePoliciesPolAssoId(
 	ue := p.Context().PCFUeFindByPolicyId(polAssoId)
 	if ue == nil || ue.AMPolicyData[polAssoId] == nil {
 		problemDetails := util.GetProblemDetail("polAssoId not found  in PCF", util.CONTEXT_NOT_FOUND)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetails.Cause)
 		c.JSON(int(problemDetails.Status), problemDetails)
 	}
 
@@ -41,6 +43,7 @@ func (p *Processor) HandleGetPoliciesPolAssoId(
 	ue := p.Context().PCFUeFindByPolicyId(polAssoId)
 	if ue == nil || ue.AMPolicyData[polAssoId] == nil {
 		problemDetails := util.GetProblemDetail("polAssoId not found  in PCF", util.CONTEXT_NOT_FOUND)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetails.Cause)
 		c.JSON(int(problemDetails.Status), problemDetails)
 		return
 	}
@@ -77,6 +80,7 @@ func (p *Processor) HandleUpdatePostPoliciesPolAssoId(
 	if response != nil {
 		c.JSON(http.StatusOK, response)
 	} else if problemDetails != nil {
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetails.Cause)
 		c.JSON(int(problemDetails.Status), problemDetails)
 	}
 
@@ -84,6 +88,7 @@ func (p *Processor) HandleUpdatePostPoliciesPolAssoId(
 		Status: http.StatusForbidden,
 		Cause:  "UNSPECIFIED",
 	}
+	c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetails.Cause)
 	c.JSON(int(problemDetails.Status), problemDetails)
 }
 
@@ -175,6 +180,7 @@ func (p *Processor) HandlePostPolicies(
 		c.JSON(http.StatusCreated, response)
 		return
 	} else if problemDetails != nil {
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetails.Cause)
 		c.JSON(int(problemDetails.Status), problemDetails)
 		return
 	}
@@ -183,6 +189,7 @@ func (p *Processor) HandlePostPolicies(
 		Status: http.StatusForbidden,
 		Cause:  "UNSPECIFIED",
 	}
+	c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetails.Cause)
 	c.JSON(int(problemDetails.Status), problemDetails)
 }
 
