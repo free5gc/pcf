@@ -2,6 +2,7 @@ package processor
 
 import (
 	"fmt"
+	"github.com/free5gc/util/metrics/sbi"
 	"net/http"
 	"strings"
 
@@ -22,7 +23,6 @@ func (p *Processor) HandleAmfStatusChangeNotify(
 
 	// TODO: handle AMF Status Change Notify
 	logger.CallbackLog.Debugf("receive AMF status change notification[%+v]", amfStatusChangeNotification)
-
 	c.JSON(http.StatusNoContent, nil)
 }
 
@@ -55,6 +55,7 @@ func (p *Processor) HandleInfluenceDataUpdateNotify(
 	if ue == nil || ue.SmPolicyData[smPolicyID] == nil {
 		problemDetail := util.GetProblemDetail("smPolicyID not found in PCF", util.CONTEXT_NOT_FOUND)
 		logger.CallbackLog.Errorf(problemDetail.Detail)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
 		c.JSON(int(problemDetail.Status), problemDetail)
 		return
 	}
@@ -96,6 +97,7 @@ func (p *Processor) HandleInfluenceDataUpdateNotify(
 				if err1 != nil {
 					logger.SmPolicyLog.Error("rating group allocate error")
 					problemDetails := util.GetProblemDetail("rating group allocate error", util.ERROR_IDGENERATOR)
+					c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetails.Cause)
 					c.JSON(int(problemDetails.Status), problemDetails)
 					return
 				}

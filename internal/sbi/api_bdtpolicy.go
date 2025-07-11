@@ -13,6 +13,7 @@
 package sbi
 
 import (
+	"github.com/free5gc/util/metrics/sbi"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -58,6 +59,7 @@ func (s *Server) HTTPCreateBDTPolicy(c *gin.Context) {
 			Cause:  "SYSTEM_FAILURE",
 		}
 		logger.BdtPolicyLog.Errorf("Get Request Body error: %+v", err)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
 		c.JSON(http.StatusInternalServerError, problemDetail)
 		return
 	}
@@ -72,7 +74,8 @@ func (s *Server) HTTPCreateBDTPolicy(c *gin.Context) {
 			Detail: problemDetail,
 		}
 		logger.BdtPolicyLog.Errorln(problemDetail)
-		c.JSON(http.StatusBadRequest, rsp)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, http.StatusText(int(rsp.Status)))
+		c.JSON(int(rsp.Status), rsp)
 		return
 	}
 
@@ -86,7 +89,8 @@ func (s *Server) HTTPGetBDTPolicy(c *gin.Context) {
 			Title:  util.ERROR_INITIAL_PARAMETERS,
 			Status: http.StatusBadRequest,
 		}
-		c.JSON(http.StatusBadRequest, problemDetails)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, http.StatusText(int(problemDetails.Status)))
+		c.JSON(int(problemDetails.Status), problemDetails)
 		return
 	}
 	s.Processor().HandleGetBDTPolicyContextRequest(c, bdtPolicyId)
@@ -105,6 +109,7 @@ func (s *Server) HTTPUpdateBDTPolicy(c *gin.Context) {
 			Cause:  "SYSTEM_FAILURE",
 		}
 		logger.BdtPolicyLog.Errorf("Get Request Body error: %+v", err)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
 		c.JSON(http.StatusInternalServerError, problemDetail)
 		return
 	}
@@ -119,7 +124,8 @@ func (s *Server) HTTPUpdateBDTPolicy(c *gin.Context) {
 			Detail: problemDetail,
 		}
 		logger.BdtPolicyLog.Errorln(problemDetail)
-		c.JSON(http.StatusBadRequest, rsp)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, http.StatusText(int(rsp.Status)))
+		c.JSON(int(rsp.Status), rsp)
 		return
 	}
 
@@ -129,7 +135,8 @@ func (s *Server) HTTPUpdateBDTPolicy(c *gin.Context) {
 			Title:  util.ERROR_INITIAL_PARAMETERS,
 			Status: http.StatusBadRequest,
 		}
-		c.JSON(http.StatusBadRequest, problemDetails)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, http.StatusText(int(problemDetails.Status)))
+		c.JSON(int(problemDetails.Status), problemDetails)
 		return
 	}
 	s.Processor().HandleUpdateBDTPolicyContextProcedure(c, bdtPolicyId, bdtPolicyDataPatch)

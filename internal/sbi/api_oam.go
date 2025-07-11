@@ -1,6 +1,7 @@
 package sbi
 
 import (
+	"github.com/free5gc/util/metrics/sbi"
 	"net/http"
 
 	"github.com/gin-contrib/cors"
@@ -46,7 +47,8 @@ func (s *Server) HTTPOAMGetAmPolicy(c *gin.Context) {
 			Title:  util.ERROR_INITIAL_PARAMETERS,
 			Status: http.StatusBadRequest,
 		}
-		c.JSON(http.StatusBadRequest, problemDetails)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetails.Title)
+		c.JSON(int(problemDetails.Status), problemDetails)
 		return
 	}
 	s.Processor().HandleOAMGetAmPolicyRequest(c, supi)
