@@ -9,6 +9,7 @@ import (
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
+	"github.com/free5gc/util/metrics/sbi"
 )
 
 type UEAmPolicy struct {
@@ -61,6 +62,7 @@ func (p *Processor) HandleOAMGetAmPolicyRequest(
 			Status: http.StatusNotFound,
 			Cause:  "CONTEXT_NOT_FOUND",
 		}
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetails.Cause)
 		c.JSON(int(problemDetails.Status), problemDetails)
 		return
 	}
