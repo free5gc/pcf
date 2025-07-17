@@ -108,7 +108,7 @@ func handleMediaSubComponent(smPolicy *pcf_context.UeSmPolicyData, medComp *mode
 				var ul, dl bool
 				qosData, ul, dl = updateQosInMedSubComp(smPolicy.PolicyDecision.QosDecs[qosID], medComp, medSubComp)
 				if problemDetails := modifyRemainBitRate(smPolicy, &qosData, ul, dl); problemDetails != nil {
-					logger.PolicyAuthLog.Errorf(problemDetails.Detail)
+					logger.PolicyAuthLog.Error(problemDetails.Detail)
 					return nil, problemDetails
 				}
 				smPolicy.PolicyDecision.QosDecs[qosData.QosId] = &qosData
@@ -197,7 +197,7 @@ func (p *Processor) postAppSessCtxProcedure(appSessCtx *models.AppSessionContext
 
 	var requestSuppFeat openapi.SupportedFeature
 	if tempRequestSuppFeat, err := openapi.NewSupportedFeature(ascReqData.SuppFeat); err != nil {
-		logger.PolicyAuthLog.Errorf(err.Error())
+		logger.PolicyAuthLog.Error(err.Error())
 	} else {
 		requestSuppFeat = tempRequestSuppFeat
 	}
@@ -454,14 +454,14 @@ func (p *Processor) HandleDeleteAppSessionContext(
 		return
 	}
 	if eventsSubscReqData != nil {
-		logger.PolicyAuthLog.Warnf("Delete AppSessions does not support with Event Subscription")
+		logger.PolicyAuthLog.Warn("Delete AppSessions does not support with Event Subscription")
 	}
 	// Remove related pcc rule resource
 	smPolicy := appSession.SmPolicyData
 	deletedSmPolicyDec := models.SmPolicyDecision{}
 	for _, pccRuleID := range appSession.RelatedPccRuleIds {
 		if err := smPolicy.RemovePccRule(pccRuleID, &deletedSmPolicyDec); err != nil {
-			logger.PolicyAuthLog.Warnf(err.Error())
+			logger.PolicyAuthLog.Warn(err.Error())
 		}
 	}
 
@@ -1586,7 +1586,7 @@ func removeMediaComp(appSession *pcf_context.AppSessionData, compN string) {
 				pccRuleID := idMaps[key]
 				err := smPolicy.RemovePccRule(pccRuleID, nil)
 				if err != nil {
-					logger.PolicyAuthLog.Warnf(err.Error())
+					logger.PolicyAuthLog.Warn(err.Error())
 				}
 				delete(appSession.RelatedPccRuleIds, key)
 				delete(appSession.PccRuleIdMapToCompId, pccRuleID)
@@ -1595,7 +1595,7 @@ func removeMediaComp(appSession *pcf_context.AppSessionData, compN string) {
 			pccRuleID := idMaps[compN]
 			err := smPolicy.RemovePccRule(pccRuleID, nil)
 			if err != nil {
-				logger.PolicyAuthLog.Warnf(err.Error())
+				logger.PolicyAuthLog.Warn(err.Error())
 			}
 			delete(appSession.RelatedPccRuleIds, compN)
 			delete(appSession.PccRuleIdMapToCompId, pccRuleID)

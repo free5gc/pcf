@@ -54,7 +54,7 @@ func (p *Processor) HandleInfluenceDataUpdateNotify(
 	ue := p.Context().PCFUeFindByPolicyId(smPolicyID)
 	if ue == nil || ue.SmPolicyData[smPolicyID] == nil {
 		problemDetail := util.GetProblemDetail("smPolicyID not found in PCF", util.CONTEXT_NOT_FOUND)
-		logger.CallbackLog.Errorf(problemDetail.Detail)
+		logger.CallbackLog.Error(problemDetail.Detail)
 		c.JSON(int(problemDetail.Status), problemDetail)
 		return
 	}
