@@ -267,7 +267,7 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 				logger.SmPolicyLog.Warnln("Wrong Port format in IP Filter's setting:", tokens[1], ", set to 1-65535")
 			}
 
-			if !(portLowerBound <= 1 && portUpperBound >= 65535) { // Port range need to be assigned
+			if portLowerBound > 1 || portUpperBound < 65535 { // Port range need to be assigned
 				FlowDescription.SrcPorts = flowdesc.PortRanges{
 					flowdesc.PortRange{
 						Start: uint16(portLowerBound),

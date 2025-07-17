@@ -866,10 +866,7 @@ func (p *Processor) HandleUpdateEventsSubscContext(
 	eventSubs := make(map[models.PcfPolicyAuthorizationAfEvent]models.AfNotifMethod)
 
 	updataSmPolicy := false
-	created := false
-	if appSession.Events == nil {
-		created = true
-	}
+	created := appSession.Events == nil
 
 	for _, subs := range eventsSubscReqData.Events {
 		if subs.NotifMethod == "" {
@@ -1096,7 +1093,7 @@ func (p *Processor) handleBDTPolicyInd(pcfSelf *pcf_context.PCFContext,
 
 	udrUri := p.getDefaultUdrUri(pcfSelf)
 	if udrUri == "" {
-		err = fmt.Errorf("Can't find any UDR which supported to this PCF")
+		err = fmt.Errorf("can't find any UDR which supported to this PCF")
 		return err
 	}
 	resp, pd, err := p.Consumer().GetBdtData(udrUri, req.BdtRefId)
@@ -1151,7 +1148,7 @@ func handleSponsoredConnectivityInformation(smPolicy *pcf_context.UeSmPolicyData
 		if umData != nil {
 			supp := util.CheckSuppFeat(smPolicy.PolicyDecision.SuppFeat, 5) // UMC support = 5 in 29512
 			if !supp {
-				err := fmt.Errorf("Usage Monitor Control is not supported in SMF")
+				err := fmt.Errorf("usage Monitor Control is not supported in SMF")
 				return err
 			}
 		}
@@ -1210,7 +1207,7 @@ func getAvailablePrecedence(pccRules map[string]*models.PccRule) (maxVaule int32
 func getFlowInfos(comp models.MediaComponent) (flows []models.FlowInformation, err error) {
 	for _, subComp := range comp.MedSubComps {
 		if subComp.EthfDescs != nil {
-			return nil, fmt.Errorf("Flow Description with Mac Address does not support")
+			return nil, fmt.Errorf("flow Description with Mac Address does not support")
 		}
 		fStatus := subComp.FStatus
 		if subComp.FlowUsage == models.FlowUsage_RTCP {
@@ -1256,7 +1253,7 @@ func getFlowInfos(comp models.MediaComponent) (flows []models.FlowInformation, e
 func getFlowInfos(subComp *models.MediaSubComponent) ([]models.FlowInformation, error) {
 	var flows []models.FlowInformation
 	if subComp.EthfDescs != nil {
-		return nil, fmt.Errorf("Flow Description with Mac Address does not support")
+		return nil, fmt.Errorf("flow Description with Mac Address does not support")
 	}
 	fStatus := subComp.FStatus
 	if subComp.FlowUsage == models.FlowUsage_RTCP {
@@ -1300,13 +1297,13 @@ func flowDescFromN5toN7(n5Flow string) (n7Flow string, direction models.FlowDire
 		n7Flow = n5Flow
 		direction = models.FlowDirection_DOWNLINK
 	} else if strings.HasPrefix(n5Flow, "permit in") {
-		n7Flow = strings.Replace(n5Flow, "permit in", "permit out", -1)
+		n7Flow = strings.ReplaceAll(n5Flow, "permit in", "permit out")
 		direction = models.FlowDirection_UPLINK
 	} else if strings.HasPrefix(n5Flow, "permit inout") {
-		n7Flow = strings.Replace(n5Flow, "permit inout", "permit out", -1)
+		n7Flow = strings.ReplaceAll(n5Flow, "permit inout", "permit out")
 		direction = models.FlowDirection_BIDIRECTIONAL
 	} else {
-		err = fmt.Errorf("Invaild flow Description[%s]", n5Flow)
+		err = fmt.Errorf("invaild flow Description[%s]", n5Flow)
 	}
 	return
 }
@@ -1640,7 +1637,7 @@ func extractUmData(umID string, eventSubs map[models.PcfPolicyAuthorizationAfEve
 ) (umData *models.UsageMonitoringData, err error) {
 	if _, umExist := eventSubs[models.PcfPolicyAuthorizationAfEvent_USAGE_REPORT]; umExist {
 		if threshold == nil {
-			return nil, fmt.Errorf("UsageThreshold is nil in USAGE REPORT Subscription")
+			return nil, fmt.Errorf("usageThreshold is nil in USAGE REPORT Subscription")
 		} else {
 			tmp := util.CreateUmData(umID, *threshold)
 			umData = &tmp

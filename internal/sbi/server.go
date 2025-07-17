@@ -167,14 +167,15 @@ func (s *Server) startServer(wg *sync.WaitGroup) {
 	var err error
 	cfg := s.Config()
 	scheme := cfg.GetSbiScheme()
-	if scheme == "http" {
+	switch scheme {
+	case "http":
 		err = s.httpServer.ListenAndServe()
-	} else if scheme == "https" {
+	case "https":
 		err = s.httpServer.ListenAndServeTLS(
 			cfg.GetCertPemPath(),
 			cfg.GetCertKeyPath())
-	} else {
-		err = fmt.Errorf("No support this scheme[%s]", scheme)
+	default:
+		err = fmt.Errorf("no support this scheme[%s]", scheme)
 	}
 
 	if err != nil && err != http.ErrServerClosed {
