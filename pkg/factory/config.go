@@ -83,7 +83,7 @@ func (c *Configuration) validate() (bool, error) {
 	}
 
 	if result := govalidator.IsTime(c.TimeFormat, PcfTimeFormatLayout); !result {
-		err := fmt.Errorf("Invalid TimeFormat: %s, should be in 2019-01-02 15:04:05 format.", c.TimeFormat)
+		err := fmt.Errorf("invalid TimeFormat: %s, should be in 2019-01-02 15:04:05 format", c.TimeFormat)
 		return false, err
 	}
 
@@ -132,21 +132,22 @@ func (s *Service) validate() (bool, error) {
 		return true
 	})
 
-	if s.ServiceName == "npcf-smpolicycontrol" {
+	switch s.ServiceName {
+	case "npcf-smpolicycontrol":
 		if sf, e := strconv.ParseUint(s.SuppFeat, 16, 40); e != nil {
-			err := fmt.Errorf("Invalid SuppFeat: %s, range of the value should be 0~3fff", s.SuppFeat)
+			err := fmt.Errorf("invalid SuppFeat: %s, range of the value should be 0~3fff", s.SuppFeat)
 			return false, err
 		} else {
 			if sf2, e := strconv.ParseUint("3fff", 16, 20); e == nil {
 				if sf > sf2 {
-					err := fmt.Errorf("Invalid SuppFeat: %s, range of the value should be 0~3fff", s.SuppFeat)
+					err := fmt.Errorf("invalid SuppFeat: %s, range of the value should be 0~3fff", s.SuppFeat)
 					return false, err
 				}
 			}
 		}
-	} else if s.ServiceName == "npcf-policyauthorization" {
+	case "npcf-policyauthorization":
 		if s.SuppFeat != "0" && s.SuppFeat != "1" && s.SuppFeat != "2" && s.SuppFeat != "3" {
-			err := fmt.Errorf("Invalid SuppFeat: %s, range of the value should be 0~3", s.SuppFeat)
+			err := fmt.Errorf("invalid SuppFeat: %s, range of the value should be 0~3", s.SuppFeat)
 			return false, err
 		}
 	}
@@ -203,7 +204,7 @@ type Mongodb struct {
 func (m *Mongodb) validate() (bool, error) {
 	pattern := `[-a-zA-Z0-9@:%._\+~#=]{1,256}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)`
 	if result := govalidator.StringMatches(m.Url, pattern); !result {
-		err := fmt.Errorf("Invalid Url: %s", m.Url)
+		err := fmt.Errorf("invalid Url: %s", m.Url)
 		return false, err
 	}
 	if _, err := govalidator.ValidateStruct(m); err != nil {
@@ -222,7 +223,7 @@ func appendInvalid(err error) error {
 
 	es := err.(govalidator.Errors).Errors()
 	for _, e := range es {
-		errs = append(errs, fmt.Errorf("Invalid %w", e))
+		errs = append(errs, fmt.Errorf("invalid %w", e))
 	}
 
 	return error(errs)

@@ -33,7 +33,7 @@ func (p *Processor) HandleGetBDTPolicyContextRequest(
 	} else {
 		// not found
 		problemDetails := util.GetProblemDetail("Can't find bdtPolicyID related resource", util.CONTEXT_NOT_FOUND)
-		logger.BdtPolicyLog.Warnf(problemDetails.Detail)
+		logger.BdtPolicyLog.Warn(problemDetails.Detail)
 		c.JSON(int(problemDetails.Status), problemDetails)
 		return
 	}
@@ -59,7 +59,7 @@ func (p *Processor) HandleUpdateBDTPolicyContextProcedure(
 	} else {
 		// not found
 		problemDetail := util.GetProblemDetail("Can't find bdtPolicyID related resource", util.CONTEXT_NOT_FOUND)
-		logger.BdtPolicyLog.Warnf(problemDetail.Detail)
+		logger.BdtPolicyLog.Warn(problemDetail.Detail)
 		c.JSON(int(problemDetail.Status), problemDetail)
 		return
 	}
@@ -85,7 +85,7 @@ func (p *Processor) HandleUpdateBDTPolicyContextProcedure(
 					Status: http.StatusServiceUnavailable,
 					Detail: "Can't find any UDR which supported to this PCF",
 				}
-				logger.BdtPolicyLog.Warnf(pd.Detail)
+				logger.BdtPolicyLog.Warn(pd.Detail)
 				c.JSON(int(pd.Status), pd)
 				return
 			}
@@ -110,7 +110,7 @@ func (p *Processor) HandleUpdateBDTPolicyContextProcedure(
 		fmt.Sprintf("Can't find TransPolicyId[%d] in TransfPolicies with bdtPolicyID[%s]",
 			bdtPolicyDataPatch.SelTransPolicyId, bdtPolicyID),
 		util.CONTEXT_NOT_FOUND)
-	logger.BdtPolicyLog.Warnf(problemDetail.Detail)
+	logger.BdtPolicyLog.Warn(problemDetail.Detail)
 	c.JSON(int(problemDetail.Status), problemDetail)
 }
 
@@ -145,7 +145,7 @@ func (p *Processor) HandleCreateBDTPolicyContextRequest(
 			Status: http.StatusServiceUnavailable,
 			Detail: "Can't find any UDR which supported to this PCF",
 		}
-		logger.BdtPolicyLog.Warnf(problemDetails.Detail)
+		logger.BdtPolicyLog.Warn(problemDetails.Detail)
 		c.JSON(int(problemDetails.Status), problemDetails)
 		return
 	}
@@ -159,7 +159,7 @@ func (p *Processor) HandleCreateBDTPolicyContextRequest(
 			Status: http.StatusServiceUnavailable,
 			Detail: "Query to UDR failed",
 		}
-		logger.BdtPolicyLog.Warnf("Query to UDR failed")
+		logger.BdtPolicyLog.Warn("Query to UDR failed")
 		c.JSON(int(problemDetails.Status), problemDetails)
 		return
 	} else if problemDetails != nil {
@@ -206,7 +206,7 @@ func (p *Processor) HandleCreateBDTPolicyContextRequest(
 			Status: http.StatusServiceUnavailable,
 			Detail: "Allocate bdtPolicyID failed",
 		}
-		logger.BdtPolicyLog.Warnf("Allocate bdtPolicyID failed")
+		logger.BdtPolicyLog.Warn("Allocate bdtPolicyID failed")
 		c.JSON(int(problemDetails.Status), problemDetails)
 		return
 	}

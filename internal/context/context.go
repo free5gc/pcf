@@ -319,16 +319,16 @@ func ueSMPolicyFindByAppSessionContext(ue *UeContext, req *models.AppSessionCont
 	if req.UeIpv4 != "" {
 		policy = ue.SMPolicyFindByIdentifiersIpv4(req.UeIpv4, req.SliceInfo, req.Dnn, req.IpDomain)
 		if policy == nil {
-			err = fmt.Errorf("Can't find Ue with Ipv4[%s]", req.UeIpv4)
+			err = fmt.Errorf("can't find Ue with Ipv4[%s]", req.UeIpv4)
 		}
 	} else if req.UeIpv6 != "" {
 		policy = ue.SMPolicyFindByIdentifiersIpv6(req.UeIpv6, req.SliceInfo, req.Dnn)
 		if policy == nil {
-			err = fmt.Errorf("Can't find Ue with Ipv6 prefix[%s]", req.UeIpv6)
+			err = fmt.Errorf("can't find Ue with Ipv6 prefix[%s]", req.UeIpv6)
 		}
 	} else {
 		// TODO: find by MAC address
-		err = fmt.Errorf("Ue finding by MAC address does not support")
+		err = fmt.Errorf("ue finding by MAC address does not support")
 	}
 	return policy, err
 }
@@ -367,7 +367,7 @@ func (c *PCFContext) SessionBinding(req *models.AppSessionContextReqData) (*UeSm
 		})
 	}
 	if policy == nil && err == nil {
-		err = fmt.Errorf("No SM policy found")
+		err = fmt.Errorf("no SM policy found")
 	}
 	return policy, err
 }

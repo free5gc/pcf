@@ -143,7 +143,7 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 			var gbrDL float64
 			gbrDL, err = pcf_context.ConvertBitRateToKbps(dnnData.GbrDl)
 			if err != nil {
-				logger.SmPolicyLog.Warnf(err.Error())
+				logger.SmPolicyLog.Warn(err.Error())
 			} else {
 				smPolicyData.RemainGbrDL = &gbrDL
 				logger.SmPolicyLog.Tracef("SM Policy Dnn[%s] Data Aggregate DL GBR[%.2f Kbps]", request.Dnn, gbrDL)
@@ -153,7 +153,7 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 			var gbrUL float64
 			gbrUL, err = pcf_context.ConvertBitRateToKbps(dnnData.GbrUl)
 			if err != nil {
-				logger.SmPolicyLog.Warnf(err.Error())
+				logger.SmPolicyLog.Warn(err.Error())
 			} else {
 				smPolicyData.RemainGbrUL = &gbrUL
 				logger.SmPolicyLog.Tracef("SM Policy Dnn[%s] Data Aggregate UL GBR[%.2f Kbps]", request.Dnn, gbrUL)
@@ -267,7 +267,7 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 				logger.SmPolicyLog.Warnln("Wrong Port format in IP Filter's setting:", tokens[1], ", set to 1-65535")
 			}
 
-			if !(portLowerBound <= 1 && portUpperBound >= 65535) { // Port range need to be assigned
+			if portLowerBound > 1 || portUpperBound < 65535 { // Port range need to be assigned
 				FlowDescription.SrcPorts = flowdesc.PortRanges{
 					flowdesc.PortRange{
 						Start: uint16(portLowerBound),
@@ -540,7 +540,7 @@ func (p *Processor) HandleDeleteSmPolicyContextRequest(
 	ue := p.Context().PCFUeFindByPolicyId(smPolicyId)
 	if ue == nil || ue.SmPolicyData[smPolicyId] == nil {
 		problemDetail := util.GetProblemDetail("smPolicyID not found in PCF", util.CONTEXT_NOT_FOUND)
-		logger.SmPolicyLog.Warnf(problemDetail.Detail)
+		logger.SmPolicyLog.Warn(problemDetail.Detail)
 		c.JSON(int(problemDetail.Status), problemDetail)
 		return
 	}
@@ -598,7 +598,7 @@ func (p *Processor) HandleGetSmPolicyContextRequest(
 	ue := p.Context().PCFUeFindByPolicyId(smPolicyId)
 	if ue == nil || ue.SmPolicyData[smPolicyId] == nil {
 		problemDetail := util.GetProblemDetail("smPolicyID not found in PCF", util.CONTEXT_NOT_FOUND)
-		logger.SmPolicyLog.Warnf(problemDetail.Detail)
+		logger.SmPolicyLog.Warn(problemDetail.Detail)
 		c.JSON(int(problemDetail.Status), problemDetail)
 		return
 	}
@@ -623,7 +623,7 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 	ue := p.Context().PCFUeFindByPolicyId(smPolicyId)
 	if ue == nil || ue.SmPolicyData[smPolicyId] == nil {
 		problemDetail := util.GetProblemDetail("smPolicyID not found in PCF", util.CONTEXT_NOT_FOUND)
-		logger.SmPolicyLog.Warnf(problemDetail.Detail)
+		logger.SmPolicyLog.Warn(problemDetail.Detail)
 		c.JSON(int(problemDetail.Status), problemDetail)
 		return
 	}
@@ -684,7 +684,7 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 				qosData.GbrDl, qosData.GbrUl, err = smPolicy.DecreaseRemainGBR(req.ReqQos)
 				if err != nil {
 					problemDetail := util.GetProblemDetail(err.Error(), util.ERROR_TRAFFIC_MAPPING_INFO_REJECTED)
-					logger.SmPolicyLog.Warnf(problemDetail.Detail)
+					logger.SmPolicyLog.Warn(problemDetail.Detail)
 					c.JSON(int(problemDetail.Status), problemDetail)
 					return
 				}
@@ -733,7 +733,7 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 								smPolicy.RemainGbrDL = origDl
 								smPolicy.RemainGbrUL = origUl
 								problemDetail := util.GetProblemDetail(err.Error(), util.ERROR_TRAFFIC_MAPPING_INFO_REJECTED)
-								logger.SmPolicyLog.Warnf(problemDetail.Detail)
+								logger.SmPolicyLog.Warn(problemDetail.Detail)
 								c.JSON(int(problemDetail.Status), problemDetail)
 								return
 							}
@@ -989,7 +989,7 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 
 	if errCause != "" {
 		problemDetail := util.GetProblemDetail(errCause, util.ERROR_TRIGGER_EVENT)
-		logger.SmPolicyLog.Warnf(errCause)
+		logger.SmPolicyLog.Warn(errCause)
 		c.JSON(int(problemDetail.Status), problemDetail)
 		return
 	}
