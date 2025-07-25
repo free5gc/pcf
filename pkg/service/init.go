@@ -7,6 +7,7 @@ import (
 	"runtime/debug"
 	"sync"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 
 	pcf_context "github.com/free5gc/pcf/internal/context"
@@ -16,6 +17,8 @@ import (
 	"github.com/free5gc/pcf/internal/sbi/processor"
 	"github.com/free5gc/pcf/pkg/app"
 	"github.com/free5gc/pcf/pkg/factory"
+	"github.com/free5gc/util/metrics"
+	"github.com/free5gc/util/metrics/utils"
 )
 
 var PCF *PcfApp
@@ -29,10 +32,11 @@ type PcfApp struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	consumer  *consumer.Consumer
-	processor *processor.Processor
-	sbiServer *sbi.Server
-	wg        sync.WaitGroup
+	consumer      *consumer.Consumer
+	processor     *processor.Processor
+	sbiServer     *sbi.Server
+	metricsServer *metrics.Server
+	wg            sync.WaitGroup
 }
 
 func NewApp(
@@ -69,9 +73,38 @@ func NewApp(
 	if pcf.sbiServer, err = sbi.NewServer(pcf, tlsKeyLogPath); err != nil {
 		return nil, err
 	}
+
+	features := map[utils.MetricTypeEnabled]bool{utils.SBI: true}
+	customMetrics := make(map[utils.MetricTypeEnabled][]prometheus.Collector)
+	if cfg.AreMetricsEnabled() {
+		if pcf.metricsServer, err = metrics.NewServer(
+			getInitMetrics(cfg, features, customMetrics), tlsKeyLogPath, logger.InitLog); err != nil {
+			return nil, err
+		}
+	}
+
 	PCF = pcf
 
 	return pcf, nil
+}
+
+func getInitMetrics(
+	cfg *factory.Config,
+	features map[utils.MetricTypeEnabled]bool,
+	customMetrics map[utils.MetricTypeEnabled][]prometheus.Collector,
+) metrics.InitMetrics {
+	metricsInfo := metrics.Metrics{
+		BindingIPv4: cfg.GetMetricsBindingAddr(),
+		Scheme:      cfg.GetMetricsScheme(),
+		Namespace:   cfg.GetMetricsNamespace(),
+		Port:        cfg.GetMetricsPort(),
+		Tls: metrics.Tls{
+			Key: cfg.GetMetricsCertKeyPath(),
+			Pem: cfg.GetMetricsCertPemPath(),
+		},
+	}
+
+	return metrics.NewInitMetrics(metricsInfo, "pcf", features, customMetrics)
 }
 
 func (a *PcfApp) Config() *factory.Config {
@@ -143,6 +176,13 @@ func (a *PcfApp) Start() {
 	if err := a.sbiServer.Run(context.Background(), &a.wg); err != nil {
 		logger.InitLog.Fatalf("Run SBI server failed: %+v", err)
 	}
+
+	if a.cfg.AreMetricsEnabled() && a.metricsServer != nil {
+		go func() {
+			a.metricsServer.Run(&a.wg)
+		}()
+	}
+
 	a.WaitRoutineStopped()
 }
 
@@ -162,6 +202,11 @@ func (a *PcfApp) listenShutdownEvent() {
 func (a *PcfApp) CallServerStop() {
 	if a.sbiServer != nil {
 		a.sbiServer.Shutdown(context.Background())
+	}
+
+	if a.metricsServer != nil {
+		a.metricsServer.Stop()
+		logger.MainLog.Infof("PCF Metrics Server terminated")
 	}
 }
 
