@@ -11,6 +11,7 @@ import (
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/internal/util"
+	"github.com/free5gc/util/metrics/sbi"
 	"github.com/free5gc/util/mongoapi"
 )
 
@@ -55,6 +56,7 @@ func (p *Processor) HandleInfluenceDataUpdateNotify(
 	if ue == nil || ue.SmPolicyData[smPolicyID] == nil {
 		problemDetail := util.GetProblemDetail("smPolicyID not found in PCF", util.CONTEXT_NOT_FOUND)
 		logger.CallbackLog.Error(problemDetail.Detail)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
 		c.JSON(int(problemDetail.Status), problemDetail)
 		return
 	}
@@ -96,6 +98,7 @@ func (p *Processor) HandleInfluenceDataUpdateNotify(
 				if err1 != nil {
 					logger.SmPolicyLog.Error("rating group allocate error")
 					problemDetails := util.GetProblemDetail("rating group allocate error", util.ERROR_IDGENERATOR)
+					c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetails.Cause)
 					c.JSON(int(problemDetails.Status), problemDetails)
 					return
 				}

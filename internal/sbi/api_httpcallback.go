@@ -9,6 +9,7 @@ import (
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/internal/util"
+	"github.com/free5gc/util/metrics/sbi"
 )
 
 func (s *Server) getHttpCallBackRoutes() []Route {
@@ -44,6 +45,7 @@ func (s *Server) HTTPAmfStatusChangeNotify(c *gin.Context) {
 			Cause:  "SYSTEM_FAILURE",
 		}
 		logger.CallbackLog.Errorf("Get Request Body error: %+v", err)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
 		c.JSON(http.StatusInternalServerError, problemDetail)
 		return
 	}
@@ -57,7 +59,8 @@ func (s *Server) HTTPAmfStatusChangeNotify(c *gin.Context) {
 			Detail: problemDetail,
 		}
 		logger.CallbackLog.Errorln(problemDetail)
-		c.JSON(http.StatusBadRequest, rsp)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, http.StatusText(int(rsp.Status)))
+		c.JSON(int(rsp.Status), rsp)
 		return
 	}
 
@@ -78,6 +81,7 @@ func (s *Server) HTTPUdrPolicyDataChangeNotify(c *gin.Context) {
 			Cause:  "SYSTEM_FAILURE",
 		}
 		logger.CallbackLog.Errorf("Get Request Body error: %+v", err)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
 		c.JSON(http.StatusInternalServerError, problemDetail)
 		return
 	}
@@ -91,7 +95,8 @@ func (s *Server) HTTPUdrPolicyDataChangeNotify(c *gin.Context) {
 			Detail: problemDetail,
 		}
 		logger.CallbackLog.Errorln(problemDetail)
-		c.JSON(http.StatusBadRequest, rsp)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, http.StatusText(int(rsp.Status)))
+		c.JSON(int(rsp.Status), rsp)
 		return
 	}
 
@@ -101,6 +106,7 @@ func (s *Server) HTTPUdrPolicyDataChangeNotify(c *gin.Context) {
 			Title:  util.ERROR_INITIAL_PARAMETERS,
 			Status: http.StatusBadRequest,
 		}
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, http.StatusText(int(problemDetails.Status)))
 		c.JSON(http.StatusBadRequest, problemDetails)
 		return
 	}
@@ -120,6 +126,7 @@ func (s *Server) HTTPUdrInfluenceDataUpdateNotify(c *gin.Context) {
 			Cause:  "SYSTEM_FAILURE",
 		}
 		logger.CallbackLog.Errorf("Get Request Body error: %+v", err)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
 		c.JSON(http.StatusInternalServerError, problemDetail)
 		return
 	}
@@ -133,7 +140,8 @@ func (s *Server) HTTPUdrInfluenceDataUpdateNotify(c *gin.Context) {
 			Detail: problemDetail,
 		}
 		logger.CallbackLog.Errorln(problemDetail)
-		c.JSON(http.StatusBadRequest, rsp)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, http.StatusText(int(rsp.Status)))
+		c.JSON(int(rsp.Status), rsp)
 		return
 	}
 
@@ -144,6 +152,7 @@ func (s *Server) HTTPUdrInfluenceDataUpdateNotify(c *gin.Context) {
 			Title:  util.ERROR_INITIAL_PARAMETERS,
 			Status: http.StatusBadRequest,
 		}
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetails.Title)
 		c.JSON(http.StatusBadRequest, problemDetails)
 		return
 	}

@@ -18,6 +18,7 @@ import (
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/internal/util"
+	"github.com/free5gc/util/metrics/sbi"
 )
 
 func (s *Server) getPolicyAuthorizationRoutes() []Route {
@@ -86,6 +87,7 @@ func (s *Server) HTTPPostAppSessions(c *gin.Context) {
 			Cause:  "SYSTEM_FAILURE",
 		}
 		logger.PolicyAuthLog.Errorf("Get Request Body error: %+v", err)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
 		c.JSON(http.StatusInternalServerError, problemDetail)
 		return
 	}
@@ -99,7 +101,8 @@ func (s *Server) HTTPPostAppSessions(c *gin.Context) {
 			Detail: problemDetail,
 		}
 		logger.PolicyAuthLog.Errorln(problemDetail)
-		c.JSON(http.StatusBadRequest, rsp)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, http.StatusText(int(rsp.Status)))
+		c.JSON(int(rsp.Status), rsp)
 		return
 	}
 
@@ -108,6 +111,7 @@ func (s *Server) HTTPPostAppSessions(c *gin.Context) {
 		// Check Mandatory IEs
 		rsp := util.GetProblemDetail("Errorneous/Missing Mandotory IE", util.ERROR_INITIAL_PARAMETERS)
 		logger.PolicyAuthLog.Errorln(rsp.Detail)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, rsp.Cause)
 		c.JSON(int(rsp.Status), rsp)
 		return
 	}
@@ -124,6 +128,7 @@ func (s *Server) HTTPDeleteEventsSubsc(c *gin.Context) {
 			Title:  util.ERROR_INITIAL_PARAMETERS,
 			Status: http.StatusBadRequest,
 		}
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetails.Title)
 		c.JSON(http.StatusBadRequest, problemDetails)
 		return
 	}
@@ -144,6 +149,7 @@ func (s *Server) HTTPUpdateEventsSubsc(c *gin.Context) {
 			Cause:  "SYSTEM_FAILURE",
 		}
 		logger.PolicyAuthLog.Errorf("Get Request Body error: %+v", err)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
 		c.JSON(http.StatusInternalServerError, problemDetail)
 		return
 	}
@@ -157,6 +163,7 @@ func (s *Server) HTTPUpdateEventsSubsc(c *gin.Context) {
 			Detail: problemDetail,
 		}
 		logger.PolicyAuthLog.Errorln(problemDetail)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, http.StatusText(int(rsp.Status)))
 		c.JSON(http.StatusBadRequest, rsp)
 		return
 	}
@@ -164,6 +171,7 @@ func (s *Server) HTTPUpdateEventsSubsc(c *gin.Context) {
 	if eventsSubscReqData.Events == nil || eventsSubscReqData.NotifUri == "" {
 		problemDetail := util.GetProblemDetail("Errorneous/Missing Mandotory IE", util.ERROR_REQUEST_PARAMETERS)
 		logger.PolicyAuthLog.Errorln(problemDetail.Detail)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
 		c.JSON(int(problemDetail.Status), problemDetail)
 		return
 	}
@@ -174,7 +182,8 @@ func (s *Server) HTTPUpdateEventsSubsc(c *gin.Context) {
 			Title:  util.ERROR_INITIAL_PARAMETERS,
 			Status: http.StatusBadRequest,
 		}
-		c.JSON(http.StatusBadRequest, problemDetails)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetails.Title)
+		c.JSON(int(problemDetails.Status), problemDetails)
 		return
 	}
 
@@ -193,6 +202,7 @@ func (s *Server) HTTPDeleteAppSession(c *gin.Context) {
 			Cause:  "SYSTEM_FAILURE",
 		}
 		logger.PolicyAuthLog.Errorf("Get Request Body error: %+v", err)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
 		c.JSON(http.StatusInternalServerError, problemDetail)
 		return
 	}
@@ -208,7 +218,8 @@ func (s *Server) HTTPDeleteAppSession(c *gin.Context) {
 				Detail: problemDetail,
 			}
 			logger.PolicyAuthLog.Errorln(problemDetail)
-			c.JSON(http.StatusBadRequest, rsp)
+			c.Set(sbi.IN_PB_DETAILS_CTX_STR, http.StatusText(int(rsp.Status)))
+			c.JSON(int(rsp.Status), rsp)
 			return
 		}
 	}
@@ -219,7 +230,8 @@ func (s *Server) HTTPDeleteAppSession(c *gin.Context) {
 			Title:  util.ERROR_INITIAL_PARAMETERS,
 			Status: http.StatusBadRequest,
 		}
-		c.JSON(http.StatusBadRequest, problemDetails)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetails.Title)
+		c.JSON(int(problemDetails.Status), problemDetails)
 		return
 	}
 
@@ -234,7 +246,8 @@ func (s *Server) HTTPGetAppSession(c *gin.Context) {
 			Title:  util.ERROR_INITIAL_PARAMETERS,
 			Status: http.StatusBadRequest,
 		}
-		c.JSON(http.StatusBadRequest, problemDetails)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetails.Title)
+		c.JSON(int(problemDetails.Status), problemDetails)
 		return
 	}
 
@@ -254,6 +267,7 @@ func (s *Server) HTTPModAppSession(c *gin.Context) {
 			Cause:  "SYSTEM_FAILURE",
 		}
 		logger.PolicyAuthLog.Errorf("Get Request Body error: %+v", err)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
 		c.JSON(http.StatusInternalServerError, problemDetail)
 		return
 	}
@@ -267,7 +281,8 @@ func (s *Server) HTTPModAppSession(c *gin.Context) {
 			Detail: problemDetail,
 		}
 		logger.PolicyAuthLog.Errorln(problemDetail)
-		c.JSON(http.StatusBadRequest, rsp)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, http.StatusText(int(rsp.Status)))
+		c.JSON(int(rsp.Status), rsp)
 		return
 	}
 
@@ -277,7 +292,8 @@ func (s *Server) HTTPModAppSession(c *gin.Context) {
 			Title:  util.ERROR_INITIAL_PARAMETERS,
 			Status: http.StatusBadRequest,
 		}
-		c.JSON(http.StatusBadRequest, problemDetails)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetails.Title)
+		c.JSON(int(problemDetails.Status), problemDetails)
 		return
 	}
 

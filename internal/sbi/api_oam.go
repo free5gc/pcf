@@ -8,6 +8,7 @@ import (
 
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/pcf/internal/util"
+	"github.com/free5gc/util/metrics/sbi"
 )
 
 const (
@@ -46,7 +47,8 @@ func (s *Server) HTTPOAMGetAmPolicy(c *gin.Context) {
 			Title:  util.ERROR_INITIAL_PARAMETERS,
 			Status: http.StatusBadRequest,
 		}
-		c.JSON(http.StatusBadRequest, problemDetails)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetails.Title)
+		c.JSON(int(problemDetails.Status), problemDetails)
 		return
 	}
 	s.Processor().HandleOAMGetAmPolicyRequest(c, supi)

@@ -11,6 +11,7 @@ import (
 	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/internal/util"
+	sbi_metrics "github.com/free5gc/util/metrics/sbi"
 )
 
 type nudrService struct {
@@ -34,6 +35,7 @@ func (s *nudrService) getDataSubscription(uri string) *DataRepository.APIClient 
 
 	configuration := DataRepository.NewConfiguration()
 	configuration.SetBasePath(uri)
+	configuration.SetMetrics(sbi_metrics.SbiMetricHook)
 	client = DataRepository.NewAPIClient(configuration)
 
 	s.nfDataSubMu.RUnlock()
