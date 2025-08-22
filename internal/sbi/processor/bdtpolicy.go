@@ -180,7 +180,8 @@ func (p *Processor) HandleCreateBDTPolicyContextRequest(
 
 	bdtDatas := resp.BdtData
 	// TODO: decide BDT Policy from other bdt policy data
-	response.BdtReqData = deepcopy.Copy(requestMsg).(*models.BdtReqData)
+	copiedBdtReqData := deepcopy.Copy(requestMsg).(models.BdtReqData)
+	response.BdtReqData = &copiedBdtReqData
 	var bdtData *models.BdtData
 	var bdtPolicyData models.PcfBdtPolicyControlBdtPolicyData
 	for _, data := range bdtDatas {

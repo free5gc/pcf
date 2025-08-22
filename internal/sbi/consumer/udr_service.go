@@ -121,7 +121,8 @@ func (s *nudrService) CreateBdtData(uri string, bdtData *models.BdtData) (
 
 	client := s.getDataSubscription(uri)
 	param := DataRepository.CreateIndividualBdtDataRequest{
-		BdtData: bdtData,
+		BdtData:        bdtData,
+		BdtReferenceId: &bdtData.BdtRefId,
 	}
 	_, localErr := client.IndividualBdtDataDocumentApi.CreateIndividualBdtData(ctx, &param)
 	if localErr == nil {
