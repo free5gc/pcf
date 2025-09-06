@@ -9,6 +9,7 @@ import (
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/internal/util"
+	"github.com/free5gc/util/metrics/sbi"
 )
 
 func (s *Server) HTTPDeleteIndividualAMPolicyAssociation(c *gin.Context) {
@@ -19,7 +20,8 @@ func (s *Server) HTTPDeleteIndividualAMPolicyAssociation(c *gin.Context) {
 			Title:  util.ERROR_INITIAL_PARAMETERS,
 			Status: http.StatusBadRequest,
 		}
-		c.JSON(http.StatusBadRequest, problemDetails)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, http.StatusText(int(problemDetails.Status)))
+		c.JSON(int(problemDetails.Status), problemDetails)
 		return
 	}
 
@@ -34,7 +36,8 @@ func (s *Server) HTTPReadIndividualAMPolicyAssociation(c *gin.Context) {
 			Title:  util.ERROR_INITIAL_PARAMETERS,
 			Status: http.StatusBadRequest,
 		}
-		c.JSON(http.StatusBadRequest, problemDetails)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, http.StatusText(int(problemDetails.Status)))
+		c.JSON(int(problemDetails.Status), problemDetails)
 		return
 	}
 
@@ -53,7 +56,8 @@ func (s *Server) HTTPReportObservedEventTriggersForIndividualAMPolicyAssociation
 			Cause:  "SYSTEM_FAILURE",
 		}
 		logger.AmPolicyLog.Errorf("Get Request Body error: %+v", err)
-		c.JSON(http.StatusInternalServerError, problemDetail)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
+		c.JSON(int(problemDetail.Status), problemDetail)
 		return
 	}
 
@@ -66,7 +70,8 @@ func (s *Server) HTTPReportObservedEventTriggersForIndividualAMPolicyAssociation
 			Detail: problemDetail,
 		}
 		logger.AmPolicyLog.Errorln(problemDetail)
-		c.JSON(http.StatusBadRequest, rsp)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, http.StatusText(int(rsp.Status)))
+		c.JSON(int(rsp.Status), rsp)
 		return
 	}
 
@@ -77,7 +82,8 @@ func (s *Server) HTTPReportObservedEventTriggersForIndividualAMPolicyAssociation
 			Title:  util.ERROR_INITIAL_PARAMETERS,
 			Status: http.StatusBadRequest,
 		}
-		c.JSON(http.StatusBadRequest, problemDetails)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, http.StatusText(int(problemDetails.Status)))
+		c.JSON(int(problemDetails.Status), problemDetails)
 		return
 	}
 
@@ -95,7 +101,8 @@ func (s *Server) HTTPCreateIndividualAMPolicyAssociation(c *gin.Context) {
 			Cause:  "SYSTEM_FAILURE",
 		}
 		logger.AmPolicyLog.Errorf("Get Request Body error: %+v", err)
-		c.JSON(http.StatusInternalServerError, problemDetail)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
+		c.JSON(int(problemDetail.Status), problemDetail)
 		return
 	}
 
@@ -108,13 +115,15 @@ func (s *Server) HTTPCreateIndividualAMPolicyAssociation(c *gin.Context) {
 			Detail: problemDetail,
 		}
 		logger.AmPolicyLog.Errorln(problemDetail)
-		c.JSON(http.StatusBadRequest, rsp)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, http.StatusText(int(rsp.Status)))
+		c.JSON(int(rsp.Status), rsp)
 		return
 	}
 
 	if policyAssociationRequest.Supi == "" || policyAssociationRequest.NotificationUri == "" {
 		rsp := util.GetProblemDetail("Missing Mandatory IE", util.ERROR_REQUEST_PARAMETERS)
 		logger.AmPolicyLog.Errorln(rsp.Detail)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, rsp.Cause)
 		c.JSON(int(rsp.Status), rsp)
 		return
 	}

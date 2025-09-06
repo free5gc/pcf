@@ -14,6 +14,7 @@ import (
 	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/internal/util"
+	"github.com/free5gc/util/metrics/sbi"
 )
 
 func (p *Processor) HandleGetBDTPolicyContextRequest(
@@ -34,6 +35,7 @@ func (p *Processor) HandleGetBDTPolicyContextRequest(
 		// not found
 		problemDetails := util.GetProblemDetail("Can't find bdtPolicyID related resource", util.CONTEXT_NOT_FOUND)
 		logger.BdtPolicyLog.Warn(problemDetails.Detail)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetails.Cause)
 		c.JSON(int(problemDetails.Status), problemDetails)
 		return
 	}
@@ -60,6 +62,7 @@ func (p *Processor) HandleUpdateBDTPolicyContextProcedure(
 		// not found
 		problemDetail := util.GetProblemDetail("Can't find bdtPolicyID related resource", util.CONTEXT_NOT_FOUND)
 		logger.BdtPolicyLog.Warn(problemDetail.Detail)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
 		c.JSON(int(problemDetail.Status), problemDetail)
 		return
 	}
@@ -86,16 +89,19 @@ func (p *Processor) HandleUpdateBDTPolicyContextProcedure(
 					Detail: "Can't find any UDR which supported to this PCF",
 				}
 				logger.BdtPolicyLog.Warn(pd.Detail)
+				c.Set(sbi.IN_PB_DETAILS_CTX_STR, pd.Detail)
 				c.JSON(int(pd.Status), pd)
 				return
 			}
 			pd, err := p.Consumer().CreateBdtData(udrUri, &bdtData)
 			if err != nil {
 				logger.BdtPolicyLog.Warnf("UDR Put BdtDate error[%s]", err.Error())
+				c.Set(sbi.IN_PB_DETAILS_CTX_STR, "UDR Put BdtDate error")
 				c.JSON(http.StatusInternalServerError, err.Error())
 				return
 			} else if pd != nil {
 				logger.BdtPolicyLog.Warnf("UDR Put BdtDate fault[%s]", pd.Detail)
+				c.Set(sbi.IN_PB_DETAILS_CTX_STR, pd.Cause)
 				c.JSON(int(pd.Status), pd)
 				return
 			}
@@ -111,6 +117,7 @@ func (p *Processor) HandleUpdateBDTPolicyContextProcedure(
 			bdtPolicyDataPatch.SelTransPolicyId, bdtPolicyID),
 		util.CONTEXT_NOT_FOUND)
 	logger.BdtPolicyLog.Warn(problemDetail.Detail)
+	c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
 	c.JSON(int(problemDetail.Status), problemDetail)
 }
 
@@ -128,6 +135,7 @@ func (p *Processor) HandleCreateBDTPolicyContextRequest(
 	if requestMsg.AspId == "" || requestMsg.DesTimeInt == nil || requestMsg.NumOfUes == 0 || requestMsg.VolPerUe == nil {
 		logger.BdtPolicyLog.Errorf("Required BdtReqData not found: AspId[%+v], DesTimeInt[%+v], NumOfUes[%+v], VolPerUe[%+v]",
 			requestMsg.AspId, requestMsg.DesTimeInt, requestMsg.NumOfUes, requestMsg.VolPerUe)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, http.StatusText(http.StatusNotFound))
 		c.JSON(http.StatusNotFound, nil)
 		return
 	}
@@ -146,6 +154,7 @@ func (p *Processor) HandleCreateBDTPolicyContextRequest(
 			Detail: "Can't find any UDR which supported to this PCF",
 		}
 		logger.BdtPolicyLog.Warn(problemDetails.Detail)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetails.Detail)
 		c.JSON(int(problemDetails.Status), problemDetails)
 		return
 	}
@@ -160,16 +169,19 @@ func (p *Processor) HandleCreateBDTPolicyContextRequest(
 			Detail: "Query to UDR failed",
 		}
 		logger.BdtPolicyLog.Warn("Query to UDR failed")
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetails.Detail)
 		c.JSON(int(problemDetails.Status), problemDetails)
 		return
 	} else if problemDetails != nil {
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetails.Cause)
 		c.JSON(int(problemDetails.Status), problemDetails)
 		return
 	}
 
 	bdtDatas := resp.BdtData
 	// TODO: decide BDT Policy from other bdt policy data
-	response.BdtReqData = deepcopy.Copy(requestMsg).(*models.BdtReqData)
+	copiedBdtReqData := deepcopy.Copy(requestMsg).(models.BdtReqData)
+	response.BdtReqData = &copiedBdtReqData
 	var bdtData *models.BdtData
 	var bdtPolicyData models.PcfBdtPolicyControlBdtPolicyData
 	for _, data := range bdtDatas {
@@ -207,6 +219,7 @@ func (p *Processor) HandleCreateBDTPolicyContextRequest(
 			Detail: "Allocate bdtPolicyID failed",
 		}
 		logger.BdtPolicyLog.Warn("Allocate bdtPolicyID failed")
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetails.Detail)
 		c.JSON(int(problemDetails.Status), problemDetails)
 		return
 	}
@@ -217,10 +230,12 @@ func (p *Processor) HandleCreateBDTPolicyContextRequest(
 	problemDetails, err = p.Consumer().CreateBdtData(udrUri, bdtData)
 	if err != nil {
 		logger.BdtPolicyLog.Warnf("UDR Put BdtDate error[%s]", err.Error())
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, "UDR Put BdtDate error")
 		c.JSON(http.StatusInternalServerError, err.Error())
 		return
 	} else if problemDetails != nil {
 		logger.BdtPolicyLog.Warnf("UDR Put BdtDate fault[%s]", problemDetails.Detail)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetails.Cause)
 		c.JSON(int(problemDetails.Status), problemDetails)
 		return
 	}
