@@ -5,7 +5,7 @@ go 1.24
 require (
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d
 	github.com/cydev/zero v0.0.0-20160322155811-4a4535dd56e7
-	github.com/free5gc/openapi v1.2.1
+	github.com/free5gc/openapi v1.2.2
 	github.com/free5gc/util v1.2.0
 	github.com/gin-contrib/cors v1.6.0
 	github.com/gin-gonic/gin v1.10.0
