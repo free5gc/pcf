@@ -22,8 +22,8 @@ require (
 
 require (
 	github.com/free5gc/aper v1.0.6-0.20250102035630-3ddc831eed6a // indirect
-	github.com/free5gc/nas v1.1.5 // indirect
-	github.com/free5gc/ngap v1.0.10 // indirect
+	github.com/free5gc/nas v1.2.1 // indirect
+	github.com/free5gc/ngap v1.1.1 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 )
 
