@@ -2,6 +2,7 @@ package consumer
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -41,7 +42,12 @@ func (s *nbsfService) BSFSelection() (string, error) {
 	}
 
 	// Use existing NRF discovery service
-	result, err := s.consumer.nnrfService.SendSearchNFInstances(s.consumer.Context().NrfUri, targetNfType, requesterNfType, request)
+	result, err := s.consumer.nnrfService.SendSearchNFInstances(
+		s.consumer.Context().NrfUri,
+		targetNfType,
+		requesterNfType,
+		request,
+	)
 	if err != nil {
 		return "", fmt.Errorf("BSF discovery failed: %w", err)
 	}
@@ -117,7 +123,7 @@ func (s *nbsfService) RegisterPCFBinding(smPolicyData *pcf_context.UeSmPolicyDat
 
 	// Create HTTP request
 	createURL := fmt.Sprintf("%s/nbsf-management/v1/pcfBindings", bsfUri)
-	req, err := http.NewRequest("POST", createURL, bytes.NewBuffer(jsonData))
+	req, err := http.NewRequestWithContext(context.Background(), "POST", createURL, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)
 	}
@@ -133,7 +139,11 @@ func (s *nbsfService) RegisterPCFBinding(smPolicyData *pcf_context.UeSmPolicyDat
 		logger.ConsumerLog.Errorf("Failed to register PCF binding in BSF: %v", err)
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			logger.ConsumerLog.Warnf("Failed to close response body: %v", closeErr)
+		}
+	}()
 
 	if resp.StatusCode == http.StatusCreated {
 		// Extract binding ID from Location header
@@ -197,7 +207,7 @@ func (s *nbsfService) UpdatePCFBinding(bindingId string, smPolicyData *pcf_conte
 
 	// Create HTTP request
 	updateURL := fmt.Sprintf("%s/nbsf-management/v1/pcfBindings/%s", bsfUri, bindingId)
-	req, err := http.NewRequest("PATCH", updateURL, bytes.NewBuffer(jsonData))
+	req, err := http.NewRequestWithContext(context.Background(), "PATCH", updateURL, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
@@ -213,7 +223,11 @@ func (s *nbsfService) UpdatePCFBinding(bindingId string, smPolicyData *pcf_conte
 		logger.ConsumerLog.Errorf("Failed to update PCF binding in BSF: %v", err)
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			logger.ConsumerLog.Warnf("Failed to close response body: %v", closeErr)
+		}
+	}()
 
 	if resp.StatusCode == http.StatusOK {
 		logger.ConsumerLog.Infof("Successfully updated PCF binding %s in BSF", bindingId)
@@ -233,7 +247,7 @@ func (s *nbsfService) DeletePCFBinding(bindingId string) error {
 
 	// Create HTTP request
 	deleteURL := fmt.Sprintf("%s/nbsf-management/v1/pcfBindings/%s", bsfUri, bindingId)
-	req, err := http.NewRequest("DELETE", deleteURL, nil)
+	req, err := http.NewRequestWithContext(context.Background(), "DELETE", deleteURL, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
@@ -245,7 +259,11 @@ func (s *nbsfService) DeletePCFBinding(bindingId string) error {
 		logger.ConsumerLog.Errorf("Failed to delete PCF binding from BSF: %v", err)
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			logger.ConsumerLog.Warnf("Failed to close response body: %v", closeErr)
+		}
+	}()
 
 	if resp.StatusCode == http.StatusNoContent || resp.StatusCode == http.StatusNotFound {
 		logger.ConsumerLog.Infof("Successfully deleted PCF binding %s from BSF", bindingId)
