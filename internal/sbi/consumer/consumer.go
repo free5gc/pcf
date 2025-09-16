@@ -26,6 +26,7 @@ type Consumer struct {
 	*namfService
 	*nudrService
 	*npcfService
+	*nbsfService
 }
 
 func NewConsumer(pcf pcf) (*Consumer, error) {
@@ -54,5 +55,22 @@ func NewConsumer(pcf pcf) (*Consumer, error) {
 		nfAMPolicyControlClient: make(map[string]*AMPolicyControl.APIClient),
 	}
 
+	c.nbsfService = &nbsfService{
+		consumer: c,
+	}
+
 	return c, nil
+}
+
+// BSF Service Methods
+func (c *Consumer) RegisterPCFBinding(smPolicyData *pcf_context.UeSmPolicyData) (string, error) {
+	return c.nbsfService.RegisterPCFBinding(smPolicyData)
+}
+
+func (c *Consumer) UpdatePCFBinding(bindingId string, smPolicyData *pcf_context.UeSmPolicyData) error {
+	return c.nbsfService.UpdatePCFBinding(bindingId, smPolicyData)
+}
+
+func (c *Consumer) DeletePCFBinding(bindingId string) error {
+	return c.nbsfService.DeletePCFBinding(bindingId)
 }
