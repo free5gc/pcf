@@ -10,7 +10,6 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 
 	"github.com/free5gc/openapi"
-	"github.com/free5gc/openapi/bsf/Management"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/openapi/pcf/SMPolicyControl"
 	"github.com/free5gc/openapi/udr/DataRepository"
@@ -475,41 +474,14 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 	}
 	smPolicyData.SubscriptionID = subscriptionID
 
-	// Create PCF binding data to BSF
-	policyAuthorizationService := p.Context().NfService[models.ServiceName_NPCF_POLICYAUTHORIZATION]
-	pcfBinding := models.PcfBinding{
-		Supi:           request.Supi,
-		Gpsi:           request.Gpsi,
-		Ipv4Addr:       request.Ipv4Address,
-		Ipv6Prefix:     request.Ipv6AddressPrefix,
-		IpDomain:       request.IpDomain,
-		Dnn:            request.Dnn,
-		Snssai:         request.SliceInfo,
-		PcfFqdn:        policyAuthorizationService.ApiPrefix,
-		PcfIpEndPoints: policyAuthorizationService.IpEndPoints,
-	}
-
-	// TODO: Record BSF URI instead of discovering from NRF every time
-	bsfUri := p.Consumer().SendNFInstancesBSF(p.Context().NrfUri)
-	if bsfUri != "" {
-		bsfClient := util.GetNbsfClient(bsfUri)
-
-		ctx, pd, err = p.Context().GetTokenCtx(models.ServiceName_NBSF_MANAGEMENT, models.NrfNfManagementNfType_BSF)
-		if err != nil {
-			c.Set(sbi.IN_PB_DETAILS_CTX_STR, pd.Cause)
-			c.JSON(int(pd.Status), pd)
-			return
-		}
-		req := Management.CreatePCFBindingRequest{
-			PcfBinding: &pcfBinding,
-		}
-		resp, err := bsfClient.PCFBindingsCollectionApi.CreatePCFBinding(ctx, &req)
-		if err != nil || resp == nil {
-			logger.SmPolicyLog.Warnf("Create PCF binding data in BSF error[%+v]", err)
-			// Uncomment the following to return error response --> PDU SessEstReq will fail
-			// problemDetail := util.GetProblemDetail("Cannot create PCF binding data in BSF", "")
-			// return nil, nil, &problemDetail
-		}
+	// Register PCF binding in BSF using the new consumer service
+	if bindingId, err := p.Consumer().RegisterPCFBinding(smPolicyData); err != nil {
+		logger.SmPolicyLog.Warnf("Failed to register PCF binding in BSF: %v", err)
+		// Continue without failing the session - BSF registration is not critical for basic operation
+	} else if bindingId != "" {
+		// Store binding ID in policy data for future updates/deletion
+		smPolicyData.BsfBindingId = bindingId
+		logger.SmPolicyLog.Infof("Successfully registered PCF binding in BSF with ID: %s", bindingId)
 	}
 	locationHeader := util.GetResourceUri(models.ServiceName_NPCF_SMPOLICYCONTROL, smPolicyID)
 	c.Header("Location", locationHeader)
@@ -566,6 +538,16 @@ func (p *Processor) HandleDeleteSmPolicyContextRequest(
 		logger.SmPolicyLog.Errorf("Remove UDR Influence Data Subscription Failed Problem[%+v]", problemDetail)
 	} else if err != nil {
 		logger.SmPolicyLog.Errorf("Remove UDR Influence Data Subscription Error[%v]", err.Error())
+	}
+
+	// Delete PCF binding from BSF if binding ID exists
+	if smPolicy.BsfBindingId != "" {
+		if err := p.Consumer().DeletePCFBinding(smPolicy.BsfBindingId); err != nil {
+			logger.SmPolicyLog.Warnf("Failed to delete PCF binding from BSF: %v", err)
+			// Continue with deletion even if BSF cleanup fails
+		} else {
+			logger.SmPolicyLog.Infof("Successfully deleted PCF binding from BSF: %s", smPolicy.BsfBindingId)
+		}
 	}
 
 	// Unsubscrice UDR
@@ -1011,6 +993,17 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 		c.JSON(int(problemDetail.Status), problemDetail)
 		return
 	}
+
+	// Update PCF binding in BSF if binding ID exists and context has relevant changes
+	if smPolicy.BsfBindingId != "" {
+		if err := p.Consumer().UpdatePCFBinding(smPolicy.BsfBindingId, smPolicy); err != nil {
+			logger.SmPolicyLog.Warnf("Failed to update PCF binding in BSF: %v", err)
+			// Continue with policy update even if BSF update fails
+		} else {
+			logger.SmPolicyLog.Infof("Successfully updated PCF binding in BSF: %s", smPolicy.BsfBindingId)
+		}
+	}
+
 	logger.SmPolicyLog.Tracef("SMPolicy smPolicyID[%s] Update", smPolicyId)
 	c.JSON(http.StatusOK, smPolicyDecision)
 }

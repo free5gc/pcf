@@ -100,6 +100,8 @@ type UeSmPolicyData struct {
 	PcfUe                  *UeContext
 	InfluenceDataToPccRule map[string]string
 	SubscriptionID         string
+	// BSF Integration
+	BsfBindingId string
 }
 
 // NewUeAMPolicyData returns created UeAMPolicyData data and insert this data to Ue.AMPolicyData with assolId as key
