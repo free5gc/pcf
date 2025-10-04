@@ -13,6 +13,7 @@ import (
 	"github.com/free5gc/openapi/nrf/NFDiscovery"
 	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
+	"github.com/free5gc/pcf/pkg/factory"
 )
 
 type nbsfService struct {
@@ -29,6 +30,18 @@ func (s *nbsfService) getHTTPClient() *http.Client {
 		s.httpClient = &http.Client{}
 	}
 	return s.httpClient
+}
+
+// isBSFEnabled checks if BSF integration is enabled in configuration
+func (s *nbsfService) isBSFEnabled() bool {
+	config := factory.PcfConfig
+
+	// Default to true if BSF config is not specified (backward compatibility)
+	if config.Configuration.Bsf == nil {
+		return true
+	}
+
+	return config.Configuration.Bsf.Enable
 }
 
 // BSFSelection discovers and selects BSF for PCF binding registration
@@ -69,11 +82,18 @@ func (s *nbsfService) BSFSelection() (string, error) {
 }
 
 // RegisterPCFBinding registers PCF binding for a PDU session context
+// Returns empty string and no error if BSF is not available (fallback mode)
 func (s *nbsfService) RegisterPCFBinding(smPolicyData *pcf_context.UeSmPolicyData) (string, error) {
+	// Check if BSF is enabled in configuration
+	if !s.isBSFEnabled() {
+		logger.ConsumerLog.Debugf("BSF integration is disabled in configuration")
+		return "", nil
+	}
+
 	bsfUri, err := s.BSFSelection()
 	if err != nil {
-		logger.ConsumerLog.Warnf("BSF selection failed: %v", err)
-		return "", err
+		logger.ConsumerLog.Warnf("BSF selection failed, continuing without BSF integration: %v", err)
+		return "", nil // Return success with empty binding ID to continue without BSF
 	}
 
 	// Extract data from policy context
@@ -165,11 +185,24 @@ func (s *nbsfService) RegisterPCFBinding(smPolicyData *pcf_context.UeSmPolicyDat
 }
 
 // UpdatePCFBinding updates existing PCF binding in BSF
+// Returns nil (success) if BSF is not available or bindingId is empty (fallback mode)
 func (s *nbsfService) UpdatePCFBinding(bindingId string, smPolicyData *pcf_context.UeSmPolicyData) error {
+	// Check if BSF is enabled in configuration
+	if !s.isBSFEnabled() {
+		logger.ConsumerLog.Debugf("BSF integration is disabled in configuration")
+		return nil
+	}
+
+	// If no binding ID, skip BSF update (fallback mode)
+	if bindingId == "" {
+		logger.ConsumerLog.Debugf("No BSF binding ID provided, skipping BSF update")
+		return nil
+	}
+
 	bsfUri, err := s.BSFSelection()
 	if err != nil {
-		logger.ConsumerLog.Warnf("BSF selection failed: %v", err)
-		return err
+		logger.ConsumerLog.Warnf("BSF selection failed, skipping BSF update: %v", err)
+		return nil // Return success to continue without BSF
 	}
 
 	// Extract data from policy context for updates
@@ -238,11 +271,24 @@ func (s *nbsfService) UpdatePCFBinding(bindingId string, smPolicyData *pcf_conte
 }
 
 // DeletePCFBinding removes PCF binding from BSF
+// Returns nil (success) if BSF is not available or bindingId is empty (fallback mode)
 func (s *nbsfService) DeletePCFBinding(bindingId string) error {
+	// Check if BSF is enabled in configuration
+	if !s.isBSFEnabled() {
+		logger.ConsumerLog.Debugf("BSF integration is disabled in configuration")
+		return nil
+	}
+
+	// If no binding ID, skip BSF deletion (fallback mode)
+	if bindingId == "" {
+		logger.ConsumerLog.Debugf("No BSF binding ID provided, skipping BSF deletion")
+		return nil
+	}
+
 	bsfUri, err := s.BSFSelection()
 	if err != nil {
-		logger.ConsumerLog.Warnf("BSF selection failed: %v", err)
-		return err
+		logger.ConsumerLog.Warnf("BSF selection failed, skipping BSF deletion: %v", err)
+		return nil // Return success to continue without BSF
 	}
 
 	// Create HTTP request
