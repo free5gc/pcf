@@ -30,7 +30,7 @@ func (p *Processor) HandleDeletePoliciesPolAssoId(
 	}
 
 	delete(ue.AMPolicyData, polAssoId)
-	c.JSON(http.StatusNoContent, nil)
+	c.Status(http.StatusNoContent)
 }
 
 // PoliciesPolAssoIdGet -
