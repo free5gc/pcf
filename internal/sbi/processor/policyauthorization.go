@@ -497,7 +497,7 @@ func (p *Processor) HandleDeleteAppSessionContext(
 	}
 	go p.SendSMPolicyUpdateNotification(smPolicy.PolicyContext.NotificationUri, &notification)
 	logger.PolicyAuthLog.Tracef("Send SM Policy[%s] Update Notification", smPolicyID)
-	c.JSON(http.StatusNoContent, nil)
+	c.Status(http.StatusNoContent)
 }
 
 // HandleGetAppSession - Reads an existing Individual Application Session Context
@@ -855,7 +855,7 @@ func (p *Processor) HandleDeleteEventsSubscContext(
 		go p.SendSMPolicyUpdateNotification(smPolicy.PolicyContext.NotificationUri, &notification)
 		logger.PolicyAuthLog.Tracef("Send SM Policy[%s] Update Notification", smPolicyID)
 	}
-	c.JSON(http.StatusNoContent, nil)
+	c.Status(http.StatusNoContent)
 }
 
 // HandleUpdateEventsSubsc - creates or modifies an Events Subscription subresource
@@ -1012,7 +1012,7 @@ func (p *Processor) HandleUpdateEventsSubscContext(
 		c.JSON(http.StatusOK, resp)
 	} else {
 		logger.PolicyAuthLog.Tracef("App Session Id[%s] Modify Subscription", appSessionId)
-		c.JSON(http.StatusNoContent, nil)
+		c.Status(http.StatusNoContent)
 	}
 }
 
