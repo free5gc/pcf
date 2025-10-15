@@ -24,9 +24,10 @@ func (p *Processor) HandleDeletePoliciesPolAssoId(
 
 	ue := p.Context().PCFUeFindByPolicyId(polAssoId)
 	if ue == nil || ue.AMPolicyData[polAssoId] == nil {
-		problemDetails := util.GetProblemDetail("polAssoId not found  in PCF", util.CONTEXT_NOT_FOUND)
+		problemDetails := util.GetProblemDetail("polAssoId not found in PCF", util.CONTEXT_NOT_FOUND)
 		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetails.Cause)
 		c.JSON(int(problemDetails.Status), problemDetails)
+		return
 	}
 
 	delete(ue.AMPolicyData, polAssoId)
