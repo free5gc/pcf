@@ -24,7 +24,7 @@ func (p *Processor) HandleAmfStatusChangeNotify(
 	// TODO: handle AMF Status Change Notify
 	logger.CallbackLog.Debugf("receive AMF status change notification[%+v]", amfStatusChangeNotification)
 
-	c.JSON(http.StatusNoContent, nil)
+	c.Status(http.StatusNoContent)
 }
 
 func (p *Processor) HandlePolicyDataChangeNotify(
@@ -158,7 +158,7 @@ func (p *Processor) HandleInfluenceDataUpdateNotify(
 		SmPolicyDecision: decision,
 	}
 	go p.SendSMPolicyUpdateNotification(smPolicy.PolicyContext.NotificationUri, &smPolicyNotification)
-	c.JSON(http.StatusNoContent, nil)
+	c.Status(http.StatusNoContent)
 }
 
 func getInfluenceID(resUri string) string {

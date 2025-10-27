@@ -579,7 +579,7 @@ func (p *Processor) HandleDeleteSmPolicyContextRequest(
 		}
 	}
 	delete(ue.RatingGroupData, smPolicyId)
-	c.JSON(http.StatusNoContent, nil)
+	c.Status(http.StatusNoContent)
 }
 
 func (p *Processor) HandleGetSmPolicyContextRequest(
