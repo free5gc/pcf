@@ -36,9 +36,9 @@ func (s *nbsfService) getHTTPClient() *http.Client {
 func (s *nbsfService) isBSFEnabled() bool {
 	config := factory.PcfConfig
 
-	// Default to true if BSF config is not specified (backward compatibility)
+	// Default to false if BSF config is not specified
 	if config.Configuration.Bsf == nil {
-		return true
+		return false
 	}
 
 	return config.Configuration.Bsf.Enable
