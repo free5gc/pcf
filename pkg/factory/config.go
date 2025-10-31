@@ -73,6 +73,7 @@ type Configuration struct {
 	DefaultBdtRefId string    `yaml:"defaultBdtRefId,omitempty" valid:"required, type(string)"`
 	NrfUri          string    `yaml:"nrfUri,omitempty" valid:"required, url"`
 	NrfCertPem      string    `yaml:"nrfCertPem,omitempty" valid:"optional"`
+	Bsf             *Bsf      `yaml:"bsf,omitempty" valid:"optional"`
 	ServiceList     []Service `yaml:"serviceList,omitempty" valid:"required"`
 	Mongodb         *Mongodb  `yaml:"mongodb" valid:"required"`
 	Locality        string    `yaml:"locality,omitempty" valid:"-"`
@@ -82,6 +83,10 @@ type Logger struct {
 	Enable       bool   `yaml:"enable" valid:"type(bool)"`
 	Level        string `yaml:"level" valid:"required,in(trace|debug|info|warn|error|fatal|panic)"`
 	ReportCaller bool   `yaml:"reportCaller" valid:"type(bool)"`
+}
+
+type Bsf struct {
+	Enable bool `yaml:"enable" valid:"type(bool)"`
 }
 
 func (c *Configuration) validate() (bool, error) {
