@@ -9,8 +9,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/google/uuid"
-
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/openapi/oauth"
@@ -86,7 +84,7 @@ func InitPcfContext(context *PCFContext) {
 	config := factory.PcfConfig
 	logger.UtilLog.Infof("pcfconfig Info: Version[%s] Description[%s]", config.Info.Version, config.Info.Description)
 	configuration := config.Configuration
-	context.NfId = uuid.New().String()
+	context.NfId = config.GetNfInstanceId()
 	if configuration.PcfName != "" {
 		context.Name = configuration.PcfName
 	}
