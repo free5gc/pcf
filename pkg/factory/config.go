@@ -11,31 +11,33 @@ import (
 	"sync"
 
 	"github.com/asaskevich/govalidator"
+	"github.com/google/uuid"
 
 	"github.com/free5gc/pcf/internal/logger"
 )
 
 const (
-	PcfTimeFormatLayout         = "2006-01-02 15:04:05"
-	PcfDefaultTLSKeyLogPath     = "./log/pcfsslkey.log"
-	PcfDefaultCertPemPath       = "./cert/pcf.pem"
-	PcfDefaultPrivateKeyPath    = "./cert/pcf.key"
-	PcfDefaultConfigPath        = "./config/pcfcfg.yaml"
-	PcfSbiDefaultIPv4           = "127.0.0.7"
-	PcfSbiDefaultPort           = 8000
-	PcfSbiDefaultScheme         = "https"
-	PcfMetricsDefaultEnabled    = false
-	PcfMetricsDefaultPort       = 9091
-	PcfMetricsDefaultScheme     = "https"
-	PcfMetricsDefaultNamespace  = "free5gc"
-	PcfDefaultNrfUri            = "https://127.0.0.10:8000"
-	PcfPolicyAuthResUriPrefix   = "/npcf-policyauthorization/v1"
-	PcfAMpolicyCtlResUriPrefix  = "/npcf-am-policy-control/v1"
-	PcfCallbackResUriPrefix     = "/npcf-callback/v1"
-	PcfSMpolicyCtlResUriPrefix  = "/npcf-smpolicycontrol/v1"
-	PcfBdtPolicyCtlResUriPrefix = "/npcf-bdtpolicycontrol/v1"
-	PcfOamResUriPrefix          = "/npcf-oam/v1"
-	PcfUePolicyCtlResUriPrefix  = "/npcf-ue-policy-control/v1/"
+	PcfTimeFormatLayout          = "2006-01-02 15:04:05"
+	PcfDefaultTLSKeyLogPath      = "./log/pcfsslkey.log"
+	PcfDefaultCertPemPath        = "./cert/pcf.pem"
+	PcfDefaultPrivateKeyPath     = "./cert/pcf.key"
+	PcfDefaultConfigPath         = "./config/pcfcfg.yaml"
+	PcfDefaultNfInstanceIdEnvVar = "PCF_NF_INSTANCE_ID"
+	PcfSbiDefaultIPv4            = "127.0.0.7"
+	PcfSbiDefaultPort            = 8000
+	PcfSbiDefaultScheme          = "https"
+	PcfMetricsDefaultEnabled     = false
+	PcfMetricsDefaultPort        = 9091
+	PcfMetricsDefaultScheme      = "https"
+	PcfMetricsDefaultNamespace   = "free5gc"
+	PcfDefaultNrfUri             = "https://127.0.0.10:8000"
+	PcfPolicyAuthResUriPrefix    = "/npcf-policyauthorization/v1"
+	PcfAMpolicyCtlResUriPrefix   = "/npcf-am-policy-control/v1"
+	PcfCallbackResUriPrefix      = "/npcf-callback/v1"
+	PcfSMpolicyCtlResUriPrefix   = "/npcf-smpolicycontrol/v1"
+	PcfBdtPolicyCtlResUriPrefix  = "/npcf-bdtpolicycontrol/v1"
+	PcfOamResUriPrefix           = "/npcf-oam/v1"
+	PcfUePolicyCtlResUriPrefix   = "/npcf-ue-policy-control/v1/"
 )
 
 type Config struct {
@@ -67,6 +69,7 @@ type Info struct {
 
 type Configuration struct {
 	PcfName         string    `yaml:"pcfName,omitempty" valid:"required, type(string)"`
+	NfInstanceId    string    `yaml:"nfInstanceId,omitempty" valid:"optional,uuidv4"`
 	Sbi             *Sbi      `yaml:"sbi,omitempty" valid:"required"`
 	Metrics         *Metrics  `yaml:"metrics,omitempty" valid:"optional"`
 	TimeFormat      string    `yaml:"timeFormat,omitempty" valid:"required"`
@@ -90,6 +93,10 @@ type Bsf struct {
 }
 
 func (c *Configuration) validate() (bool, error) {
+	if c.NfInstanceId == "" {
+		c.NfInstanceId = uuid.New().String()
+	}
+
 	if c.Sbi != nil {
 		if _, err := c.Sbi.validate(); err != nil {
 			return false, err
@@ -185,6 +192,31 @@ func (s *Service) validate() (bool, error) {
 	}
 
 	return true, nil
+}
+
+func (c *Config) GetNfInstanceId() string {
+	c.RLock()
+	defer c.RUnlock()
+
+	var nfInstanceId string
+
+	logger.CfgLog.Debugf("Fetching nfInstanceId from env var \"%s\"", PcfDefaultNfInstanceIdEnvVar)
+
+	if nfInstanceId = os.Getenv(PcfDefaultNfInstanceIdEnvVar); nfInstanceId == "" {
+		logger.CfgLog.Debugf("No value found for \"%s\" env, fallback on config nfInstanceId : %s",
+			PcfDefaultNfInstanceIdEnvVar, c.Configuration.NfInstanceId)
+		return c.Configuration.NfInstanceId
+	}
+
+	if err := uuid.Validate(nfInstanceId); err != nil {
+		logger.CfgLog.Errorf("Env var \"%s\" is not a valid uuid, "+
+			"fallback on configuration nfInstanceId : %s", PcfDefaultNfInstanceIdEnvVar, c.Configuration.NfInstanceId)
+		return c.Configuration.NfInstanceId
+	}
+
+	logger.CfgLog.Debugf("nfInstanceId from %s : %s", PcfDefaultNfInstanceIdEnvVar, nfInstanceId)
+
+	return nfInstanceId
 }
 
 type Sbi struct {
