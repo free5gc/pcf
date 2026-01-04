@@ -1,12 +1,12 @@
 module github.com/free5gc/pcf
 
-go 1.24.0
+go 1.25.5
 
 require (
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d
 	github.com/cydev/zero v0.0.0-20160322155811-4a4535dd56e7
-	github.com/free5gc/openapi v1.2.2
-	github.com/free5gc/util v1.2.0
+	github.com/free5gc/openapi v1.2.3
+	github.com/free5gc/util v1.3.1
 	github.com/gin-contrib/cors v1.6.0
 	github.com/gin-gonic/gin v1.10.0
 	github.com/go-playground/assert/v2 v2.2.0
@@ -21,9 +21,9 @@ require (
 )
 
 require (
-	github.com/free5gc/aper v1.0.6-0.20250102035630-3ddc831eed6a // indirect
-	github.com/free5gc/nas v1.2.1 // indirect
-	github.com/free5gc/ngap v1.1.1 // indirect
+	github.com/free5gc/aper v1.1.0 // indirect
+	github.com/free5gc/nas v1.2.2 // indirect
+	github.com/free5gc/ngap v1.1.2 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 )
 
