@@ -78,7 +78,7 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 			request.SliceInfo,
 			request.Dnn,
 		)
-		smData = response.SmPolicyData
+
 		if sessionErr != nil || response == nil {
 			problemDetail := util.GetProblemDetail("Can't find UE SM Policy Data in UDR", util.USER_UNKNOWN)
 			logger.SmPolicyLog.Warnf("Can't find UE[%s] SM Policy Data in UDR", ue.Supi)
@@ -90,6 +90,7 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 			c.JSON(int(pd.Status), pd)
 			return
 		}
+		smData = response.SmPolicyData
 		// TODO: subscribe to UDR
 	} else {
 		smData = *smPolicyData.SmPolicyData
