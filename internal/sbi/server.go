@@ -92,6 +92,10 @@ func NewServer(pcf pcf, tlsKeyLogPath string) (*Server, error) {
 
 	httpcallbackRoutes := s.getHttpCallBackRoutes()
 	httpcallbackGroup := s.router.Group(factory.PcfCallbackResUriPrefix)
+	pcfCallbackAuthCheck := util.NewRouterAuthorizationCheck(models.ServiceName("npcf-callback"))
+	httpcallbackGroup.Use(func(c *gin.Context) {
+		pcfCallbackAuthCheck.Check(c, s.Context())
+	})
 	applyRoutes(httpcallbackGroup, httpcallbackRoutes)
 
 	oamRoutes := s.getOamRoutes()
