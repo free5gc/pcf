@@ -3,12 +3,14 @@ package processor
 import (
 	"fmt"
 	"net/http"
+	"reflect"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
 
 	"github.com/free5gc/openapi/models"
+	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/internal/util"
 	"github.com/free5gc/util/metrics/sbi"
@@ -19,10 +21,58 @@ func (p *Processor) HandleAmfStatusChangeNotify(
 	c *gin.Context,
 	amfStatusChangeNotification models.AmfStatusChangeNotification,
 ) {
-	logger.CallbackLog.Warnf("[PCF] Handle Amf Status Change Notify is not implemented.")
-
-	// TODO: handle AMF Status Change Notify
 	logger.CallbackLog.Debugf("receive AMF status change notification[%+v]", amfStatusChangeNotification)
+
+	unavailableGuamiList := make([]models.Guami, 0)
+	for _, amfStatusInfo := range amfStatusChangeNotification.AmfStatusInfoList {
+		logger.CallbackLog.Debugf("AMF status info: status[%s] guamiCount[%d]",
+			amfStatusInfo.StatusChange, len(amfStatusInfo.GuamiList))
+		if amfStatusInfo.StatusChange == models.StatusChange_UNAVAILABLE {
+			unavailableGuamiList = append(unavailableGuamiList, amfStatusInfo.GuamiList...)
+		}
+	}
+
+	if len(unavailableGuamiList) == 0 {
+		c.Status(http.StatusNoContent)
+		return
+	}
+
+	removedSubs := 0
+	p.Context().AMFStatusSubsData.Range(func(key, value interface{}) bool {
+		subsData, ok := value.(pcf_context.AMFStatusSubscriptionData)
+		if !ok {
+			return true
+		}
+
+		if hasAnyMatchedGuami(subsData.GuamiList, unavailableGuamiList) {
+			p.Context().AMFStatusSubsData.Delete(key)
+			removedSubs++
+		}
+		return true
+	})
+
+	updatedPolicies := 0
+	p.Context().UePool.Range(func(_, value interface{}) bool {
+		ue, ok := value.(*pcf_context.UeContext)
+		if !ok {
+			return true
+		}
+		for polID, amPolicy := range ue.AMPolicyData {
+			if amPolicy == nil || amPolicy.Guami == nil {
+				continue
+			}
+			if hasMatchedGuami(*amPolicy.Guami, unavailableGuamiList) {
+				logger.CallbackLog.Infof("AMF unavailable affects policy[%s] of UE[%s]", polID, ue.Supi)
+				amPolicy.AmfStatusUri = ""
+				amPolicy.Guami = nil
+				updatedPolicies++
+			}
+		}
+		return true
+	})
+
+	logger.CallbackLog.Infof("AMF status change processed: removedSubs[%d], updatedPolicies[%d]",
+		removedSubs, updatedPolicies)
 
 	c.Status(http.StatusNoContent)
 }
@@ -32,15 +82,60 @@ func (p *Processor) HandlePolicyDataChangeNotify(
 	supi string,
 	policyDataChangeNotification models.PolicyDataChangeNotification,
 ) {
-	logger.CallbackLog.Warnf("[PCF] Handle Policy Data Change Notify is not implemented.")
+	problemDetails := p.PolicyDataChangeNotifyProcedure(supi, policyDataChangeNotification)
+	if problemDetails != nil {
+		logger.CallbackLog.Warnf("Handle Policy Data Change Notify failed: %+v", problemDetails)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetails.Cause)
+		c.JSON(int(problemDetails.Status), problemDetails)
+		return
+	}
 
-	PolicyDataChangeNotifyProcedure(supi, policyDataChangeNotification)
-
-	c.JSON(http.StatusNotImplemented, gin.H{})
+	c.Status(http.StatusNoContent)
 }
 
-// TODO: handle Policy Data Change Notify
-func PolicyDataChangeNotifyProcedure(supi string, notification models.PolicyDataChangeNotification) {
+func (p *Processor) PolicyDataChangeNotifyProcedure(
+	supi string,
+	notification models.PolicyDataChangeNotification,
+) *models.ProblemDetails {
+	if supi == "" {
+		problemDetail := util.GetProblemDetail("Supi is empty", util.ERROR_INITIAL_PARAMETERS)
+		return &problemDetail
+	}
+
+	value, ok := p.Context().UePool.Load(supi)
+	if !ok {
+		problemDetail := util.GetProblemDetail("supi not found in PCF", util.CONTEXT_NOT_FOUND)
+		return &problemDetail
+	}
+
+	ue, ok := value.(*pcf_context.UeContext)
+	if !ok {
+		problemDetail := util.GetProblemDetail("invalid UE context type", util.ERROR_INITIAL_PARAMETERS)
+		return &problemDetail
+	}
+
+	ue.PolicyDataChangeStore = &notification
+
+	if notification.AmPolicyData != nil {
+		for _, amPolicy := range ue.AMPolicyData {
+			if amPolicy != nil {
+				amPolicy.AmPolicyData = notification.AmPolicyData
+			}
+		}
+	}
+
+	if notification.SmPolicyData != nil {
+		for _, smPolicy := range ue.SmPolicyData {
+			if smPolicy != nil {
+				smPolicy.SmPolicyData = notification.SmPolicyData
+			}
+		}
+	}
+
+	logger.CallbackLog.Infof("Policy data change stored for UE[%s]: hasAM[%t] hasSM[%t] delResources[%d]",
+		supi, notification.AmPolicyData != nil, notification.SmPolicyData != nil, len(notification.DelResources))
+
+	return nil
 }
 
 func (p *Processor) HandleInfluenceDataUpdateNotify(
@@ -164,4 +259,22 @@ func (p *Processor) HandleInfluenceDataUpdateNotify(
 func getInfluenceID(resUri string) string {
 	temp := strings.Split(resUri, "/")
 	return temp[len(temp)-1]
+}
+
+func hasAnyMatchedGuami(guamiList []models.Guami, targetGuamiList []models.Guami) bool {
+	for _, guami := range guamiList {
+		if hasMatchedGuami(guami, targetGuamiList) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasMatchedGuami(guami models.Guami, targetGuamiList []models.Guami) bool {
+	for _, target := range targetGuamiList {
+		if reflect.DeepEqual(guami, target) {
+			return true
+		}
+	}
+	return false
 }
