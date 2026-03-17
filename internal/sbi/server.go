@@ -72,6 +72,10 @@ func NewServer(pcf pcf, tlsKeyLogPath string) (*Server, error) {
 
 	smPolicyRoutes := s.getSmPolicyRoutes()
 	smPolicyGroup := s.router.Group(factory.PcfSMpolicyCtlResUriPrefix)
+	smRouterAuthorizationCheck := util.NewRouterAuthorizationCheck(models.ServiceName_NPCF_SMPOLICYCONTROL)
+	smPolicyGroup.Use(func(c *gin.Context) {
+		smRouterAuthorizationCheck.Check(c, s.Context())
+	})
 	applyRoutes(smPolicyGroup, smPolicyRoutes)
 
 	amPolicyRoutes := s.getAmPolicyRoutes()
@@ -113,6 +117,10 @@ func NewServer(pcf pcf, tlsKeyLogPath string) (*Server, error) {
 
 	uePolicyRoutes := s.getUePolicyRoutes()
 	uePolicyGroup := s.router.Group(factory.PcfUePolicyCtlResUriPrefix)
+	uePolicyRouterAuthorizationCheck := util.NewRouterAuthorizationCheck(models.ServiceName_NPCF_UE_POLICY_CONTROL)
+	uePolicyGroup.Use(func(c *gin.Context) {
+		uePolicyRouterAuthorizationCheck.Check(c, s.Context())
+	})
 	applyRoutes(uePolicyGroup, uePolicyRoutes)
 
 	cfg := s.Config()
