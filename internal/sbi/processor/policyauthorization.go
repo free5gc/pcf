@@ -284,7 +284,7 @@ func (p *Processor) postAppSessCtxProcedure(appSessCtx *models.AppSessionContext
 				}
 			}
 			// Initial provisioning of traffic routing information
-			if traffRoutSupp && routeReq != nil {
+			if traffRoutSupp {
 				pccRule = provisioningOfTrafficRoutingInfo(smPolicy, appID, routeReq, medComp.FStatus)
 			}
 			key := fmt.Sprintf("%d", medComp.MedCompN)
