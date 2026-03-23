@@ -1709,6 +1709,11 @@ func modifyRemainBitRate(smPolicy *pcf_context.UeSmPolicyData, qosData *models.Q
 func provisioningOfTrafficRoutingInfo(smPolicy *pcf_context.UeSmPolicyData, appID string,
 	routeReq *models.AfRoutingRequirement, fStatus models.FlowStatus,
 ) *models.PccRule {
+	if routeReq == nil {
+		logger.PolicyAuthLog.Warnf("provisioningOfTrafficRoutingInfo: routeReq is nil for appID[%s], skipping", appID)
+		return util.GetPccRuleByAfAppId(smPolicy.PolicyDecision.PccRules, appID)
+	}
+
 	var tcData *models.TrafficControlData
 
 	// TODO : handle temporal or spatial validity
