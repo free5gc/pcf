@@ -837,6 +837,14 @@ func (p *Processor) HandleDeleteEventsSubscContext(
 		return
 	}
 
+	smPolicy := appSession.SmPolicyData
+	if smPolicy == nil {
+		problemDetail := util.GetProblemDetail("Can't find related PDU Session", util.REQUESTED_SERVICE_NOT_AUTHORIZED)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
+		c.JSON(int(problemDetail.Status), problemDetail)
+		return
+	}
+
 	appSession.Events = nil
 	appSession.EventUri = ""
 	appSession.AppSessionContext.EvsNotif = nil
@@ -844,7 +852,6 @@ func (p *Processor) HandleDeleteEventsSubscContext(
 
 	logger.PolicyAuthLog.Tracef("App Session Id[%s] Del Events Subsc success", appSessionId)
 
-	smPolicy := appSession.SmPolicyData
 	// Send Notification to SMF
 	if changed := appSession.SmPolicyData.ArrangeExistEventSubscription(); changed {
 		smPolicyID := fmt.Sprintf("%s-%d", smPolicy.PcfUe.Supi, smPolicy.PolicyContext.PduSessionId)
@@ -879,6 +886,12 @@ func (p *Processor) HandleUpdateEventsSubscContext(
 		return
 	}
 	smPolicy := appSession.SmPolicyData
+	if smPolicy == nil {
+		problemDetail := util.GetProblemDetail("Can't find related PDU Session", util.REQUESTED_SERVICE_NOT_AUTHORIZED)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
+		c.JSON(int(problemDetail.Status), problemDetail)
+		return
+	}
 	eventSubs := make(map[models.PcfPolicyAuthorizationAfEvent]models.AfNotifMethod)
 
 	updataSmPolicy := false
