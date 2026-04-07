@@ -982,15 +982,15 @@ func (p *Processor) HandleUpdateEventsSubscContext(
 	}
 
 	resp := models.EventsSubscPutData{
-		Events:                    eventsSubscReqData.Events,
-		NotifUri:                  eventsSubscReqData.NotifUri,
-		ReqQosMonParams:           eventsSubscReqData.ReqQosMonParams,
-		QosMon:                    eventsSubscReqData.QosMon,
-		ReqAnis:                   eventsSubscReqData.ReqAnis,
-		UsgThres:                  eventsSubscReqData.UsgThres,
-		NotifCorreId:              eventsSubscReqData.NotifCorreId,
-		AfAppIds:                  eventsSubscReqData.AfAppIds,
-		DirectNotifInd:            eventsSubscReqData.DirectNotifInd,
+		Events:          eventsSubscReqData.Events,
+		NotifUri:        eventsSubscReqData.NotifUri,
+		ReqQosMonParams: eventsSubscReqData.ReqQosMonParams,
+		QosMon:          eventsSubscReqData.QosMon,
+		ReqAnis:         eventsSubscReqData.ReqAnis,
+		UsgThres:        eventsSubscReqData.UsgThres,
+		NotifCorreId:    eventsSubscReqData.NotifCorreId,
+		AfAppIds:        eventsSubscReqData.AfAppIds,
+		DirectNotifInd:  eventsSubscReqData.DirectNotifInd,
 	}
 	if appSessCtx.EvsNotif != nil {
 		resp.AccessType = appSessCtx.EvsNotif.AccessType
