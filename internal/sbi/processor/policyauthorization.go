@@ -25,6 +25,9 @@ const (
 )
 
 func transferAfRoutReqRmToAfRoutReq(AfRoutReqRm *models.AfRoutingRequirementRm) *models.AfRoutingRequirement {
+	if AfRoutReqRm == nil || AfRoutReqRm.SpVal == nil {
+		return nil
+	}
 	spVal := models.SpatialValidity{
 		PresenceInfoList: AfRoutReqRm.SpVal.PresenceInfoList,
 	}
@@ -362,6 +365,10 @@ func (p *Processor) postAppSessCtxProcedure(appSessCtx *models.AppSessionContext
 			problemDetail := util.GetProblemDetail("Sponsored Connectivity not supported", util.REQUESTED_SERVICE_NOT_AUTHORIZED)
 			return nil, "", &problemDetail
 		}
+		if ascReqData.EvSubsc == nil {
+			problemDetail := util.GetProblemDetail("Missing evSubsc for sponsored connectivity", util.ERROR_REQUEST_PARAMETERS)
+			return nil, "", &problemDetail
+		}
 		umID := util.GetUmId(ascReqData.AspId, ascReqData.SponId)
 		var umData *models.UsageMonitoringData
 		if tempUmData, err := extractUmData(umID, eventSubs, ascReqData.EvSubsc.UsgThres); err != nil {
@@ -573,6 +580,12 @@ func (p *Processor) HandleModAppSessionContext(
 	if appSessionContextUpdateData.MedComponents != nil {
 		precedence := getAvailablePrecedence(smPolicy.PolicyDecision.PccRules)
 		for compN, medCompRm := range appSessionContextUpdateData.MedComponents {
+			if medCompRm != nil && medCompRm.AfRoutReq != nil && medCompRm.AfRoutReq.SpVal == nil {
+				problemDetail := util.GetProblemDetail("Field afRoutReq.spVal is nil", util.ERROR_REQUEST_PARAMETERS)
+				c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
+				c.JSON(int(problemDetail.Status), problemDetail)
+				return
+			}
 			medComp := transferMedCompRmToMedComp(medCompRm)
 			removeMediaComp(appSession, compN)
 			if zero.IsZero(medComp) {
@@ -669,6 +682,12 @@ func (p *Processor) HandleModAppSessionContext(
 	// Update of traffic routing information
 	// TODO: check ascUpdateData.AfAppId with appSessCtx.AscReqData.AfAppId (now ascUpdateData.AfAppId is empty)
 	if appSessionContextUpdateData.AfRoutReq != nil && traffRoutSupp {
+		if appSessionContextUpdateData.AfRoutReq.SpVal == nil {
+			problemDetail := util.GetProblemDetail("Field afRoutReq.spVal is nil", util.ERROR_REQUEST_PARAMETERS)
+			c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
+			c.JSON(int(problemDetail.Status), problemDetail)
+			return
+		}
 		logger.PolicyAuthLog.Infof("Update Traffic Routing info - [%+v]", appSessionContextUpdateData.AfRoutReq)
 		appSessCtx.AscReqData.AfRoutReq = transferAfRoutReqRmToAfRoutReq(appSessionContextUpdateData.AfRoutReq)
 		// Update SmPolicyDecision
@@ -746,6 +765,12 @@ func (p *Processor) HandleModAppSessionContext(
 
 	// Moification provisioning of sponsored connectivity information
 	if appSessionContextUpdateData.AspId != "" && appSessionContextUpdateData.SponId != "" {
+		if appSessionContextUpdateData.EvSubsc == nil {
+			problemDetail := util.GetProblemDetail("Missing evSubsc for sponsored connectivity", util.ERROR_REQUEST_PARAMETERS)
+			c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
+			c.JSON(int(problemDetail.Status), problemDetail)
+			return
+		}
 		umID := util.GetUmId(appSessionContextUpdateData.AspId, appSessionContextUpdateData.SponId)
 		var umData *models.UsageMonitoringData
 		if tempUmData, err := extractUmData(umID, eventSubs,
