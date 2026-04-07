@@ -262,6 +262,12 @@ func (policy *UeSmPolicyData) RemovePccRule(pccRuleId string, deletedSmPolicyDec
 			}
 		}
 		delete(decision.PccRules, pccRuleId)
+
+		for influenceID, mappedPccRuleId := range policy.InfluenceDataToPccRule {
+			if mappedPccRuleId == pccRuleId {
+				delete(policy.InfluenceDataToPccRule, influenceID)
+			}
+		}
 	} else {
 		return fmt.Errorf("can't find the pccRuleId[%s] in Session[%d]", pccRuleId, policy.PolicyContext.PduSessionId)
 	}
