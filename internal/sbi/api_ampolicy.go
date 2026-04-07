@@ -120,7 +120,9 @@ func (s *Server) HTTPCreateIndividualAMPolicyAssociation(c *gin.Context) {
 		return
 	}
 
-	if policyAssociationRequest.Supi == "" || policyAssociationRequest.NotificationUri == "" || policyAssociationRequest.ServingPlmn == nil {
+	if policyAssociationRequest.Supi == "" ||
+		policyAssociationRequest.NotificationUri == "" ||
+		policyAssociationRequest.ServingPlmn == nil {
 		rsp := util.GetProblemDetail("Missing Mandatory IE", util.ERROR_REQUEST_PARAMETERS)
 		logger.AmPolicyLog.Errorln(rsp.Detail)
 		c.Set(sbi.IN_PB_DETAILS_CTX_STR, rsp.Cause)
