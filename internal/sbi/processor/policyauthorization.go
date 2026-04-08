@@ -982,24 +982,26 @@ func (p *Processor) HandleUpdateEventsSubscContext(
 	}
 
 	resp := models.EventsSubscPutData{
-		Events:                    eventsSubscReqData.Events,
-		NotifUri:                  eventsSubscReqData.NotifUri,
-		ReqQosMonParams:           eventsSubscReqData.ReqQosMonParams,
-		QosMon:                    eventsSubscReqData.QosMon,
-		ReqAnis:                   eventsSubscReqData.ReqAnis,
-		UsgThres:                  eventsSubscReqData.UsgThres,
-		NotifCorreId:              eventsSubscReqData.NotifCorreId,
-		AfAppIds:                  eventsSubscReqData.AfAppIds,
-		DirectNotifInd:            eventsSubscReqData.DirectNotifInd,
-		AccessType:                appSessCtx.EvsNotif.AccessType,
-		AnGwAddr:                  appSessCtx.EvsNotif.AnGwAddr,
-		EvSubsUri:                 appSessCtx.EvsNotif.EvSubsUri,
-		EvNotifs:                  appSessCtx.EvsNotif.EvNotifs,
-		FailedResourcAllocReports: appSessCtx.EvsNotif.FailedResourcAllocReports,
-		PlmnId:                    appSessCtx.EvsNotif.PlmnId,
-		QncReports:                appSessCtx.EvsNotif.QncReports,
-		RatType:                   appSessCtx.EvsNotif.RatType,
-		UsgRep:                    appSessCtx.EvsNotif.UsgRep,
+		Events:          eventsSubscReqData.Events,
+		NotifUri:        eventsSubscReqData.NotifUri,
+		ReqQosMonParams: eventsSubscReqData.ReqQosMonParams,
+		QosMon:          eventsSubscReqData.QosMon,
+		ReqAnis:         eventsSubscReqData.ReqAnis,
+		UsgThres:        eventsSubscReqData.UsgThres,
+		NotifCorreId:    eventsSubscReqData.NotifCorreId,
+		AfAppIds:        eventsSubscReqData.AfAppIds,
+		DirectNotifInd:  eventsSubscReqData.DirectNotifInd,
+	}
+	if appSessCtx.EvsNotif != nil {
+		resp.AccessType = appSessCtx.EvsNotif.AccessType
+		resp.AnGwAddr = appSessCtx.EvsNotif.AnGwAddr
+		resp.EvSubsUri = appSessCtx.EvsNotif.EvSubsUri
+		resp.EvNotifs = appSessCtx.EvsNotif.EvNotifs
+		resp.FailedResourcAllocReports = appSessCtx.EvsNotif.FailedResourcAllocReports
+		resp.PlmnId = appSessCtx.EvsNotif.PlmnId
+		resp.QncReports = appSessCtx.EvsNotif.QncReports
+		resp.RatType = appSessCtx.EvsNotif.RatType
+		resp.UsgRep = appSessCtx.EvsNotif.UsgRep
 	}
 
 	changed := appSession.SmPolicyData.ArrangeExistEventSubscription()

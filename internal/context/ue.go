@@ -262,6 +262,28 @@ func (policy *UeSmPolicyData) RemovePccRule(pccRuleId string, deletedSmPolicyDec
 			}
 		}
 		delete(decision.PccRules, pccRuleId)
+		// Prune stale references from related app-sessions.
+		for appSessionId := range policy.AppSessions {
+			if val, ok := GetSelf().AppSessionPool.Load(appSessionId); ok {
+				appSession := val.(*AppSessionData)
+				if appSession.RelatedPccRuleIds != nil {
+					for key, relatedId := range appSession.RelatedPccRuleIds {
+						if relatedId == pccRuleId {
+							delete(appSession.RelatedPccRuleIds, key)
+						}
+					}
+					if len(appSession.RelatedPccRuleIds) == 0 {
+						appSession.RelatedPccRuleIds = nil
+					}
+				}
+				if appSession.PccRuleIdMapToCompId != nil {
+					delete(appSession.PccRuleIdMapToCompId, pccRuleId)
+					if len(appSession.PccRuleIdMapToCompId) == 0 {
+						appSession.PccRuleIdMapToCompId = nil
+					}
+				}
+			}
+		}
 
 		for influenceID, mappedPccRuleId := range policy.InfluenceDataToPccRule {
 			if mappedPccRuleId == pccRuleId {
