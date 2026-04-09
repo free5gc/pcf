@@ -422,6 +422,10 @@ func (ue *UeContext) FindAMPolicy(anType models.AccessType, plmnId *models.PlmnI
 		return nil
 	}
 	for _, amPolicy := range ue.AMPolicyData {
+		if amPolicy == nil || amPolicy.ServingPlmn == nil {
+			logger.CtxLog.Warnln("AM Policy or ServingPlmn is nil")
+			continue
+		}
 		if amPolicy.AccessType == anType && reflect.DeepEqual(*amPolicy.ServingPlmn, *plmnId) {
 			return amPolicy
 		}
