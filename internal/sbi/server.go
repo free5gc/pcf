@@ -72,9 +72,9 @@ func NewServer(pcf pcf, tlsKeyLogPath string) (*Server, error) {
 
 	smPolicyRoutes := s.getSmPolicyRoutes()
 	smPolicyGroup := s.router.Group(factory.PcfSMpolicyCtlResUriPrefix)
-	smRouterAuthorizationCheck := util.NewRouterAuthorizationCheck(models.ServiceName_NPCF_SMPOLICYCONTROL)
+	smPolicyAuthCheck := util.NewRouterAuthorizationCheck(models.ServiceName_NPCF_SMPOLICYCONTROL)
 	smPolicyGroup.Use(func(c *gin.Context) {
-		smRouterAuthorizationCheck.Check(c, s.Context())
+		smPolicyAuthCheck.Check(c, s.Context())
 	})
 	applyRoutes(smPolicyGroup, smPolicyRoutes)
 
@@ -96,6 +96,10 @@ func NewServer(pcf pcf, tlsKeyLogPath string) (*Server, error) {
 
 	httpcallbackRoutes := s.getHttpCallBackRoutes()
 	httpcallbackGroup := s.router.Group(factory.PcfCallbackResUriPrefix)
+	pcfCallbackAuthCheck := util.NewRouterAuthorizationCheck(models.ServiceName("npcf-callback"))
+	httpcallbackGroup.Use(func(c *gin.Context) {
+		pcfCallbackAuthCheck.Check(c, s.Context())
+	})
 	applyRoutes(httpcallbackGroup, httpcallbackRoutes)
 
 	oamRoutes := s.getOamRoutes()
@@ -117,9 +121,9 @@ func NewServer(pcf pcf, tlsKeyLogPath string) (*Server, error) {
 
 	uePolicyRoutes := s.getUePolicyRoutes()
 	uePolicyGroup := s.router.Group(factory.PcfUePolicyCtlResUriPrefix)
-	uePolicyRouterAuthorizationCheck := util.NewRouterAuthorizationCheck(models.ServiceName_NPCF_UE_POLICY_CONTROL)
+	uePolicyAuthCheck := util.NewRouterAuthorizationCheck(models.ServiceName("npcf-ue-policy-control"))
 	uePolicyGroup.Use(func(c *gin.Context) {
-		uePolicyRouterAuthorizationCheck.Check(c, s.Context())
+		uePolicyAuthCheck.Check(c, s.Context())
 	})
 	applyRoutes(uePolicyGroup, uePolicyRoutes)
 
