@@ -687,11 +687,11 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 					c.JSON(int(problemDetail.Status), problemDetail)
 					return
 				}
-				if qosData.GbrDl != "" {
+				if qosData.GbrDl != "" && smPolicy.RemainGbrDL != nil {
 					logger.SmPolicyLog.Tracef("SM Policy Dnn[%s] Data Aggregate decrease %s and then DL GBR remain[%.2f Kbps]",
 						smPolicyContext.Dnn, qosData.GbrDl, *smPolicy.RemainGbrDL)
 				}
-				if qosData.GbrUl != "" {
+				if qosData.GbrUl != "" && smPolicy.RemainGbrUL != nil {
 					logger.SmPolicyLog.Tracef("SM Policy Dnn[%s] Data Aggregate decrease %s and then UL GBR remain[%.2f Kbps]",
 						smPolicyContext.Dnn, qosData.GbrUl, *smPolicy.RemainGbrUL)
 				}
@@ -740,11 +740,11 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 							qosData.Var5qi = req.ReqQos.Var5qi
 							qosData.GbrDl = gbrDl
 							qosData.GbrUl = gbrUl
-							if qosData.GbrDl != "" {
+							if qosData.GbrDl != "" && smPolicy.RemainGbrDL != nil {
 								logger.SmPolicyLog.Tracef("SM Policy Dnn[%s] Data Aggregate decrease %s and then DL GBR remain[%.2f Kbps]",
 									smPolicyContext.Dnn, qosData.GbrDl, *smPolicy.RemainGbrDL)
 							}
-							if qosData.GbrUl != "" {
+							if qosData.GbrUl != "" && smPolicy.RemainGbrUL != nil {
 								logger.SmPolicyLog.Tracef("SM Policy Dnn[%s] Data Aggregate decrease %s and then UL GBR remain[%.2f Kbps]",
 									smPolicyContext.Dnn, qosData.GbrUl, *smPolicy.RemainGbrUL)
 							}

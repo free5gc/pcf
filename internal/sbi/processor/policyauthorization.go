@@ -166,9 +166,8 @@ func (p *Processor) postAppSessCtxProcedure(appSessCtx *models.AppSessionContext
 
 	// Initial BDT policy indication(the only one which is not related to session)
 	if ascReqData.BdtRefId != "" {
-		if err := p.handleBDTPolicyInd(pcfSelf, appSessCtx); err != nil {
-			problemDetail := util.GetProblemDetail(err.Error(), util.ERROR_REQUEST_PARAMETERS)
-			return nil, "", &problemDetail
+		if pd := p.handleBDTPolicyInd(pcfSelf, appSessCtx); pd != nil {
+			return nil, "", pd
 		}
 		appSessID := fmt.Sprintf("BdtRefId-%s", ascReqData.BdtRefId)
 		data := pcf_context.AppSessionData{
@@ -467,8 +466,17 @@ func (p *Processor) HandleDeleteAppSessionContext(
 	if eventsSubscReqData != nil {
 		logger.PolicyAuthLog.Warn("Delete AppSessions does not support with Event Subscription")
 	}
-	// Remove related pcc rule resource
+
 	smPolicy := appSession.SmPolicyData
+	if smPolicy == nil {
+		// BDT-only AppSession / AppSession without SM Policy - nothing to undo on the SM Policy side
+		pcfSelf.AppSessionPool.Delete(appSessionId)
+		logger.PolicyAuthLog.Infof("App Session Id[%s] Del", appSessionId)
+		c.Status(http.StatusNoContent)
+		return
+	}
+
+	// Remove related pcc rule resource
 	deletedSmPolicyDec := models.SmPolicyDecision{}
 	for _, pccRuleID := range appSession.RelatedPccRuleIds {
 		if err := smPolicy.RemovePccRule(pccRuleID, &deletedSmPolicyDec); err != nil {
@@ -552,10 +560,9 @@ func (p *Processor) HandleModAppSessionContext(
 	appSessCtx := appSession.AppSessionContext
 	if appSessionContextUpdateData.BdtRefId != "" {
 		appSessCtx.AscReqData.BdtRefId = appSessionContextUpdateData.BdtRefId
-		if err := p.handleBDTPolicyInd(pcfSelf, appSessCtx); err != nil {
-			problemDetail := util.GetProblemDetail(err.Error(), util.ERROR_REQUEST_PARAMETERS)
-			c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
-			c.JSON(int(problemDetail.Status), problemDetail)
+		if pd := p.handleBDTPolicyInd(pcfSelf, appSessCtx); pd != nil {
+			c.Set(sbi.IN_PB_DETAILS_CTX_STR, pd.Cause)
+			c.JSON(int(pd.Status), pd)
 			return
 		}
 		logger.PolicyAuthLog.Tracef("App Session Id[%s] Updated", appSessionId)
@@ -1132,7 +1139,7 @@ func (p *Processor) SendAppSessionTermination(appSession *pcf_context.AppSession
 // Handle Create/ Modify Background Data Transfer Policy Indication
 func (p *Processor) handleBDTPolicyInd(pcfSelf *pcf_context.PCFContext,
 	appSessCtx *models.AppSessionContext,
-) (err error) {
+) *models.ProblemDetails {
 	req := appSessCtx.AscReqData
 
 	var requestSuppFeat openapi.SupportedFeature
@@ -1149,24 +1156,38 @@ func (p *Processor) handleBDTPolicyInd(pcfSelf *pcf_context.PCFContext,
 
 	udrUri := p.getDefaultUdrUri(pcfSelf)
 	if udrUri == "" {
-		err = fmt.Errorf("can't find any UDR which supported to this PCF")
-		return err
+		pd := util.GetProblemDetail("can't find any UDR which supported to this PCF", util.ERROR_REQUEST_PARAMETERS)
+		return &pd
 	}
 	resp, pd, err := p.Consumer().GetBdtData(udrUri, req.BdtRefId)
-	bdtData := resp.BdtData
 	if err != nil {
-		return fmt.Errorf("UDR Get BdtData error[%s]", err.Error())
+		p := util.GetProblemDetail(fmt.Sprintf("UDR Get BdtData error[%s]", err.Error()), util.ERROR_REQUEST_PARAMETERS)
+		return &p
 	} else if pd != nil {
-		return fmt.Errorf("UDR Get BdtData fault[%s]", pd.Detail)
-	} else if resp == nil {
-		return fmt.Errorf("UDR Get BdtData error")
-	} else {
-		if bdtData.TransPolicy.RecTimeInt.StartTime.After(time.Now()) {
-			respData.ServAuthInfo = models.ServAuthInfo_TP_NOT_YET_OCURRED
-		} else if bdtData.TransPolicy.RecTimeInt.StopTime.Before(time.Now()) {
-			respData.ServAuthInfo = models.ServAuthInfo_TP_EXPIRED
+		if pd.Status == http.StatusNotFound {
+			p := util.GetProblemDetail(fmt.Sprintf("UDR Get BdtData fault[%s]", pd.Detail), util.BDT_POLICY_NOT_FOUND)
+			return &p
 		}
+		p := util.GetProblemDetail(fmt.Sprintf("UDR Get BdtData fault[%s]", pd.Detail), util.ERROR_REQUEST_PARAMETERS)
+		return &p
+	} else if resp == nil {
+		p := util.GetProblemDetail("UDR Get BdtData error: returned nil response", util.ERROR_REQUEST_PARAMETERS)
+		return &p
 	}
+
+	bdtData := resp.BdtData
+	if bdtData.TransPolicy == nil || bdtData.TransPolicy.RecTimeInt == nil {
+		errMsg := fmt.Sprintf("UDR BdtData has nil TransPolicy/RecTimeInt for bdtRefId=%s", req.BdtRefId)
+		p := util.GetProblemDetail(errMsg, util.ERROR_REQUEST_PARAMETERS)
+		return &p
+	}
+
+	if bdtData.TransPolicy.RecTimeInt.StartTime.After(time.Now()) {
+		respData.ServAuthInfo = models.ServAuthInfo_TP_NOT_YET_OCURRED
+	} else if bdtData.TransPolicy.RecTimeInt.StopTime.Before(time.Now()) {
+		respData.ServAuthInfo = models.ServAuthInfo_TP_EXPIRED
+	}
+
 	appSessCtx.AscRespData = &respData
 	return nil
 }
