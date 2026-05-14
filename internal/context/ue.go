@@ -262,6 +262,34 @@ func (policy *UeSmPolicyData) RemovePccRule(pccRuleId string, deletedSmPolicyDec
 			}
 		}
 		delete(decision.PccRules, pccRuleId)
+		// Prune stale references from related app-sessions.
+		for appSessionId := range policy.AppSessions {
+			if val, ok := GetSelf().AppSessionPool.Load(appSessionId); ok {
+				appSession := val.(*AppSessionData)
+				if appSession.RelatedPccRuleIds != nil {
+					for key, relatedId := range appSession.RelatedPccRuleIds {
+						if relatedId == pccRuleId {
+							delete(appSession.RelatedPccRuleIds, key)
+						}
+					}
+					if len(appSession.RelatedPccRuleIds) == 0 {
+						appSession.RelatedPccRuleIds = nil
+					}
+				}
+				if appSession.PccRuleIdMapToCompId != nil {
+					delete(appSession.PccRuleIdMapToCompId, pccRuleId)
+					if len(appSession.PccRuleIdMapToCompId) == 0 {
+						appSession.PccRuleIdMapToCompId = nil
+					}
+				}
+			}
+		}
+
+		for influenceID, mappedPccRuleId := range policy.InfluenceDataToPccRule {
+			if mappedPccRuleId == pccRuleId {
+				delete(policy.InfluenceDataToPccRule, influenceID)
+			}
+		}
 	} else {
 		return fmt.Errorf("can't find the pccRuleId[%s] in Session[%d]", pccRuleId, policy.PolicyContext.PduSessionId)
 	}
@@ -394,6 +422,10 @@ func (ue *UeContext) FindAMPolicy(anType models.AccessType, plmnId *models.PlmnI
 		return nil
 	}
 	for _, amPolicy := range ue.AMPolicyData {
+		if amPolicy == nil || amPolicy.ServingPlmn == nil {
+			logger.CtxLog.Warnln("AM Policy or ServingPlmn is nil")
+			continue
+		}
 		if amPolicy.AccessType == anType && reflect.DeepEqual(*amPolicy.ServingPlmn, *plmnId) {
 			return amPolicy
 		}

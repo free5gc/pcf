@@ -25,6 +25,9 @@ const (
 )
 
 func transferAfRoutReqRmToAfRoutReq(AfRoutReqRm *models.AfRoutingRequirementRm) *models.AfRoutingRequirement {
+	if AfRoutReqRm == nil || AfRoutReqRm.SpVal == nil {
+		return nil
+	}
 	spVal := models.SpatialValidity{
 		PresenceInfoList: AfRoutReqRm.SpVal.PresenceInfoList,
 	}
@@ -163,9 +166,8 @@ func (p *Processor) postAppSessCtxProcedure(appSessCtx *models.AppSessionContext
 
 	// Initial BDT policy indication(the only one which is not related to session)
 	if ascReqData.BdtRefId != "" {
-		if err := p.handleBDTPolicyInd(pcfSelf, appSessCtx); err != nil {
-			problemDetail := util.GetProblemDetail(err.Error(), util.ERROR_REQUEST_PARAMETERS)
-			return nil, "", &problemDetail
+		if pd := p.handleBDTPolicyInd(pcfSelf, appSessCtx); pd != nil {
+			return nil, "", pd
 		}
 		appSessID := fmt.Sprintf("BdtRefId-%s", ascReqData.BdtRefId)
 		data := pcf_context.AppSessionData{
@@ -362,6 +364,10 @@ func (p *Processor) postAppSessCtxProcedure(appSessCtx *models.AppSessionContext
 			problemDetail := util.GetProblemDetail("Sponsored Connectivity not supported", util.REQUESTED_SERVICE_NOT_AUTHORIZED)
 			return nil, "", &problemDetail
 		}
+		if ascReqData.EvSubsc == nil {
+			problemDetail := util.GetProblemDetail("Missing evSubsc for sponsored connectivity", util.ERROR_REQUEST_PARAMETERS)
+			return nil, "", &problemDetail
+		}
 		umID := util.GetUmId(ascReqData.AspId, ascReqData.SponId)
 		var umData *models.UsageMonitoringData
 		if tempUmData, err := extractUmData(umID, eventSubs, ascReqData.EvSubsc.UsgThres); err != nil {
@@ -460,8 +466,17 @@ func (p *Processor) HandleDeleteAppSessionContext(
 	if eventsSubscReqData != nil {
 		logger.PolicyAuthLog.Warn("Delete AppSessions does not support with Event Subscription")
 	}
-	// Remove related pcc rule resource
+
 	smPolicy := appSession.SmPolicyData
+	if smPolicy == nil {
+		// BDT-only AppSession / AppSession without SM Policy - nothing to undo on the SM Policy side
+		pcfSelf.AppSessionPool.Delete(appSessionId)
+		logger.PolicyAuthLog.Infof("App Session Id[%s] Del", appSessionId)
+		c.Status(http.StatusNoContent)
+		return
+	}
+
+	// Remove related pcc rule resource
 	deletedSmPolicyDec := models.SmPolicyDecision{}
 	for _, pccRuleID := range appSession.RelatedPccRuleIds {
 		if err := smPolicy.RemovePccRule(pccRuleID, &deletedSmPolicyDec); err != nil {
@@ -545,10 +560,9 @@ func (p *Processor) HandleModAppSessionContext(
 	appSessCtx := appSession.AppSessionContext
 	if appSessionContextUpdateData.BdtRefId != "" {
 		appSessCtx.AscReqData.BdtRefId = appSessionContextUpdateData.BdtRefId
-		if err := p.handleBDTPolicyInd(pcfSelf, appSessCtx); err != nil {
-			problemDetail := util.GetProblemDetail(err.Error(), util.ERROR_REQUEST_PARAMETERS)
-			c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
-			c.JSON(int(problemDetail.Status), problemDetail)
+		if pd := p.handleBDTPolicyInd(pcfSelf, appSessCtx); pd != nil {
+			c.Set(sbi.IN_PB_DETAILS_CTX_STR, pd.Cause)
+			c.JSON(int(pd.Status), pd)
 			return
 		}
 		logger.PolicyAuthLog.Tracef("App Session Id[%s] Updated", appSessionId)
@@ -573,6 +587,12 @@ func (p *Processor) HandleModAppSessionContext(
 	if appSessionContextUpdateData.MedComponents != nil {
 		precedence := getAvailablePrecedence(smPolicy.PolicyDecision.PccRules)
 		for compN, medCompRm := range appSessionContextUpdateData.MedComponents {
+			if medCompRm != nil && medCompRm.AfRoutReq != nil && medCompRm.AfRoutReq.SpVal == nil {
+				problemDetail := util.GetProblemDetail("Field afRoutReq.spVal is nil", util.ERROR_REQUEST_PARAMETERS)
+				c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
+				c.JSON(int(problemDetail.Status), problemDetail)
+				return
+			}
 			medComp := transferMedCompRmToMedComp(medCompRm)
 			removeMediaComp(appSession, compN)
 			if zero.IsZero(medComp) {
@@ -669,6 +689,12 @@ func (p *Processor) HandleModAppSessionContext(
 	// Update of traffic routing information
 	// TODO: check ascUpdateData.AfAppId with appSessCtx.AscReqData.AfAppId (now ascUpdateData.AfAppId is empty)
 	if appSessionContextUpdateData.AfRoutReq != nil && traffRoutSupp {
+		if appSessionContextUpdateData.AfRoutReq.SpVal == nil {
+			problemDetail := util.GetProblemDetail("Field afRoutReq.spVal is nil", util.ERROR_REQUEST_PARAMETERS)
+			c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
+			c.JSON(int(problemDetail.Status), problemDetail)
+			return
+		}
 		logger.PolicyAuthLog.Infof("Update Traffic Routing info - [%+v]", appSessionContextUpdateData.AfRoutReq)
 		appSessCtx.AscReqData.AfRoutReq = transferAfRoutReqRmToAfRoutReq(appSessionContextUpdateData.AfRoutReq)
 		// Update SmPolicyDecision
@@ -746,6 +772,12 @@ func (p *Processor) HandleModAppSessionContext(
 
 	// Moification provisioning of sponsored connectivity information
 	if appSessionContextUpdateData.AspId != "" && appSessionContextUpdateData.SponId != "" {
+		if appSessionContextUpdateData.EvSubsc == nil {
+			problemDetail := util.GetProblemDetail("Missing evSubsc for sponsored connectivity", util.ERROR_REQUEST_PARAMETERS)
+			c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
+			c.JSON(int(problemDetail.Status), problemDetail)
+			return
+		}
 		umID := util.GetUmId(appSessionContextUpdateData.AspId, appSessionContextUpdateData.SponId)
 		var umData *models.UsageMonitoringData
 		if tempUmData, err := extractUmData(umID, eventSubs,
@@ -837,6 +869,14 @@ func (p *Processor) HandleDeleteEventsSubscContext(
 		return
 	}
 
+	smPolicy := appSession.SmPolicyData
+	if smPolicy == nil {
+		problemDetail := util.GetProblemDetail("Can't find related PDU Session", util.REQUESTED_SERVICE_NOT_AUTHORIZED)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
+		c.JSON(int(problemDetail.Status), problemDetail)
+		return
+	}
+
 	appSession.Events = nil
 	appSession.EventUri = ""
 	appSession.AppSessionContext.EvsNotif = nil
@@ -844,7 +884,6 @@ func (p *Processor) HandleDeleteEventsSubscContext(
 
 	logger.PolicyAuthLog.Tracef("App Session Id[%s] Del Events Subsc success", appSessionId)
 
-	smPolicy := appSession.SmPolicyData
 	// Send Notification to SMF
 	if changed := appSession.SmPolicyData.ArrangeExistEventSubscription(); changed {
 		smPolicyID := fmt.Sprintf("%s-%d", smPolicy.PcfUe.Supi, smPolicy.PolicyContext.PduSessionId)
@@ -879,6 +918,12 @@ func (p *Processor) HandleUpdateEventsSubscContext(
 		return
 	}
 	smPolicy := appSession.SmPolicyData
+	if smPolicy == nil {
+		problemDetail := util.GetProblemDetail("Can't find related PDU Session", util.REQUESTED_SERVICE_NOT_AUTHORIZED)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
+		c.JSON(int(problemDetail.Status), problemDetail)
+		return
+	}
 	eventSubs := make(map[models.PcfPolicyAuthorizationAfEvent]models.AfNotifMethod)
 
 	updataSmPolicy := false
@@ -969,24 +1014,26 @@ func (p *Processor) HandleUpdateEventsSubscContext(
 	}
 
 	resp := models.EventsSubscPutData{
-		Events:                    eventsSubscReqData.Events,
-		NotifUri:                  eventsSubscReqData.NotifUri,
-		ReqQosMonParams:           eventsSubscReqData.ReqQosMonParams,
-		QosMon:                    eventsSubscReqData.QosMon,
-		ReqAnis:                   eventsSubscReqData.ReqAnis,
-		UsgThres:                  eventsSubscReqData.UsgThres,
-		NotifCorreId:              eventsSubscReqData.NotifCorreId,
-		AfAppIds:                  eventsSubscReqData.AfAppIds,
-		DirectNotifInd:            eventsSubscReqData.DirectNotifInd,
-		AccessType:                appSessCtx.EvsNotif.AccessType,
-		AnGwAddr:                  appSessCtx.EvsNotif.AnGwAddr,
-		EvSubsUri:                 appSessCtx.EvsNotif.EvSubsUri,
-		EvNotifs:                  appSessCtx.EvsNotif.EvNotifs,
-		FailedResourcAllocReports: appSessCtx.EvsNotif.FailedResourcAllocReports,
-		PlmnId:                    appSessCtx.EvsNotif.PlmnId,
-		QncReports:                appSessCtx.EvsNotif.QncReports,
-		RatType:                   appSessCtx.EvsNotif.RatType,
-		UsgRep:                    appSessCtx.EvsNotif.UsgRep,
+		Events:          eventsSubscReqData.Events,
+		NotifUri:        eventsSubscReqData.NotifUri,
+		ReqQosMonParams: eventsSubscReqData.ReqQosMonParams,
+		QosMon:          eventsSubscReqData.QosMon,
+		ReqAnis:         eventsSubscReqData.ReqAnis,
+		UsgThres:        eventsSubscReqData.UsgThres,
+		NotifCorreId:    eventsSubscReqData.NotifCorreId,
+		AfAppIds:        eventsSubscReqData.AfAppIds,
+		DirectNotifInd:  eventsSubscReqData.DirectNotifInd,
+	}
+	if appSessCtx.EvsNotif != nil {
+		resp.AccessType = appSessCtx.EvsNotif.AccessType
+		resp.AnGwAddr = appSessCtx.EvsNotif.AnGwAddr
+		resp.EvSubsUri = appSessCtx.EvsNotif.EvSubsUri
+		resp.EvNotifs = appSessCtx.EvsNotif.EvNotifs
+		resp.FailedResourcAllocReports = appSessCtx.EvsNotif.FailedResourcAllocReports
+		resp.PlmnId = appSessCtx.EvsNotif.PlmnId
+		resp.QncReports = appSessCtx.EvsNotif.QncReports
+		resp.RatType = appSessCtx.EvsNotif.RatType
+		resp.UsgRep = appSessCtx.EvsNotif.UsgRep
 	}
 
 	changed := appSession.SmPolicyData.ArrangeExistEventSubscription()
@@ -1092,7 +1139,7 @@ func (p *Processor) SendAppSessionTermination(appSession *pcf_context.AppSession
 // Handle Create/ Modify Background Data Transfer Policy Indication
 func (p *Processor) handleBDTPolicyInd(pcfSelf *pcf_context.PCFContext,
 	appSessCtx *models.AppSessionContext,
-) (err error) {
+) *models.ProblemDetails {
 	req := appSessCtx.AscReqData
 
 	var requestSuppFeat openapi.SupportedFeature
@@ -1109,24 +1156,38 @@ func (p *Processor) handleBDTPolicyInd(pcfSelf *pcf_context.PCFContext,
 
 	udrUri := p.getDefaultUdrUri(pcfSelf)
 	if udrUri == "" {
-		err = fmt.Errorf("can't find any UDR which supported to this PCF")
-		return err
+		pd := util.GetProblemDetail("can't find any UDR which supported to this PCF", util.ERROR_REQUEST_PARAMETERS)
+		return &pd
 	}
 	resp, pd, err := p.Consumer().GetBdtData(udrUri, req.BdtRefId)
-	bdtData := resp.BdtData
 	if err != nil {
-		return fmt.Errorf("UDR Get BdtData error[%s]", err.Error())
+		p := util.GetProblemDetail(fmt.Sprintf("UDR Get BdtData error[%s]", err.Error()), util.ERROR_REQUEST_PARAMETERS)
+		return &p
 	} else if pd != nil {
-		return fmt.Errorf("UDR Get BdtData fault[%s]", pd.Detail)
-	} else if resp == nil {
-		return fmt.Errorf("UDR Get BdtData error")
-	} else {
-		if bdtData.TransPolicy.RecTimeInt.StartTime.After(time.Now()) {
-			respData.ServAuthInfo = models.ServAuthInfo_TP_NOT_YET_OCURRED
-		} else if bdtData.TransPolicy.RecTimeInt.StopTime.Before(time.Now()) {
-			respData.ServAuthInfo = models.ServAuthInfo_TP_EXPIRED
+		if pd.Status == http.StatusNotFound {
+			p := util.GetProblemDetail(fmt.Sprintf("UDR Get BdtData fault[%s]", pd.Detail), util.BDT_POLICY_NOT_FOUND)
+			return &p
 		}
+		p := util.GetProblemDetail(fmt.Sprintf("UDR Get BdtData fault[%s]", pd.Detail), util.ERROR_REQUEST_PARAMETERS)
+		return &p
+	} else if resp == nil {
+		p := util.GetProblemDetail("UDR Get BdtData error: returned nil response", util.ERROR_REQUEST_PARAMETERS)
+		return &p
 	}
+
+	bdtData := resp.BdtData
+	if bdtData.TransPolicy == nil || bdtData.TransPolicy.RecTimeInt == nil {
+		errMsg := fmt.Sprintf("UDR BdtData has nil TransPolicy/RecTimeInt for bdtRefId=%s", req.BdtRefId)
+		p := util.GetProblemDetail(errMsg, util.ERROR_REQUEST_PARAMETERS)
+		return &p
+	}
+
+	if bdtData.TransPolicy.RecTimeInt.StartTime.After(time.Now()) {
+		respData.ServAuthInfo = models.ServAuthInfo_TP_NOT_YET_OCURRED
+	} else if bdtData.TransPolicy.RecTimeInt.StopTime.Before(time.Now()) {
+		respData.ServAuthInfo = models.ServAuthInfo_TP_EXPIRED
+	}
+
 	appSessCtx.AscRespData = &respData
 	return nil
 }
@@ -1709,6 +1770,11 @@ func modifyRemainBitRate(smPolicy *pcf_context.UeSmPolicyData, qosData *models.Q
 func provisioningOfTrafficRoutingInfo(smPolicy *pcf_context.UeSmPolicyData, appID string,
 	routeReq *models.AfRoutingRequirement, fStatus models.FlowStatus,
 ) *models.PccRule {
+	if routeReq == nil {
+		logger.PolicyAuthLog.Warnf("provisioningOfTrafficRoutingInfo: routeReq is nil for appID[%s], skipping", appID)
+		return util.GetPccRuleByAfAppId(smPolicy.PolicyDecision.PccRules, appID)
+	}
+
 	var tcData *models.TrafficControlData
 
 	// TODO : handle temporal or spatial validity

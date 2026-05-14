@@ -1,6 +1,7 @@
 package sbi
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -11,6 +12,26 @@ import (
 	"github.com/free5gc/pcf/internal/util"
 	"github.com/free5gc/util/metrics/sbi"
 )
+
+func validateTrafficInfluDataNotif(
+	trafficInfluDataNotif []models.TrafficInfluDataNotif,
+) *models.ProblemDetails {
+	for i, notification := range trafficInfluDataNotif {
+		if notification.TrafficInfluData == nil {
+			continue
+		}
+
+		if notification.TrafficInfluData.Snssai == nil {
+			problemDetail := util.GetProblemDetail(
+				fmt.Sprintf("Errorneous/Missing Mandotory IE: trafficInfluData.snssai at index %d", i),
+				util.ERROR_REQUEST_PARAMETERS,
+			)
+			return &problemDetail
+		}
+	}
+
+	return nil
+}
 
 func (s *Server) getHttpCallBackRoutes() []Route {
 	return []Route{
@@ -156,5 +177,13 @@ func (s *Server) HTTPUdrInfluenceDataUpdateNotify(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, problemDetails)
 		return
 	}
+
+	if problemDetails := validateTrafficInfluDataNotif(trafficInfluDataNotif); problemDetails != nil {
+		logger.CallbackLog.Warnf("Influence data notify validation failed: %+v", problemDetails)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetails.Cause)
+		c.JSON(int(problemDetails.Status), problemDetails)
+		return
+	}
+
 	s.Processor().HandleInfluenceDataUpdateNotify(c, supi, pduSessionId, trafficInfluDataNotif)
 }

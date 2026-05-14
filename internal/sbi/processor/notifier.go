@@ -82,6 +82,16 @@ func (p *Processor) HandleInfluenceDataUpdateNotify(
 			var chargingInterface map[string]interface{}
 
 			trafficInfluData := *notification.TrafficInfluData
+			if trafficInfluData.Snssai == nil {
+				problemDetail := util.GetProblemDetail(
+					"Errorneous/Missing Mandotory IE: trafficInfluData.snssai",
+					util.ERROR_REQUEST_PARAMETERS,
+				)
+				logger.CallbackLog.Warnf("Influence data notify validation failed: %+v", problemDetail)
+				c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
+				c.JSON(int(problemDetail.Status), problemDetail)
+				return
+			}
 
 			filterCharging := bson.M{
 				"ueId":   ue.Supi,
