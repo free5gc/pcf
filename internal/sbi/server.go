@@ -121,7 +121,7 @@ func NewServer(pcf pcf, tlsKeyLogPath string) (*Server, error) {
 
 	uePolicyRoutes := s.getUePolicyRoutes()
 	uePolicyGroup := s.router.Group(factory.PcfUePolicyCtlResUriPrefix)
-	uePolicyAuthCheck := util.NewRouterAuthorizationCheck(models.ServiceName("npcf-ue-policy-control"))
+	uePolicyAuthCheck := util.NewRouterAuthorizationCheck(models.ServiceName_NPCF_UE_POLICY_CONTROL)
 	uePolicyGroup.Use(func(c *gin.Context) {
 		uePolicyAuthCheck.Check(c, s.Context())
 	})
