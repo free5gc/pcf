@@ -161,6 +161,7 @@ func (s *Service) validate() (bool, error) {
 		case "npcf-policyauthorization":
 		case "npcf-eventexposure":
 		case "npcf-ue-policy-control":
+		case "npcf-callback":
 		default:
 			return false
 		}
