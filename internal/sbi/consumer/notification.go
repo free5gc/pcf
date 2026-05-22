@@ -69,8 +69,8 @@ func (s *npcfService) SendAMPolicyUpdateNotification(ue *pcf_context.UeContext,
 		return
 	}
 
-	ctx, problemDetails, err := s.consumer.Context().GetTokenCtx(models.ServiceName_NPCF_AM_POLICY_CONTROL,
-		models.NrfNfManagementNfType_PCF)
+	ctx, problemDetails, err := s.consumer.Context().GetTokenCtx(models.ServiceName("namf-callback"),
+		models.NrfNfManagementNfType_AMF)
 	if err != nil {
 		logger.ConsumerLog.Warnf("Policy Update Notification Error[%s]", err.Error())
 		return
@@ -115,8 +115,8 @@ func (s *npcfService) SendAMPolicyAssociationPolicyAssocitionTerminationRequestN
 	}
 
 	ctx, problemDetails, err := s.consumer.Context().GetTokenCtx(
-		models.ServiceName_NPCF_AM_POLICY_CONTROL,
-		models.NrfNfManagementNfType_PCF)
+		models.ServiceName("namf-callback"),
+		models.NrfNfManagementNfType_AMF)
 	if err != nil {
 		return nil, err
 	} else if problemDetails != nil {
