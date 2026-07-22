@@ -61,6 +61,9 @@ func (p *Processor) HandleInfluenceDataUpdateNotify(
 		return
 	}
 	smPolicy := ue.SmPolicyData[smPolicyID]
+	smPolicy.InfluenceDataMu.Lock()
+	defer smPolicy.InfluenceDataMu.Unlock()
+
 	decision := smPolicy.PolicyDecision
 	influenceDataToPccRule := smPolicy.InfluenceDataToPccRule
 	precedence := getAvailablePrecedence(smPolicy.PolicyDecision.PccRules)
@@ -167,7 +170,7 @@ func (p *Processor) HandleInfluenceDataUpdateNotify(
 		ResourceUri:      util.GetResourceUri(models.ServiceName_NPCF_SMPOLICYCONTROL, smPolicyID),
 		SmPolicyDecision: decision,
 	}
-	go p.SendSMPolicyUpdateNotification(smPolicy.PolicyContext.NotificationUri, &smPolicyNotification)
+	p.SendSMPolicyUpdateNotification(smPolicy.PolicyContext.NotificationUri, &smPolicyNotification)
 	c.Status(http.StatusNoContent)
 }
 

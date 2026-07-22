@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/pcf/internal/logger"
@@ -69,6 +70,8 @@ type UeAMPolicyData struct {
 }
 
 type UeSmPolicyData struct {
+	InfluenceDataMu sync.Mutex
+
 	// PduSessionId    int32
 	// DNN             string
 	// NotificationUri string
