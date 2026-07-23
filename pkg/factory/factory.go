@@ -41,9 +41,12 @@ func ReadConfig(cfgPath string) (*Config, error) {
 		return nil, fmt.Errorf("ReadConfig [%s] Error: %+v", cfgPath, err)
 	}
 	if _, err := cfg.Validate(); err != nil {
-		validErrs := err.(govalidator.Errors).Errors()
-		for _, validErr := range validErrs {
-			logger.CfgLog.Errorf("%+v", validErr)
+		if validErrs, ok := err.(govalidator.Errors); ok {
+			for _, validErr := range validErrs.Errors() {
+				logger.CfgLog.Errorf("%+v", validErr)
+			}
+		} else {
+			logger.CfgLog.Errorf("%+v", err)
 		}
 		logger.CfgLog.Errorf("[-- PLEASE REFER TO SAMPLE CONFIG FILE COMMENTS --]")
 		return nil, fmt.Errorf("Config validate Error")
