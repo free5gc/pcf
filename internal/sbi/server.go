@@ -72,7 +72,7 @@ func NewServer(pcf pcf, tlsKeyLogPath string) (*Server, error) {
 
 	smPolicyRoutes := s.getSmPolicyRoutes()
 	smPolicyGroup := s.router.Group(factory.PcfSMpolicyCtlResUriPrefix)
-	smPolicyAuthCheck := util.NewRouterAuthorizationCheck(models.ServiceName_NPCF_SMPOLICYCONTROL)
+	smPolicyAuthCheck := util.NewRouterAuthorizationCheck(models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL)
 	smPolicyGroup.Use(func(c *gin.Context) {
 		smPolicyAuthCheck.Check(c, s.Context())
 	})
@@ -80,7 +80,7 @@ func NewServer(pcf pcf, tlsKeyLogPath string) (*Server, error) {
 
 	amPolicyRoutes := s.getAmPolicyRoutes()
 	amPolicyGroup := s.router.Group(factory.PcfAMpolicyCtlResUriPrefix)
-	amRouterAuthorizationCheck := util.NewRouterAuthorizationCheck(models.ServiceName_NPCF_AM_POLICY_CONTROL)
+	amRouterAuthorizationCheck := util.NewRouterAuthorizationCheck(models.Nrf_NFMgmt_ServiceName_NPCF_AM_POLICY_CONTROL)
 	amPolicyGroup.Use(func(c *gin.Context) {
 		amRouterAuthorizationCheck.Check(c, s.Context())
 	})
@@ -88,7 +88,7 @@ func NewServer(pcf pcf, tlsKeyLogPath string) (*Server, error) {
 
 	bdtPolicyRoutes := s.getBdtPolicyRoutes()
 	bdtPolicyGroup := s.router.Group(factory.PcfBdtPolicyCtlResUriPrefix)
-	bdtRouterAuthorizationCheck := util.NewRouterAuthorizationCheck(models.ServiceName_NPCF_BDTPOLICYCONTROL)
+	bdtRouterAuthorizationCheck := util.NewRouterAuthorizationCheck(models.Nrf_NFMgmt_ServiceName_NPCF_BDTPOLICYCONTROL)
 	bdtPolicyGroup.Use(func(c *gin.Context) {
 		bdtRouterAuthorizationCheck.Check(c, s.Context())
 	})
@@ -96,7 +96,7 @@ func NewServer(pcf pcf, tlsKeyLogPath string) (*Server, error) {
 
 	httpcallbackRoutes := s.getHttpCallBackRoutes()
 	httpcallbackGroup := s.router.Group(factory.PcfCallbackResUriPrefix)
-	pcfCallbackAuthCheck := util.NewRouterAuthorizationCheck(models.ServiceName("npcf-callback"))
+	pcfCallbackAuthCheck := util.NewRouterAuthorizationCheck(models.Nrf_NFMgmt_ServiceName("npcf-callback"))
 	httpcallbackGroup.Use(func(c *gin.Context) {
 		pcfCallbackAuthCheck.Check(c, s.Context())
 	})
@@ -104,7 +104,7 @@ func NewServer(pcf pcf, tlsKeyLogPath string) (*Server, error) {
 
 	oamRoutes := s.getOamRoutes()
 	oamGroup := s.router.Group(factory.PcfOamResUriPrefix)
-	oamRouterAuthorizationCheck := util.NewRouterAuthorizationCheck(models.ServiceName_NPCF_OAM)
+	oamRouterAuthorizationCheck := util.NewRouterAuthorizationCheck(models.Nrf_NFMgmt_ServiceName_NPCF_OAM)
 	oamGroup.Use(func(c *gin.Context) {
 		oamRouterAuthorizationCheck.Check(c, s.Context())
 	})
@@ -113,7 +113,7 @@ func NewServer(pcf pcf, tlsKeyLogPath string) (*Server, error) {
 	policyAuthorizationRoutes := s.getPolicyAuthorizationRoutes()
 	policyAuthorizationGroup := s.router.Group(factory.PcfPolicyAuthResUriPrefix)
 	policyAuthorizationRouterAuthorizationCheck := util.
-		NewRouterAuthorizationCheck(models.ServiceName_NPCF_POLICYAUTHORIZATION)
+		NewRouterAuthorizationCheck(models.Nrf_NFMgmt_ServiceName_NPCF_POLICYAUTHORIZATION)
 	policyAuthorizationGroup.Use(func(c *gin.Context) {
 		policyAuthorizationRouterAuthorizationCheck.Check(c, s.Context())
 	})
@@ -121,7 +121,7 @@ func NewServer(pcf pcf, tlsKeyLogPath string) (*Server, error) {
 
 	uePolicyRoutes := s.getUePolicyRoutes()
 	uePolicyGroup := s.router.Group(factory.PcfUePolicyCtlResUriPrefix)
-	uePolicyAuthCheck := util.NewRouterAuthorizationCheck(models.ServiceName_NPCF_UE_POLICY_CONTROL)
+	uePolicyAuthCheck := util.NewRouterAuthorizationCheck(models.Nrf_NFMgmt_ServiceName_NPCF_UE_POLICY_CONTROL)
 	uePolicyGroup.Use(func(c *gin.Context) {
 		uePolicyAuthCheck.Check(c, s.Context())
 	})

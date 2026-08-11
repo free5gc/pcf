@@ -11,8 +11,8 @@ import (
 
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/models"
-	"github.com/free5gc/openapi/pcf/SMPolicyControl"
-	"github.com/free5gc/openapi/udr/DataRepository"
+	"github.com/free5gc/openapi/pcf/SMPolCtrl"
+	"github.com/free5gc/openapi/udr/DR"
 	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/internal/util"
@@ -29,7 +29,7 @@ const (
 
 func (p *Processor) HandleCreateSmPolicyRequest(
 	c *gin.Context,
-	request models.SmPolicyContextData,
+	request models.Pcf_SMPolCtrl_SmPolicyContextData,
 ) {
 	logger.SmPolicyLog.Infof("Handle CreateSmPolicy")
 
@@ -67,11 +67,11 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 		c.JSON(int(problemDetail.Status), problemDetail)
 		return
 	}
-	var smData models.SmPolicyData
+	var smData models.Udr_DR_SmPolicyData
 	smPolicyID := fmt.Sprintf("%s-%d", ue.Supi, request.PduSessionId)
 	smPolicyData := ue.SmPolicyData[smPolicyID]
 	if smPolicyData == nil || smPolicyData.SmPolicyData == nil {
-		var response *DataRepository.ReadSessionManagementPolicyDataResponse
+		var response *DR.ReadSessionManagementPolicyDataResponse
 		response, pd, sessionErr := p.Consumer().GetSessionManagementPolicyData(
 			udrUri,
 			ue.Supi,
@@ -90,7 +90,7 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 			c.JSON(int(pd.Status), pd)
 			return
 		}
-		smData = response.SmPolicyData
+		smData = *response.Udr_DR_SmPolicyData
 		// TODO: subscribe to UDR
 	} else {
 		smData = *smPolicyData.SmPolicyData
@@ -115,13 +115,13 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 	}
 	smPolicyData = ue.NewUeSmPolicyData(smPolicyID, request, &smData)
 	// Policy Decision
-	decision := models.SmPolicyDecision{
-		SessRules:     make(map[string]*models.SessionRule),
-		PccRules:      make(map[string]*models.PccRule),
-		TraffContDecs: make(map[string]*models.TrafficControlData),
+	decision := models.Pcf_SMPolCtrl_SmPolicyDecision{
+		SessRules:     make(map[string]*models.Pcf_SMPolCtrl_SessionRule),
+		PccRules:      make(map[string]*models.Pcf_SMPolCtrl_PccRule),
+		TraffContDecs: make(map[string]*models.Pcf_SMPolCtrl_TrafficControlData),
 	}
 	SessRuleId := fmt.Sprintf("SessRuleId-%d", request.PduSessionId)
-	sessRule := models.SessionRule{
+	sessRule := models.Pcf_SMPolCtrl_SessionRule{
 		AuthSessAmbr: request.SubsSessAmbr,
 		SessRuleId:   SessRuleId,
 		// RefUmData
@@ -129,7 +129,7 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 	}
 	defQos := request.SubsDefQos
 	if defQos != nil {
-		sessRule.AuthDefQos = &models.AuthorizedDefaultQos{
+		sessRule.AuthDefQos = &models.Pcf_SMPolCtrl_AuthorizedDefaultQos{
 			Var5qi:        defQos.Var5qi,
 			Arp:           defQos.Arp,
 			PriorityLevel: defQos.PriorityLevel,
@@ -183,7 +183,7 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 	for _, qosFlow := range qosFlowInterface {
 		qosData := newQosDataWithQosFlowMap(qosFlow)
 		if decision.QosDecs == nil {
-			decision.QosDecs = make(map[string]*models.QosData)
+			decision.QosDecs = make(map[string]*models.Pcf_SMPolCtrl_QosData)
 		}
 		decision.QosDecs[qosData.QosId] = qosData
 	}
@@ -219,11 +219,11 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 			c.JSON(int(problemDetails.Status), problemDetails)
 			return
 		}
-		chgData := &models.ChargingData{
+		chgData := &models.Pcf_SMPolCtrl_ChargingData{
 			ChgId:          util.GetChgId(smPolicyData.ChargingIdGenerator),
 			RatingGroup:    int32(rg),
-			ReportingLevel: models.ReportingLevel_RAT_GR_LEVEL,
-			MeteringMethod: models.MeteringMethod_VOLUME,
+			ReportingLevel: models.Pcf_SMPolCtrl_ReportingLevel_RAT_GR_LEVEL,
+			MeteringMethod: models.Pcf_SMPolCtrl_MeteringMethod_VOLUME,
 		}
 
 		switch chargingInterface["chargingMethod"].(string) {
@@ -252,7 +252,7 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 
 	logger.SmPolicyLog.Traceln("FlowRules for ueId:", ue.Supi, "snssai:", util.SnssaiModelsToHex(*request.SliceInfo))
 	for i, flowRule := range flowRulesInterface {
-		logger.SmPolicyLog.Tracef("flowRule %d: %s\n", i, openapi.MarshToJsonString(flowRule))
+		logger.SmPolicyLog.Tracef("flowRule %d: %s\n", i, util.MarshToJsonString(flowRule))
 		precedence := int32(flowRule["precedence"].(float64))
 		if val, ok := flowRule["filter"].(string); ok {
 			tokens := strings.Split(val, " ")
@@ -290,10 +290,10 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 				logger.SmPolicyLog.Errorf("Error occurs when encoding flow despcription: %s\n", err)
 			}
 
-			pccRule := util.CreatePccRule(smPolicyData.PccRuleIdGenerator, precedence, []models.FlowInformation{
+			pccRule := util.CreatePccRule(smPolicyData.PccRuleIdGenerator, precedence, []models.Pcf_SMPolCtrl_FlowInformation{
 				{
 					FlowDescription: FlowDescriptionStr,
-					FlowDirection:   models.FlowDirection_DOWNLINK,
+					FlowDirection:   models.Pcf_SMPolCtrl_FlowDirectionRm_DOWNLINK,
 				},
 			}, "")
 
@@ -316,11 +316,11 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 					c.JSON(int(problemDetails.Status), problemDetails)
 					return
 				}
-				chgData := &models.ChargingData{
+				chgData := &models.Pcf_SMPolCtrl_ChargingData{
 					ChgId:          util.GetChgId(smPolicyData.ChargingIdGenerator),
 					RatingGroup:    int32(rg),
-					ReportingLevel: models.ReportingLevel_RAT_GR_LEVEL,
-					MeteringMethod: models.MeteringMethod_VOLUME,
+					ReportingLevel: models.Pcf_SMPolCtrl_ReportingLevel_RAT_GR_LEVEL,
+					MeteringMethod: models.Pcf_SMPolCtrl_MeteringMethod_VOLUME,
 				}
 
 				switch chargingInterface["chargingMethod"].(string) {
@@ -333,7 +333,7 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 				}
 
 				if decision.ChgDecs == nil {
-					decision.ChgDecs = make(map[string]*models.ChargingData)
+					decision.ChgDecs = make(map[string]*models.Pcf_SMPolCtrl_ChargingData)
 				}
 
 				chargingInterface["ratingGroup"] = chgData.RatingGroup
@@ -360,7 +360,7 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 	if err != nil {
 		logger.SmPolicyLog.Errorf("openapi NewSupportedFeature error: %+v", err)
 	}
-	decision.SuppFeat = pcfSelf.PcfSuppFeats[models.ServiceName_NPCF_SMPOLICYCONTROL].
+	decision.SuppFeat = pcfSelf.PcfSuppFeats[models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL].
 		NegotiateWith(requestSuppFeat).String()
 	decision.QosFlowUsage = request.QosFlowUsage
 	// TODO: Trigger about UMC, ADC, NetLoc,...
@@ -370,14 +370,14 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 	// Get Application Data Influence Data from UDR
 	// r15: ApplicationDataInfluenceDataGetParamOpts
 	// r17: CreateOrReplaceIndividualInfluenceDataRequest || ReadInfluenceDataRequest
-	reqParam := DataRepository.ReadInfluenceDataRequest{
+	reqParam := DR.ReadInfluenceDataRequest{
 		Dnns:             []string{request.Dnn},
 		Snssais:          []models.Snssai{*request.SliceInfo},
 		InternalGroupIds: request.InterGrpIds,
 		Supis:            []string{request.Supi},
 	}
 
-	ctx, pd, err := p.Context().GetTokenCtx(models.ServiceName_NUDR_DR, models.NrfNfManagementNfType_UDR)
+	ctx, pd, err := p.Context().GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NUDR_DR, models.Nrf_NFMgmt_NFType_UDR)
 	if err != nil {
 		c.Set(sbi.IN_PB_DETAILS_CTX_STR, pd.Cause)
 		c.JSON(int(pd.Status), pd)
@@ -388,7 +388,7 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 	// var resp *http.Response
 	resp, err := udrClient.InfluenceDataStoreApi.
 		ReadInfluenceData(ctx, &reqParam)
-	trafficInfluDatas := resp.TrafficInfluData
+	trafficInfluDatas := resp.Udr_DR_TrafficInfluData
 	if err != nil || resp == nil {
 		logger.SmPolicyLog.Warnf("Error response from UDR Application Data Influence Data Get")
 	}
@@ -397,7 +397,7 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 		// UE identity in UDR appData and apply appData to sm poliocy
 		var precedence int32 = 23
 		for _, tiData := range trafficInfluDatas {
-			var chgData *models.ChargingData
+			var chgData *models.Pcf_SMPolCtrl_ChargingData
 			var chargingInterface map[string]interface{}
 
 			filterCharging := bson.M{
@@ -419,11 +419,11 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 					c.JSON(int(problemDetails.Status), problemDetails)
 					return
 				}
-				chgData = &models.ChargingData{
+				chgData = &models.Pcf_SMPolCtrl_ChargingData{
 					ChgId:          util.GetChgId(smPolicyData.ChargingIdGenerator),
 					RatingGroup:    int32(rg),
-					ReportingLevel: models.ReportingLevel_RAT_GR_LEVEL,
-					MeteringMethod: models.MeteringMethod_VOLUME,
+					ReportingLevel: models.Pcf_SMPolCtrl_ReportingLevel_RAT_GR_LEVEL,
+					MeteringMethod: models.Pcf_SMPolCtrl_MeteringMethod_VOLUME,
 				}
 
 				switch chargingInterface["chargingMethod"].(string) {
@@ -436,7 +436,7 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 				}
 
 				if decision.ChgDecs == nil {
-					decision.ChgDecs = make(map[string]*models.ChargingData)
+					decision.ChgDecs = make(map[string]*models.Pcf_SMPolCtrl_ChargingData)
 				}
 
 				chargingInterface["ratingGroup"] = chgData.RatingGroup
@@ -484,14 +484,14 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 		smPolicyData.BsfBindingId = bindingId
 		logger.SmPolicyLog.Infof("Successfully registered PCF binding in BSF with ID: %s", bindingId)
 	}
-	locationHeader := util.GetResourceUri(models.ServiceName_NPCF_SMPOLICYCONTROL, smPolicyID)
+	locationHeader := util.GetResourceUri(models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL, smPolicyID)
 	c.Header("Location", locationHeader)
 	logger.SmPolicyLog.Tracef("SMPolicy PduSessionId[%d] Create", request.PduSessionId)
 	c.JSON(http.StatusCreated, decision)
 }
 
-func newQosDataWithQosFlowMap(qosFlow map[string]interface{}) *models.QosData {
-	qosData := &models.QosData{
+func newQosDataWithQosFlowMap(qosFlow map[string]interface{}) *models.Pcf_SMPolCtrl_QosData {
+	qosData := &models.Pcf_SMPolCtrl_QosData{
 		QosId:  strconv.Itoa(int(qosFlow["qosRef"].(float64))),
 		Qnc:    false,
 		Var5qi: int32(qosFlow["5qi"].(float64)),
@@ -556,8 +556,8 @@ func (p *Processor) HandleDeleteSmPolicyContextRequest(
 	logger.SmPolicyLog.Tracef("SMPolicy smPolicyID[%s] DELETE", smPolicyId)
 
 	// Release related App Session
-	terminationInfo := models.TerminationInfo{
-		TermCause: models.PcfPolicyAuthorizationTerminationCause_PDU_SESSION_TERMINATION,
+	terminationInfo := models.Pcf_PolAuth_TerminationInfo{
+		TermCause: models.Pcf_PolAuth_TerminationCause_PDU_SESSION_TERMINATION,
 	}
 	for appSessionID := range smPolicy.AppSessions {
 		if val, exist := pcfSelf.AppSessionPool.Load(appSessionID); exist {
@@ -600,7 +600,7 @@ func (p *Processor) HandleGetSmPolicyContextRequest(
 		return
 	}
 	smPolicyData := ue.SmPolicyData[smPolicyId]
-	response := &models.SmPolicyControl{
+	response := &models.Pcf_SMPolCtrl_SmPolicyControl{
 		Policy:  smPolicyData.PolicyDecision,
 		Context: smPolicyData.PolicyContext,
 	}
@@ -611,7 +611,7 @@ func (p *Processor) HandleGetSmPolicyContextRequest(
 func (p *Processor) HandleUpdateSmPolicyContextRequest(
 	c *gin.Context,
 	smPolicyId string,
-	request models.SmPolicyUpdateContextData,
+	request models.Pcf_SMPolCtrl_SmPolicyUpdateContextData,
 ) {
 	logger.SmPolicyLog.Infof("Handle UpdateSmPolicyContext")
 
@@ -631,10 +631,10 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 	errCause := ""
 
 	// For App Session Notification
-	afEventsNotification := models.PcfPolicyAuthorizationEventsNotification{}
+	afEventsNotification := models.Pcf_PolAuth_EventsNotification{}
 	for _, trigger := range request.RepPolicyCtrlReqTriggers {
 		switch trigger {
-		case models.PolicyControlRequestTrigger_PLMN_CH: // PLMN Change
+		case models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_PLMN_CH: // PLMN Change
 			if request.ServingNetwork == nil {
 				errCause = "Serving Network is nil in Trigger PLMN_CH"
 				break
@@ -644,13 +644,13 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 				Mcc: request.ServingNetwork.Mcc,
 				Mnc: request.ServingNetwork.Mnc,
 			}
-			afNotif := models.PcfPolicyAuthorizationAfEventNotification{
-				Event: models.PcfPolicyAuthorizationAfEvent_PLMN_CHG,
+			afNotif := models.Pcf_PolAuth_AfEventNotification{
+				Event: models.Pcf_PolAuth_AfEvent_PLMN_CHG,
 			}
 			afEventsNotification.EvNotifs = append(afEventsNotification.EvNotifs, afNotif)
 
 			logger.SmPolicyLog.Tracef("SM Policy Update(%s) Successfully", trigger)
-		case models.PolicyControlRequestTrigger_RES_MO_RE:
+		case models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_RES_MO_RE:
 			// UE intiate resource modification to SMF (subsclause 4.2.4.17 in TS29512)
 			req := request.UeInitResReq
 			if req == nil {
@@ -658,7 +658,7 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 				break
 			}
 			switch req.RuleOp {
-			case models.RuleOperation_CREATE_PCC_RULE:
+			case models.Pcf_SMPolCtrl_RuleOperation_CREATE_PCC_RULE:
 				if req.ReqQos == nil || len(req.PackFiltInfo) < 1 {
 					errCause = "Parameter Erroneous/Missing in Create Pcc Rule"
 					break
@@ -701,7 +701,7 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 					smPolicy.PackFiltMapToPccRuleId[info.PackFiltId] = pccRule.PccRuleId
 				}
 				smPolicy.PccRuleIdGenerator++
-			case models.RuleOperation_DELETE_PCC_RULE:
+			case models.Pcf_SMPolCtrl_RuleOperation_DELETE_PCC_RULE:
 				if req.PccRuleId == "" {
 					errCause = "Parameter Erroneous/Missing in Create Pcc Rule"
 					break
@@ -710,12 +710,12 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 				if err != nil {
 					errCause = err.Error()
 				}
-			case models.RuleOperation_MODIFY_PCC_RULE_AND_ADD_PACKET_FILTERS,
-				models.RuleOperation_MODIFY_PCC_RULE_AND_REPLACE_PACKET_FILTERS,
-				models.RuleOperation_MODIFY_PCC_RULE_AND_DELETE_PACKET_FILTERS,
-				models.RuleOperation_MODIFY_PCC_RULE_WITHOUT_MODIFY_PACKET_FILTERS:
+			case models.Pcf_SMPolCtrl_RuleOperation_MODIFY_PCC_RULE_AND_ADD_PACKET_FILTERS,
+				models.Pcf_SMPolCtrl_RuleOperation_MODIFY_PCC_RULE_AND_REPLACE_PACKET_FILTERS,
+				models.Pcf_SMPolCtrl_RuleOperation_MODIFY_PCC_RULE_AND_DELETE_PACKET_FILTERS,
+				models.Pcf_SMPolCtrl_RuleOperation_MODIFY_PCC_RULE_WITHOUT_MODIFY_PACKET_FILTERS:
 				if req.PccRuleId == "" ||
-					(req.RuleOp != models.RuleOperation_MODIFY_PCC_RULE_WITHOUT_MODIFY_PACKET_FILTERS &&
+					(req.RuleOp != models.Pcf_SMPolCtrl_RuleOperation_MODIFY_PCC_RULE_WITHOUT_MODIFY_PACKET_FILTERS &&
 						len(req.PackFiltInfo) < 1) {
 					errCause = "Parameter Erroneous/Missing in Modify Pcc Rule"
 					break
@@ -756,7 +756,7 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 					}
 					infos := util.ConvertPacketInfoToFlowInformation(req.PackFiltInfo)
 					switch req.RuleOp {
-					case models.RuleOperation_MODIFY_PCC_RULE_AND_ADD_PACKET_FILTERS:
+					case models.Pcf_SMPolCtrl_RuleOperation_MODIFY_PCC_RULE_AND_ADD_PACKET_FILTERS:
 						// Set PackFiltId
 						for i := range infos {
 							infos[i].PackFiltId = util.GetPackFiltId(smPolicy.PackFiltIdGenerator)
@@ -764,7 +764,7 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 							smPolicy.PackFiltIdGenerator++
 						}
 						rule.FlowInfos = append(rule.FlowInfos, infos...)
-					case models.RuleOperation_MODIFY_PCC_RULE_AND_REPLACE_PACKET_FILTERS:
+					case models.Pcf_SMPolCtrl_RuleOperation_MODIFY_PCC_RULE_AND_REPLACE_PACKET_FILTERS:
 						// Replace all Packet Filters
 						for _, info := range rule.FlowInfos {
 							delete(smPolicy.PackFiltMapToPccRuleId, info.PackFiltId)
@@ -776,13 +776,13 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 							smPolicy.PackFiltIdGenerator++
 						}
 						rule.FlowInfos = infos
-					case models.RuleOperation_MODIFY_PCC_RULE_AND_DELETE_PACKET_FILTERS:
+					case models.Pcf_SMPolCtrl_RuleOperation_MODIFY_PCC_RULE_AND_DELETE_PACKET_FILTERS:
 						removeId := make(map[string]bool)
 						for _, info := range infos {
 							delete(smPolicy.PackFiltMapToPccRuleId, info.PackFiltId)
 							removeId[info.PackFiltId] = true
 						}
-						result := []models.FlowInformation{}
+						result := []models.Pcf_SMPolCtrl_FlowInformation{}
 						for _, info := range rule.FlowInfos {
 							if _, exist := removeId[info.PackFiltId]; !exist {
 								result = append(result, info)
@@ -796,12 +796,13 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 				}
 			}
 
-		case models.PolicyControlRequestTrigger_AC_TY_CH: // UE Access Type Change (subsclause 4.2.4.8 in TS29512)
+		// UE Access Type Change (subsclause 4.2.4.8 in TS29512)
+		case models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_AC_TY_CH:
 			if request.AccessType == "" {
 				errCause = "Access Type is empty in Trigger AC_TY_CH"
 				break
 			}
-			// if request.AccessType == models.AccessType__3_GPP_ACCESS && smPolicyContext.Var3gppPsDataOffStatus {
+			// if request.AccessType == models.AccessType_3_GPP_ACCESS && smPolicyContext.Var3gppPsDataOffStatus {
 			// TODO: Handle Data off Status
 			// Block Session Service except for Exempt Serice which is described in TS22011, TS 23221
 			// }
@@ -811,12 +812,13 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 				smPolicyContext.RatType = request.RatType
 				afEventsNotification.RatType = request.RatType
 			}
-			afNotif := models.PcfPolicyAuthorizationAfEventNotification{
-				Event: models.PcfPolicyAuthorizationAfEvent_ACCESS_TYPE_CHANGE,
+			afNotif := models.Pcf_PolAuth_AfEventNotification{
+				Event: models.Pcf_PolAuth_AfEvent_ACCESS_TYPE_CHANGE,
 			}
 			afEventsNotification.EvNotifs = append(afEventsNotification.EvNotifs, afNotif)
 			logger.SmPolicyLog.Tracef("SM Policy Update(%s) Successfully", trigger)
-		case models.PolicyControlRequestTrigger_UE_IP_CH: // SMF notice PCF "ipv4Address" & ipv6AddressPrefix (always)
+		// SMF notice PCF "ipv4Address" & ipv6AddressPrefix (always)
+		case models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_UE_IP_CH:
 			// TODO: Decide new Session Rule / Pcc rule
 			if request.RelIpv4Address == smPolicyContext.Ipv4Address {
 				smPolicyContext.Ipv4Address = ""
@@ -831,23 +833,23 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 				smPolicyContext.Ipv6AddressPrefix = request.Ipv6AddressPrefix
 			}
 			logger.SmPolicyLog.Tracef("SM Policy Update(%s) Successfully", trigger)
-		case models.PolicyControlRequestTrigger_UE_MAC_CH: // SMF notice PCF when SMF detect new UE MAC
-		case models.PolicyControlRequestTrigger_AN_CH_COR:
+		case models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_UE_MAC_CH: // SMF notice PCF when SMF detect new UE MAC
+		case models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_AN_CH_COR:
 		// Access Network Charging Correlation Info (subsclause 4.2.6.5.1, 4.2.4.13 in TS29512)
 		// request.AccNetChIds
-		case models.PolicyControlRequestTrigger_US_RE: // UMC (subsclause 4.2.4.10, 5.8 in TS29512)
-			afNotif := models.PcfPolicyAuthorizationAfEventNotification{
-				Event: models.PcfPolicyAuthorizationAfEvent_USAGE_REPORT,
+		case models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_US_RE: // UMC (subsclause 4.2.4.10, 5.8 in TS29512)
+			afNotif := models.Pcf_PolAuth_AfEventNotification{
+				Event: models.Pcf_PolAuth_AfEvent_USAGE_REPORT,
 			}
 			afEventsNotification.EvNotifs = append(afEventsNotification.EvNotifs, afNotif)
-		case models.PolicyControlRequestTrigger_APP_STA: // ADC (subsclause 4.2.4.6, 5.8 in TS29512)
+		case models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_APP_STA: // ADC (subsclause 4.2.4.6, 5.8 in TS29512)
 			// request.AppDetectionInfos
-		case models.PolicyControlRequestTrigger_APP_STO: // ADC (subsclause 4.2.4.6, 5.8 in TS29512)
+		case models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_APP_STO: // ADC (subsclause 4.2.4.6, 5.8 in TS29512)
 			// request.AppDetectionInfos
-		case models.PolicyControlRequestTrigger_AN_INFO: // NetLoc (subsclause 4.2.4.9, 5.8 in TS29512)
-		case models.PolicyControlRequestTrigger_CM_SES_FAIL: // Credit Management Session Failure
+		case models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_AN_INFO: // NetLoc (subsclause 4.2.4.9, 5.8 in TS29512)
+		case models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_CM_SES_FAIL: // Credit Management Session Failure
 			// request.CreditManageStatus
-		case models.PolicyControlRequestTrigger_PS_DA_OFF:
+		case models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_PS_DA_OFF:
 			// 3GPP PS Data Off status changed (subsclause 4.2.4.8, 5.8 in TS29512) (always)
 			if smPolicyContext.Var3gppPsDataOffStatus != request.Var3gppPsDataOffStatus {
 				// TODO: Handle Data off Status
@@ -858,7 +860,7 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 				// }
 				smPolicyContext.Var3gppPsDataOffStatus = request.Var3gppPsDataOffStatus
 			}
-		case models.PolicyControlRequestTrigger_DEF_QOS_CH:
+		case models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_DEF_QOS_CH:
 			// Default QoS Change (subsclause 4.2.4.5 in TS29512) (always)
 			if request.SubsDefQos == nil {
 				errCause = "SubsDefQos  is nil in Trigger DEF_QOS_CH"
@@ -868,7 +870,7 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 			sessRuleId := fmt.Sprintf("SessRuleId-%d", smPolicyContext.PduSessionId)
 			if smPolicyDecision.SessRules[sessRuleId].AuthDefQos == nil {
 				tmp := smPolicyDecision.SessRules[sessRuleId]
-				tmp.AuthDefQos = new(models.AuthorizedDefaultQos)
+				tmp.AuthDefQos = new(models.Pcf_SMPolCtrl_AuthorizedDefaultQos)
 				smPolicyDecision.SessRules[sessRuleId] = tmp
 			}
 			authQos := smPolicyDecision.SessRules[sessRuleId].AuthDefQos
@@ -876,7 +878,8 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 			authQos.Arp = request.SubsDefQos.Arp
 			authQos.PriorityLevel = request.SubsDefQos.PriorityLevel
 			logger.SmPolicyLog.Tracef("SM Policy Update(%s) Successfully", trigger)
-		case models.PolicyControlRequestTrigger_SE_AMBR_CH: // Session Ambr Change (subsclause 4.2.4.4 in TS29512) (always)
+		// Session Ambr Change (subsclause 4.2.4.4 in TS29512) (always)
+		case models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_SE_AMBR_CH:
 			if request.SubsSessAmbr == nil {
 				errCause = "SubsSessAmbr  is nil in Trigger SE_AMBR_CH"
 				break
@@ -890,38 +893,40 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 			}
 			*smPolicyDecision.SessRules[sessRuleId].AuthSessAmbr = *request.SubsSessAmbr
 			logger.SmPolicyLog.Tracef("SM Policy Update(%s) Successfully", trigger)
-		case models.PolicyControlRequestTrigger_QOS_NOTIF:
+		case models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_QOS_NOTIF:
 			// SMF notify PCF when receiving from RAN that QoS can/can't be guaranteed (subsclause 4.2.4.20 in TS29512) (always)
 			// request.QncReports
-			afNotif := models.PcfPolicyAuthorizationAfEventNotification{
-				Event: models.PcfPolicyAuthorizationAfEvent_QOS_NOTIF,
+			afNotif := models.Pcf_PolAuth_AfEventNotification{
+				Event: models.Pcf_PolAuth_AfEvent_QOS_NOTIF,
 			}
 			afEventsNotification.EvNotifs = append(afEventsNotification.EvNotifs, afNotif)
 			for _, report := range request.QncReports {
 				afEventsNotification.QncReports = append(
 					afEventsNotification.QncReports,
-					models.PcfPolicyAuthorizationQosNotificationControlInfo{
+					models.Pcf_PolAuth_QosNotificationControlInfo{
 						NotifType: report.NotifType,
 					})
 			}
-		case models.PolicyControlRequestTrigger_NO_CREDIT: // Out of Credit
-		case models.PolicyControlRequestTrigger_PRA_CH: // Presence Reporting (subsclause 4.2.6.5.6, 4.2.4.16, 5.8 in TS29512)
+		case models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_NO_CREDIT: // Out of Credit
+		// Presence Reporting (subsclause 4.2.6.5.6, 4.2.4.16, 5.8 in TS29512)
+		case models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_PRA_CH:
 			// request.RepPraInfos
-		case models.PolicyControlRequestTrigger_SAREA_CH: // Change Of Service Area
+		case models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_SAREA_CH: // Change Of Service Area
 			if request.UserLocationInfo == nil {
 				errCause = "UserLocationInfo  is nil in Trigger SAREA_CH"
 				break
 			}
 			smPolicyContext.UserLocationInfo = request.UserLocationInfo
 			logger.SmPolicyLog.Tracef("SM Policy Update(%s) Successfully", trigger)
-		case models.PolicyControlRequestTrigger_SCNN_CH: // Change of Serving Network Function
+		case models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_SCNN_CH: // Change of Serving Network Function
 			if request.ServNfId == nil {
 				errCause = "ServNfId  is nil in Trigger SCNN_CH"
 				break
 			}
 			smPolicyContext.ServNfId = request.ServNfId
 			logger.SmPolicyLog.Tracef("SM Policy Update(%s) Successfully", trigger)
-		case models.PolicyControlRequestTrigger_RE_TIMEOUT: // Revalidation TimeOut (subsclause 4.2.4.13 in TS29512)
+		// Revalidation TimeOut (subsclause 4.2.4.13 in TS29512)
+		case models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_RE_TIMEOUT:
 			// formatTimeStr := time.Now()
 			// formatTimeStr = formatTimeStr.Add(time.Second * 60)
 			// formatTimeStrAdd := formatTimeStr.Format(pcf_context.GetTimeformat())
@@ -929,29 +934,29 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 			// if err == nil {
 			// 	smPolicyDecision.RevalidationTime = &formatTime
 			// }
-		case models.PolicyControlRequestTrigger_RES_RELEASE:
+		case models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_RES_RELEASE:
 			// Outcome of request Pcc rule removal (subsclause 4.2.6.5.2, 5.8 in TS29512)
-		case models.PolicyControlRequestTrigger_SUCC_RES_ALLO:
+		case models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_SUCC_RES_ALLO:
 			// Successful resource allocation (subsclause 4.2.6.5.5, 4.2.4.14 in TS29512)
-			afNotif := models.PcfPolicyAuthorizationAfEventNotification{
-				Event: models.PcfPolicyAuthorizationAfEvent_SUCCESSFUL_RESOURCES_ALLOCATION,
+			afNotif := models.Pcf_PolAuth_AfEventNotification{
+				Event: models.Pcf_PolAuth_AfEvent_SUCCESSFUL_RESOURCES_ALLOCATION,
 			}
 			afEventsNotification.EvNotifs = append(afEventsNotification.EvNotifs, afNotif)
-		case models.PolicyControlRequestTrigger_RAT_TY_CH: // Change of RatType
+		case models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_RAT_TY_CH: // Change of RatType
 			if request.RatType == "" {
 				errCause = "RatType is empty in Trigger RAT_TY_CH"
 				break
 			}
 			smPolicyContext.RatType = request.RatType
 			logger.SmPolicyLog.Tracef("SM Policy Update(%s) Successfully", trigger)
-		case models.PolicyControlRequestTrigger_REF_QOS_IND_CH: // Change of reflective Qos Indication from UE
+		case models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_REF_QOS_IND_CH: // Change of reflective Qos Indication from UE
 			smPolicyContext.RefQosIndication = request.RefQosIndication
 			// TODO: modify Decision about RefQos in Pcc rule
 			logger.SmPolicyLog.Tracef("SM Policy Update(%s) Successfully", trigger)
-		case models.PolicyControlRequestTrigger_NUM_OF_PACKET_FILTER: // Interworking Only (always)
-		case models.PolicyControlRequestTrigger_UE_STATUS_RESUME: // UE State Resume
+		case models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_NUM_OF_PACKET_FILTER: // Interworking Only (always)
+		case models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_UE_STATUS_RESUME: // UE State Resume
 			// TODO
-		case models.PolicyControlRequestTrigger_UE_TZ_CH: // UE TimeZome Change
+		case models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_UE_TZ_CH: // UE TimeZome Change
 			if request.UeTimeZone == "" {
 				errCause = "Ue TimeZone is empty in Trigger UE_TZ_CH"
 				break
@@ -961,9 +966,9 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 		}
 	}
 
-	var successRules, failRules []models.RuleReport
+	var successRules, failRules []models.Pcf_SMPolCtrl_RuleReport
 	for _, rule := range request.RuleReports {
-		if rule.RuleStatus == models.RuleStatus_ACTIVE {
+		if rule.RuleStatus == models.Pcf_SMPolCtrl_RuleStatus_ACTIVE {
 			successRules = append(successRules, rule)
 		} else {
 			failRules = append(failRules, rule)
@@ -977,8 +982,8 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 		}
 	}
 	if len(failRules) > 0 {
-		afNotif := models.PcfPolicyAuthorizationAfEventNotification{
-			Event: models.PcfPolicyAuthorizationAfEvent_FAILED_RESOURCES_ALLOCATION,
+		afNotif := models.Pcf_PolAuth_AfEventNotification{
+			Event: models.Pcf_PolAuth_AfEvent_FAILED_RESOURCES_ALLOCATION,
 		}
 		afEventsNotification.EvNotifs = append(afEventsNotification.EvNotifs, afNotif)
 	}
@@ -1010,8 +1015,8 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 }
 
 func (p *Processor) sendSmPolicyRelatedAppSessionNotification(smPolicy *pcf_context.UeSmPolicyData,
-	notification models.PcfPolicyAuthorizationEventsNotification, usageReports []models.AccuUsageReport,
-	successRules, failRules []models.RuleReport,
+	notification models.Pcf_PolAuth_EventsNotification, usageReports []models.Pcf_SMPolCtrl_AccuUsageReport,
+	successRules, failRules []models.Pcf_SMPolCtrl_RuleReport,
 ) {
 	for appSessionId := range smPolicy.AppSessions {
 		if val, exist := p.Context().AppSessionPool.Load(appSessionId); exist {
@@ -1019,18 +1024,18 @@ func (p *Processor) sendSmPolicyRelatedAppSessionNotification(smPolicy *pcf_cont
 			if len(appSession.Events) == 0 {
 				continue
 			}
-			sessionNotif := models.PcfPolicyAuthorizationEventsNotification{}
+			sessionNotif := models.Pcf_PolAuth_EventsNotification{}
 			for _, notif := range notification.EvNotifs {
 				if _, found := appSession.Events[notif.Event]; found {
 					switch notif.Event {
-					case models.PcfPolicyAuthorizationAfEvent_ACCESS_TYPE_CHANGE:
+					case models.Pcf_PolAuth_AfEvent_ACCESS_TYPE_CHANGE:
 						sessionNotif.AccessType = notification.AccessType
 						sessionNotif.RatType = notification.RatType
-					case models.PcfPolicyAuthorizationAfEvent_FAILED_RESOURCES_ALLOCATION:
-						failItem := models.ResourcesAllocationInfo{
-							McResourcStatus: models.MediaComponentResourcesStatus_INACTIVE,
+					case models.Pcf_PolAuth_AfEvent_FAILED_RESOURCES_ALLOCATION:
+						failItem := models.Pcf_PolAuth_ResourcesAllocationInfo{
+							McResourcStatus: models.Pcf_PolAuth_MediaComponentResourcesStatus_INACTIVE,
 						}
-						flows := make(map[int32]models.Flows)
+						flows := make(map[int32]models.Pcf_PolAuth_Flows)
 						for _, report := range failRules {
 							for _, pccRuleId := range report.PccRuleIds {
 								if key, exist := appSession.PccRuleIdMapToCompId[pccRuleId]; exist {
@@ -1043,7 +1048,7 @@ func (p *Processor) sendSmPolicyRelatedAppSessionNotification(smPolicy *pcf_cont
 										compN32 := int32(compN)
 										if len(items) == 1 {
 											// Comp
-											flow := models.Flows{
+											flow := models.Pcf_PolAuth_Flows{
 												MedCompN: compN32,
 											}
 											failItem.Flows = append(failItem.Flows, flow)
@@ -1057,7 +1062,7 @@ func (p *Processor) sendSmPolicyRelatedAppSessionNotification(smPolicy *pcf_cont
 
 											flow, exist := flows[compN32]
 											if !exist {
-												flow = models.Flows{
+												flow = models.Pcf_PolAuth_Flows{
 													MedCompN: compN32,
 													FNums:    []int32{fNum32},
 												}
@@ -1081,9 +1086,9 @@ func (p *Processor) sendSmPolicyRelatedAppSessionNotification(smPolicy *pcf_cont
 						} else {
 							continue
 						}
-					case models.PcfPolicyAuthorizationAfEvent_PLMN_CHG:
+					case models.Pcf_PolAuth_AfEvent_PLMN_CHG:
 						sessionNotif.PlmnId = notification.PlmnId
-					case models.PcfPolicyAuthorizationAfEvent_QOS_NOTIF:
+					case models.Pcf_PolAuth_AfEvent_QOS_NOTIF:
 						// TODO: Send Qos Notification to AF
 						// SMF notify PCF : 29.512 4.2.4.20 Notification about Service Data Flow QoS target enforcement
 						// PCF notify AF : 29.514  4.2.5.4 Notification about Service Data Flow QoS notification control
@@ -1099,12 +1104,12 @@ func (p *Processor) sendSmPolicyRelatedAppSessionNotification(smPolicy *pcf_cont
 						// if sessionNotif.QncReports == nil {
 						// 	continue
 						// }
-					case models.PcfPolicyAuthorizationAfEvent_SUCCESSFUL_RESOURCES_ALLOCATION:
+					case models.Pcf_PolAuth_AfEvent_SUCCESSFUL_RESOURCES_ALLOCATION:
 						// Subscription to resources allocation outcome
 						if successRules == nil {
 							continue
 						}
-						flows := make(map[int32]models.Flows)
+						flows := make(map[int32]models.Pcf_PolAuth_Flows)
 						for _, report := range successRules {
 							for _, pccRuleId := range report.PccRuleIds {
 								if key, exist := appSession.PccRuleIdMapToCompId[pccRuleId]; exist {
@@ -1117,7 +1122,7 @@ func (p *Processor) sendSmPolicyRelatedAppSessionNotification(smPolicy *pcf_cont
 										compN32 := int32(compN)
 										if len(items) == 1 {
 											// Comp
-											flow := models.Flows{
+											flow := models.Pcf_PolAuth_Flows{
 												MedCompN: compN32,
 											}
 											notif.Flows = append(notif.Flows, flow)
@@ -1130,7 +1135,7 @@ func (p *Processor) sendSmPolicyRelatedAppSessionNotification(smPolicy *pcf_cont
 											fNum32 := int32(fNum)
 											flow, exist := flows[compN32]
 											if !exist {
-												flow = models.Flows{
+												flow = models.Pcf_PolAuth_Flows{
 													MedCompN: compN32,
 													FNums:    []int32{fNum32},
 												}
@@ -1149,12 +1154,12 @@ func (p *Processor) sendSmPolicyRelatedAppSessionNotification(smPolicy *pcf_cont
 						if notif.Flows == nil {
 							continue
 						}
-					case models.PcfPolicyAuthorizationAfEvent_USAGE_REPORT:
+					case models.Pcf_PolAuth_AfEvent_USAGE_REPORT:
 						for _, report := range usageReports {
 							for _, pccRuleId := range appSession.RelatedPccRuleIds {
 								if pccRule, exist := appSession.SmPolicyData.PolicyDecision.PccRules[pccRuleId]; exist {
 									if pccRule.RefUmData != nil && pccRule.RefUmData[0] == report.RefUmIds {
-										sessionNotif.UsgRep = &models.AccumulatedUsage{
+										sessionNotif.UsgRep = &models.Nef_AccumulatedUsage{
 											Duration:       report.TimeUsage,
 											TotalVolume:    report.VolUsage,
 											UplinkVolume:   report.VolUsageUplink,
@@ -1184,24 +1189,24 @@ func (p *Processor) sendSmPolicyRelatedAppSessionNotification(smPolicy *pcf_cont
 }
 
 func (p *Processor) SendSMPolicyUpdateNotification(
-	uri string, request *models.SmPolicyNotification,
+	uri string, request *models.Pcf_SMPolCtrl_SmPolicyNotification,
 ) {
 	if uri == "" {
 		logger.SmPolicyLog.Warnln("SM Policy Update Notification Error[uri is empty]")
 		return
 	}
 
-	ctx, _, err := p.Context().GetTokenCtx(models.ServiceName("nsmf-callback"), models.NrfNfManagementNfType_SMF)
+	ctx, _, err := p.Context().GetTokenCtx(models.Nrf_NFMgmt_ServiceName("nsmf-callback"), models.Nrf_NFMgmt_NFType_SMF)
 	if err != nil {
 		return
 	}
 
 	client := util.GetNpcfSMPolicyCallbackClient()
 	logger.SmPolicyLog.Infof("Send SM Policy Update Notification to SMF")
-	req := SMPolicyControl.SMPolicyUpdateNotificationRequest{
-		SmPolicyNotification: request,
+	req := SMPolCtrl.CreateSMPolicySmPolicyUpdateNotificationRequest{
+		RequestBody: request,
 	}
-	_, err = client.SMPoliciesCollectionApi.SMPolicyUpdateNotification(ctx, uri, &req)
+	_, err = client.SMPoliciesCollectionApi.CreateSMPolicySmPolicyUpdateNotification(ctx, uri, &req)
 
 	switch err.(type) {
 	case openapi.GenericOpenAPIError:
@@ -1216,24 +1221,24 @@ func (p *Processor) SendSMPolicyUpdateNotification(
 }
 
 func (p *Processor) SendSMPolicyTerminationRequestNotification(
-	uri string, request *models.PcfSmPolicyControlTerminationNotification,
+	uri string, request *models.Pcf_SMPolCtrl_TerminationNotification,
 ) {
 	if uri == "" {
 		logger.SmPolicyLog.Warnln("SM Policy Termination Request Notification Error[uri is empty]")
 		return
 	}
 
-	ctx, _, err := p.Context().GetTokenCtx(models.ServiceName("nsmf-callback"), models.NrfNfManagementNfType_SMF)
+	ctx, _, err := p.Context().GetTokenCtx(models.Nrf_NFMgmt_ServiceName("nsmf-callback"), models.Nrf_NFMgmt_NFType_SMF)
 	if err != nil {
 		return
 	}
 
 	client := util.GetNpcfSMPolicyCallbackClient()
-	req := SMPolicyControl.SMPolicyTerminationRequestNotificationRequest{
-		PcfSmPolicyControlTerminationNotification: request,
+	req := SMPolCtrl.CreateSMPolicySmPolicyControlTerminationRequestNotificationRequest{
+		RequestBody: request,
 	}
 	_, err = client.SMPoliciesCollectionApi.
-		SMPolicyTerminationRequestNotification(ctx, uri, &req)
+		CreateSMPolicySmPolicyControlTerminationRequestNotification(ctx, uri, &req)
 
 	switch err.(type) {
 	case openapi.GenericOpenAPIError:

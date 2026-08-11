@@ -8,24 +8,24 @@ import (
 	"github.com/free5gc/openapi/models"
 )
 
-var MediaTypeTo5qiMap = map[models.MediaType]int32{
-	models.MediaType_AUDIO:       1,
-	models.MediaType_VIDEO:       2,
-	models.MediaType_APPLICATION: 2,
-	models.MediaType_DATA:        9,
-	models.MediaType_CONTROL:     9,
-	models.MediaType_TEXT:        9,
-	models.MediaType_MESSAGE:     9,
-	models.MediaType_OTHER:       9,
+var MediaTypeTo5qiMap = map[models.Pcf_PolAuth_MediaType]int32{
+	models.Pcf_PolAuth_MediaType_AUDIO:       1,
+	models.Pcf_PolAuth_MediaType_VIDEO:       2,
+	models.Pcf_PolAuth_MediaType_APPLICATION: 2,
+	models.Pcf_PolAuth_MediaType_DATA:        9,
+	models.Pcf_PolAuth_MediaType_CONTROL:     9,
+	models.Pcf_PolAuth_MediaType_TEXT:        9,
+	models.Pcf_PolAuth_MediaType_MESSAGE:     9,
+	models.Pcf_PolAuth_MediaType_OTHER:       9,
 }
 
 // Create default pcc rule in PCF,
 // TODO: use config file to pass default pcc rule
-func CreateDefaultPccRules(id int32) *models.PccRule {
-	flowInfo := []models.FlowInformation{
+func CreateDefaultPccRules(id int32) *models.Pcf_SMPolCtrl_PccRule {
+	flowInfo := []models.Pcf_SMPolCtrl_FlowInformation{
 		{
 			FlowDescription:   "permit out ip from any to assigned",
-			FlowDirection:     models.FlowDirection_BIDIRECTIONAL,
+			FlowDirection:     models.Pcf_SMPolCtrl_FlowDirectionRm_BIDIRECTIONAL,
 			PacketFilterUsage: true,
 			PackFiltId:        "PackFiltId-0",
 		},
@@ -69,8 +69,10 @@ func GetPackFiltId(id int32) string {
 }
 
 // Create Pcc Rule with param id, precedence, flow information, appID
-func CreatePccRule(id, precedence int32, flowInfo []models.FlowInformation, appID string) *models.PccRule {
-	rule := models.PccRule{
+func CreatePccRule(
+	id, precedence int32, flowInfo []models.Pcf_SMPolCtrl_FlowInformation, appID string,
+) *models.Pcf_SMPolCtrl_PccRule {
+	rule := models.Pcf_SMPolCtrl_PccRule{
 		AppId:      appID,
 		FlowInfos:  flowInfo,
 		PccRuleId:  GetPccRuleId(id),
@@ -79,16 +81,16 @@ func CreatePccRule(id, precedence int32, flowInfo []models.FlowInformation, appI
 	return &rule
 }
 
-func CreateCondData(id int32) models.ConditionData {
+func CreateCondData(id int32) models.Pcf_SMPolCtrl_ConditionData {
 	activationTime := time.Now()
-	return models.ConditionData{
+	return models.Pcf_SMPolCtrl_ConditionData{
 		CondId:         GetCondId(id),
 		ActivationTime: &activationTime,
 	}
 }
 
-func CreateQosData(id, var5qi, arp int32) models.QosData {
-	return models.QosData{
+func CreateQosData(id, var5qi, arp int32) models.Pcf_SMPolCtrl_QosData {
+	return models.Pcf_SMPolCtrl_QosData{
 		QosId:  GetQosId(id),
 		Var5qi: var5qi,
 		Arp: &models.Arp{
@@ -97,21 +99,23 @@ func CreateQosData(id, var5qi, arp int32) models.QosData {
 	}
 }
 
-func CreateTcData(id int32, fullID string, flowStatus models.FlowStatus) *models.TrafficControlData {
+func CreateTcData(
+	id int32, fullID string, flowStatus models.Pcf_PolAuth_FlowStatus,
+) *models.Pcf_SMPolCtrl_TrafficControlData {
 	if flowStatus == "" {
-		flowStatus = models.FlowStatus_ENABLED
+		flowStatus = models.Pcf_PolAuth_FlowStatus_ENABLED
 	}
 	if fullID == "" {
 		fullID = GetTcId(id)
 	}
-	return &models.TrafficControlData{
+	return &models.Pcf_SMPolCtrl_TrafficControlData{
 		TcId:       fullID,
 		FlowStatus: flowStatus,
 	}
 }
 
-func CreateUmData(umId string, thresh models.UsageThreshold) models.UsageMonitoringData {
-	return models.UsageMonitoringData{
+func CreateUmData(umId string, thresh models.Nef_UsageThreshold) models.Pcf_SMPolCtrl_UsageMonitoringData {
+	return models.Pcf_SMPolCtrl_UsageMonitoringData{
 		UmId:                    umId,
 		VolumeThreshold:         thresh.TotalVolume,
 		VolumeThresholdUplink:   thresh.UplinkVolume,
@@ -122,23 +126,27 @@ func CreateUmData(umId string, thresh models.UsageThreshold) models.UsageMonitor
 
 // Convert Packet Filter information list to Flow Information List(Packet Filter Usage always true),
 // EthDescription is Not Supported
-func ConvertPacketInfoToFlowInformation(infos []models.PacketFilterInfo) (flowInfos []models.FlowInformation) {
+func ConvertPacketInfoToFlowInformation(
+	infos []models.Pcf_SMPolCtrl_PacketFilterInfo) (flowInfos []models.Pcf_SMPolCtrl_FlowInformation,
+) {
 	for _, info := range infos {
-		flowInfo := models.FlowInformation{
+		flowInfo := models.Pcf_SMPolCtrl_FlowInformation{
 			FlowDescription:   info.PackFiltCont,
 			PackFiltId:        info.PackFiltId,
 			PacketFilterUsage: true,
 			TosTrafficClass:   info.TosTrafficClass,
 			Spi:               info.Spi,
 			FlowLabel:         info.FlowLabel,
-			FlowDirection:     info.FlowDirection,
+			FlowDirection:     models.Pcf_SMPolCtrl_FlowDirectionRm(info.FlowDirection),
 		}
 		flowInfos = append(flowInfos, flowInfo)
 	}
 	return
 }
 
-func GetPccRuleByAfAppId(pccRules map[string]*models.PccRule, afAppId string) *models.PccRule {
+func GetPccRuleByAfAppId(
+	pccRules map[string]*models.Pcf_SMPolCtrl_PccRule, afAppId string,
+) *models.Pcf_SMPolCtrl_PccRule {
 	for _, pccRule := range pccRules {
 		if pccRule.AppId == afAppId {
 			return pccRule
@@ -147,9 +155,11 @@ func GetPccRuleByAfAppId(pccRules map[string]*models.PccRule, afAppId string) *m
 	return nil
 }
 
-func GetPccRuleByFlowInfos(pccRules map[string]*models.PccRule, flowInfos []models.FlowInformation) *models.PccRule {
+func GetPccRuleByFlowInfos(
+	pccRules map[string]*models.Pcf_SMPolCtrl_PccRule, flowInfos []models.Pcf_SMPolCtrl_FlowInformation,
+) *models.Pcf_SMPolCtrl_PccRule {
 	found := false
-	set := make(map[string]models.FlowInformation)
+	set := make(map[string]models.Pcf_SMPolCtrl_FlowInformation)
 
 	for _, flowInfo := range flowInfos {
 		set[flowInfo.FlowDescription] = flowInfo
@@ -170,66 +180,68 @@ func GetPccRuleByFlowInfos(pccRules map[string]*models.PccRule, flowInfos []mode
 	return nil
 }
 
-func SetPccRuleRelatedByQosRef(decision *models.SmPolicyDecision, pccRule *models.PccRule, qfi string) {
+func SetPccRuleRelatedByQosRef(
+	decision *models.Pcf_SMPolCtrl_SmPolicyDecision, pccRule *models.Pcf_SMPolCtrl_PccRule, qfi string,
+) {
 	if decision.QosDecs == nil || decision.QosDecs[qfi] == nil {
 		return
 	}
 	pccRule.RefQosData = append(pccRule.RefQosData, qfi)
 	if decision.PccRules == nil {
-		decision.PccRules = make(map[string]*models.PccRule)
+		decision.PccRules = make(map[string]*models.Pcf_SMPolCtrl_PccRule)
 	}
 	decision.PccRules[pccRule.PccRuleId] = pccRule
 }
 
-func SetPccRuleRelatedData(decision *models.SmPolicyDecision, pccRule *models.PccRule,
-	tcData *models.TrafficControlData, qosData *models.QosData, chgData *models.ChargingData,
-	umData *models.UsageMonitoringData,
+func SetPccRuleRelatedData(decision *models.Pcf_SMPolCtrl_SmPolicyDecision, pccRule *models.Pcf_SMPolCtrl_PccRule,
+	tcData *models.Pcf_SMPolCtrl_TrafficControlData, qosData *models.Pcf_SMPolCtrl_QosData, chgData *models.Pcf_SMPolCtrl_ChargingData, //nolint:lll
+	umData *models.Pcf_SMPolCtrl_UsageMonitoringData,
 ) {
 	if tcData != nil {
 		if decision.TraffContDecs == nil {
-			decision.TraffContDecs = make(map[string]*models.TrafficControlData)
+			decision.TraffContDecs = make(map[string]*models.Pcf_SMPolCtrl_TrafficControlData)
 		}
 		decision.TraffContDecs[tcData.TcId] = tcData
 		pccRule.RefTcData = []string{tcData.TcId}
 	}
 	if qosData != nil {
 		if decision.QosDecs == nil {
-			decision.QosDecs = make(map[string]*models.QosData)
+			decision.QosDecs = make(map[string]*models.Pcf_SMPolCtrl_QosData)
 		}
 		decision.QosDecs[qosData.QosId] = qosData
 		pccRule.RefQosData = []string{qosData.QosId}
 	}
 	if chgData != nil {
 		if decision.ChgDecs == nil {
-			decision.ChgDecs = make(map[string]*models.ChargingData)
+			decision.ChgDecs = make(map[string]*models.Pcf_SMPolCtrl_ChargingData)
 		}
 		decision.ChgDecs[chgData.ChgId] = chgData
 		pccRule.RefChgData = []string{chgData.ChgId}
 	}
 	if umData != nil {
 		if decision.UmDecs == nil {
-			decision.UmDecs = make(map[string]*models.UsageMonitoringData)
+			decision.UmDecs = make(map[string]*models.Pcf_SMPolCtrl_UsageMonitoringData)
 		}
 		decision.UmDecs[umData.UmId] = umData
 		pccRule.RefUmData = []string{umData.UmId}
 	}
 	if pccRule != nil {
 		if decision.PccRules == nil {
-			decision.PccRules = make(map[string]*models.PccRule)
+			decision.PccRules = make(map[string]*models.Pcf_SMPolCtrl_PccRule)
 		}
 		decision.PccRules[pccRule.PccRuleId] = pccRule
 	}
 }
 
 // SetSmPolicyDecisionByDefault with pcc rule and traffic control data
-func SetSmPolicyDecisionByDefault(decision *models.SmPolicyDecision, id int32) {
+func SetSmPolicyDecisionByDefault(decision *models.Pcf_SMPolCtrl_SmPolicyDecision, id int32) {
 	pccrule := CreateDefaultPccRules(id)
 	decision.PccRules[pccrule.PccRuleId] = pccrule
 }
 
 // Set SMpilicy decision with the PCC rule generated from the trafficInfluData
-func SetSmPolicyDecisionByTrafficInfluData(decision *models.SmPolicyDecision,
-	pccRule *models.PccRule, trafficInfluData models.TrafficInfluData, chgData *models.ChargingData,
+func SetSmPolicyDecisionByTrafficInfluData(decision *models.Pcf_SMPolCtrl_SmPolicyDecision,
+	pccRule *models.Pcf_SMPolCtrl_PccRule, trafficInfluData models.Udr_DR_TrafficInfluData, chgData *models.Pcf_SMPolCtrl_ChargingData, //nolint:lll
 ) {
 	tcData := convertToTrafficControlData(&trafficInfluData)
 	tcData.TcId = strings.ReplaceAll(pccRule.PccRuleId, "PccRuleId", "TcId")
@@ -238,11 +250,11 @@ func SetSmPolicyDecisionByTrafficInfluData(decision *models.SmPolicyDecision,
 	SetPccRuleRelatedData(decision, pccRule, tcData, nil, chgData, nil)
 }
 
-func convertToFlowinfos(trafficInfluData *models.TrafficInfluData) []models.FlowInformation {
-	flowInfos := []models.FlowInformation{}
+func convertToFlowinfos(trafficInfluData *models.Udr_DR_TrafficInfluData) []models.Pcf_SMPolCtrl_FlowInformation {
+	flowInfos := []models.Pcf_SMPolCtrl_FlowInformation{}
 	for _, trafficFilters := range trafficInfluData.TrafficFilters {
 		for _, descriptions := range trafficFilters.FlowDescriptions {
-			flowInfomation := models.FlowInformation{
+			flowInfomation := models.Pcf_SMPolCtrl_FlowInformation{
 				FlowDescription: descriptions,
 			}
 			flowInfos = append(flowInfos, flowInfomation)
@@ -251,8 +263,10 @@ func convertToFlowinfos(trafficInfluData *models.TrafficInfluData) []models.Flow
 	return flowInfos
 }
 
-func convertToTrafficControlData(trafficInfluData *models.TrafficInfluData) *models.TrafficControlData {
-	var trafficControlData models.TrafficControlData
+func convertToTrafficControlData(
+	trafficInfluData *models.Udr_DR_TrafficInfluData,
+) *models.Pcf_SMPolCtrl_TrafficControlData {
+	var trafficControlData models.Pcf_SMPolCtrl_TrafficControlData
 	trafficControlData.RouteToLocs = trafficInfluData.TrafficRoutes
 	if isUpPathChgEventExist(trafficInfluData) {
 		trafficControlData.UpPathChgEvent = setUpPathChgEvent(trafficInfluData)
@@ -260,15 +274,15 @@ func convertToTrafficControlData(trafficInfluData *models.TrafficInfluData) *mod
 	return &trafficControlData
 }
 
-func isUpPathChgEventExist(trafficInfluData *models.TrafficInfluData) bool {
+func isUpPathChgEventExist(trafficInfluData *models.Udr_DR_TrafficInfluData) bool {
 	return trafficInfluData.UpPathChgNotifCorreId != "" &&
 		trafficInfluData.UpPathChgNotifUri != "" &&
 		trafficInfluData.DnaiChgType != ""
 }
 
 // subclause 4.2.6.2.6.2 in 3GPP TS 29.512.
-func setUpPathChgEvent(trafficInfluData *models.TrafficInfluData) *models.UpPathChgEvent {
-	return &models.UpPathChgEvent{
+func setUpPathChgEvent(trafficInfluData *models.Udr_DR_TrafficInfluData) *models.Pcf_SMPolCtrl_UpPathChgEvent {
+	return &models.Pcf_SMPolCtrl_UpPathChgEvent{
 		NotificationUri: trafficInfluData.UpPathChgNotifUri,
 		NotifCorreId:    trafficInfluData.UpPathChgNotifCorreId,
 		DnaiChgType:     trafficInfluData.DnaiChgType,

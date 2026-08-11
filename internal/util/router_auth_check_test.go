@@ -23,7 +23,7 @@ func newMockPCFContext() *mockPCFContext {
 	return &mockPCFContext{}
 }
 
-func (m *mockPCFContext) AuthorizationCheck(token string, serviceName models.ServiceName) error {
+func (m *mockPCFContext) AuthorizationCheck(token string, serviceName models.Nrf_NFMgmt_ServiceName) error {
 	if token == Valid {
 		return nil
 	}

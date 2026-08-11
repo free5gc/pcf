@@ -10,7 +10,7 @@ import (
 	"sync"
 
 	"github.com/free5gc/openapi/models"
-	"github.com/free5gc/openapi/nrf/NFDiscovery"
+	"github.com/free5gc/openapi/nrf/NFDisc"
 	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/pkg/factory"
@@ -47,9 +47,9 @@ func (s *nbsfService) isBSFEnabled() bool {
 // BSFSelection discovers and selects BSF for PCF binding registration
 func (s *nbsfService) BSFSelection() (string, error) {
 	// Discover BSF via NRF
-	targetNfType := models.NrfNfManagementNfType_BSF
-	requesterNfType := models.NrfNfManagementNfType_PCF
-	request := NFDiscovery.SearchNFInstancesRequest{
+	targetNfType := models.Nrf_NFMgmt_NFType_BSF
+	requesterNfType := models.Nrf_NFMgmt_NFType_PCF
+	request := NFDisc.SearchNFInstancesRequest{
 		TargetNfType:    &targetNfType,
 		RequesterNfType: &requesterNfType,
 	}
@@ -72,8 +72,8 @@ func (s *nbsfService) BSFSelection() (string, error) {
 	// Select first BSF instance and find management service URI
 	bsfProfile := result.NfInstances[0]
 	for _, service := range bsfProfile.NfServices {
-		if service.ServiceName == models.ServiceName_NBSF_MANAGEMENT &&
-			service.NfServiceStatus == models.NfServiceStatus_REGISTERED {
+		if service.ServiceName == models.Nrf_NFMgmt_ServiceName_NBSF_MANAGEMENT &&
+			service.NfServiceStatus == models.Nrf_NFMgmt_NFServiceStatus_REGISTERED {
 			return service.ApiPrefix, nil
 		}
 	}
@@ -105,15 +105,15 @@ func (s *nbsfService) RegisterPCFBinding(smPolicyData *pcf_context.UeSmPolicyDat
 	// Get PCF service information
 	pcfContext := s.consumer.Context()
 	var pcfFqdn string
-	var pcfIpEndPoints []models.IpEndPoint
+	var pcfIpEndPoints []models.Nrf_NFMgmt_IpEndPoint
 
-	if policyAuthService, exists := pcfContext.NfService[models.ServiceName_NPCF_POLICYAUTHORIZATION]; exists {
+	if policyAuthService, exists := pcfContext.NfService[models.Nrf_NFMgmt_ServiceName_NPCF_POLICYAUTHORIZATION]; exists {
 		pcfFqdn = policyAuthService.ApiPrefix
 		pcfIpEndPoints = policyAuthService.IpEndPoints
 	} else {
 		// Fallback to basic PCF info
 		pcfFqdn = fmt.Sprintf("%s://%s:%d", pcfContext.UriScheme, pcfContext.RegisterIPv4, pcfContext.SBIPort)
-		pcfIpEndPoints = []models.IpEndPoint{
+		pcfIpEndPoints = []models.Nrf_NFMgmt_IpEndPoint{
 			{
 				Ipv4Address: pcfContext.RegisterIPv4,
 				Port:        int32(pcfContext.SBIPort),
@@ -122,7 +122,7 @@ func (s *nbsfService) RegisterPCFBinding(smPolicyData *pcf_context.UeSmPolicyDat
 	}
 
 	// Create binding request
-	binding := models.PcfBinding{
+	binding := models.Bsf_Mgmt_PcfBinding{
 		Supi:           ctx.Supi,
 		Gpsi:           ctx.Gpsi,
 		Ipv4Addr:       ctx.Ipv4Address,
@@ -227,7 +227,7 @@ func (s *nbsfService) UpdatePCFBinding(bindingId string, smPolicyData *pcf_conte
 
 	// Add PCF info updates
 	pcfContext := s.consumer.Context()
-	if policyAuthService, exists := pcfContext.NfService[models.ServiceName_NPCF_POLICYAUTHORIZATION]; exists {
+	if policyAuthService, exists := pcfContext.NfService[models.Nrf_NFMgmt_ServiceName_NPCF_POLICYAUTHORIZATION]; exists {
 		updates["pcfFqdn"] = policyAuthService.ApiPrefix
 		updates["pcfIpEndPoints"] = policyAuthService.IpEndPoints
 	}

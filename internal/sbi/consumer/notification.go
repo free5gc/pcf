@@ -5,7 +5,7 @@ import (
 	"sync"
 
 	"github.com/free5gc/openapi/models"
-	"github.com/free5gc/openapi/pcf/AMPolicyControl"
+	"github.com/free5gc/openapi/pcf/AMPolCtrl"
 	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/internal/util"
@@ -17,10 +17,10 @@ type npcfService struct {
 
 	nfAMPolicyControlMu sync.RWMutex
 
-	nfAMPolicyControlClient map[string]*AMPolicyControl.APIClient
+	nfAMPolicyControlClient map[string]*AMPolCtrl.APIClient
 }
 
-func (s *npcfService) getAMPolicyControl(uri string) *AMPolicyControl.APIClient {
+func (s *npcfService) getAMPolicyControl(uri string) *AMPolCtrl.APIClient {
 	if uri == "" {
 		return nil
 	}
@@ -31,10 +31,10 @@ func (s *npcfService) getAMPolicyControl(uri string) *AMPolicyControl.APIClient 
 		return client
 	}
 
-	configuration := AMPolicyControl.NewConfiguration()
+	configuration := AMPolCtrl.NewConfiguration()
 	configuration.SetBasePath(uri)
 	configuration.SetMetrics(sbi_metrics.SbiMetricHook)
-	client = AMPolicyControl.NewAPIClient(configuration)
+	client = AMPolCtrl.NewAPIClient(configuration)
 
 	s.nfAMPolicyControlMu.RUnlock()
 	s.nfAMPolicyControlMu.Lock()
@@ -45,7 +45,7 @@ func (s *npcfService) getAMPolicyControl(uri string) *AMPolicyControl.APIClient 
 
 // Send AM Policy Update to AMF if policy has changed
 func (s *npcfService) SendAMPolicyUpdateNotification(ue *pcf_context.UeContext,
-	PolId string, request models.PcfAmPolicyControlPolicyUpdate,
+	PolId string, request models.Pcf_AMPolCtrl_PolicyUpdate,
 ) {
 	if ue == nil {
 		logger.ConsumerLog.Warnln("Policy Update Notification Error[Ue is nil]")
@@ -64,13 +64,13 @@ func (s *npcfService) SendAMPolicyUpdateNotification(ue *pcf_context.UeContext,
 		return
 	}
 
-	if reflect.DeepEqual(request, models.PcfAmPolicyControlPolicyUpdate{}) {
+	if reflect.DeepEqual(request, models.Pcf_AMPolCtrl_PolicyUpdate{}) {
 		logger.ConsumerLog.Warnln("SendAMPolicyUpdateNotification request is nil")
 		return
 	}
 
-	ctx, problemDetails, err := s.consumer.Context().GetTokenCtx(models.ServiceName("namf-callback"),
-		models.NrfNfManagementNfType_AMF)
+	ctx, problemDetails, err := s.consumer.Context().GetTokenCtx(models.Nrf_NFMgmt_ServiceName("namf-callback"),
+		models.Nrf_NFMgmt_NFType_AMF)
 	if err != nil {
 		logger.ConsumerLog.Warnf("Policy Update Notification Error[%s]", err.Error())
 		return
@@ -80,11 +80,11 @@ func (s *npcfService) SendAMPolicyUpdateNotification(ue *pcf_context.UeContext,
 	}
 
 	client := s.getAMPolicyControl(uri)
-	param := AMPolicyControl.CreateIndividualAMPolicyAssociationPolicyUpdateNotificationPostRequest{
-		PcfAmPolicyControlPolicyUpdate: &request,
+	param := AMPolCtrl.CreateIndividualAMPolicyAssociationPolicyUpdateNotificationRequest{
+		RequestBody: &request,
 	}
 	rsp, err := client.AMPolicyAssociationsCollectionApi.
-		CreateIndividualAMPolicyAssociationPolicyUpdateNotificationPost(
+		CreateIndividualAMPolicyAssociationPolicyUpdateNotification(
 			ctx, uri, &param)
 	if err != nil {
 		logger.ConsumerLog.Warnf("SendAMPolicyUpdateNotification function in consumer Error[%s]",
@@ -97,7 +97,7 @@ func (s *npcfService) SendAMPolicyUpdateNotification(ue *pcf_context.UeContext,
 }
 
 func (s *npcfService) SendAMPolicyAssociationPolicyAssocitionTerminationRequestNotification(
-	uri string, request *models.PcfAmPolicyControlTerminationNotification,
+	uri string, request *models.Pcf_AMPolCtrl_TerminationNotification,
 ) (
 	problemDetails *models.ProblemDetails, err error,
 ) {
@@ -115,8 +115,8 @@ func (s *npcfService) SendAMPolicyAssociationPolicyAssocitionTerminationRequestN
 	}
 
 	ctx, problemDetails, err := s.consumer.Context().GetTokenCtx(
-		models.ServiceName("namf-callback"),
-		models.NrfNfManagementNfType_AMF)
+		models.Nrf_NFMgmt_ServiceName("namf-callback"),
+		models.Nrf_NFMgmt_NFType_AMF)
 	if err != nil {
 		return nil, err
 	} else if problemDetails != nil {
@@ -124,16 +124,16 @@ func (s *npcfService) SendAMPolicyAssociationPolicyAssocitionTerminationRequestN
 	}
 
 	client := s.getAMPolicyControl(uri)
-	param := AMPolicyControl.
-		CreateIndividualAMPolicyAssociationPolicyAssocitionTerminationRequestNotificationPostRequest{
-		PcfAmPolicyControlTerminationNotification: request,
+	param := AMPolCtrl.
+		CreateIndividualAMPolicyAssociationPolicyAssocitionTerminationRequestNotificationRequest{
+		RequestBody: request,
 	}
 	_, err = client.AMPolicyAssociationsCollectionApi.
-		CreateIndividualAMPolicyAssociationPolicyAssocitionTerminationRequestNotificationPost(
+		CreateIndividualAMPolicyAssociationPolicyAssocitionTerminationRequestNotification(
 			ctx, uri, &param)
 	if err != nil {
 		logger.AmPolicyLog.Warnf(
-			"CreateIndividualAMPolicyAssociationPolicyAssocitionTerminationRequestNotificationPost Error[%s]",
+			"CreateIndividualAMPolicyAssociationPolicyAssocitionTerminationRequestNotification Error[%s]",
 			err.Error())
 		return nil, err
 	}

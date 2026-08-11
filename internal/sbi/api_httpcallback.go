@@ -14,7 +14,7 @@ import (
 )
 
 func validateTrafficInfluDataNotif(
-	trafficInfluDataNotif []models.TrafficInfluDataNotif,
+	trafficInfluDataNotif []models.Udr_DR_TrafficInfluDataNotif,
 ) *models.ProblemDetails {
 	for i, notification := range trafficInfluDataNotif {
 		if notification.TrafficInfluData == nil {
@@ -55,7 +55,7 @@ func (s *Server) getHttpCallBackRoutes() []Route {
 
 // amf_status_change
 func (s *Server) HTTPAmfStatusChangeNotify(c *gin.Context) {
-	var amfStatusChangeNotification models.AmfStatusChangeNotification
+	var amfStatusChangeNotification models.Amf_Comm_AmfStatusChangeNotification
 
 	requestBody, err := c.GetRawData()
 	if err != nil {
@@ -91,7 +91,7 @@ func (s *Server) HTTPAmfStatusChangeNotify(c *gin.Context) {
 // sm_policy_notify
 // Nudr-Notify-smpolicy
 func (s *Server) HTTPUdrPolicyDataChangeNotify(c *gin.Context) {
-	var policyDataChangeNotification models.PolicyDataChangeNotification
+	var policyDataChangeNotification models.Udr_DR_PolicyDataChangeNotification
 
 	requestBody, err := c.GetRawData()
 	if err != nil {
@@ -136,7 +136,7 @@ func (s *Server) HTTPUdrPolicyDataChangeNotify(c *gin.Context) {
 
 // Influence Data Update Notification
 func (s *Server) HTTPUdrInfluenceDataUpdateNotify(c *gin.Context) {
-	var trafficInfluDataNotif []models.TrafficInfluDataNotif
+	var trafficInfluDataNotif []models.Udr_DR_TrafficInfluDataNotif
 
 	requestBody, err := c.GetRawData()
 	if err != nil {

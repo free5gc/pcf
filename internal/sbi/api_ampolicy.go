@@ -45,7 +45,7 @@ func (s *Server) HTTPReadIndividualAMPolicyAssociation(c *gin.Context) {
 }
 
 func (s *Server) HTTPReportObservedEventTriggersForIndividualAMPolicyAssociation(c *gin.Context) {
-	var policyAssociationUpdateRequest models.PcfAmPolicyControlPolicyAssociationUpdateRequest
+	var policyAssociationUpdateRequest models.Pcf_AMPolCtrl_PolicyAssociationUpdateRequest
 
 	requestBody, err := c.GetRawData()
 	if err != nil {
@@ -91,7 +91,7 @@ func (s *Server) HTTPReportObservedEventTriggersForIndividualAMPolicyAssociation
 }
 
 func (s *Server) HTTPCreateIndividualAMPolicyAssociation(c *gin.Context) {
-	var policyAssociationRequest models.PcfAmPolicyControlPolicyAssociationRequest
+	var policyAssociationRequest models.Pcf_AMPolCtrl_PolicyAssociationRequest
 	requestBody, err := c.GetRawData()
 	if err != nil {
 		problemDetail := models.ProblemDetails{

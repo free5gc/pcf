@@ -16,7 +16,7 @@ type UEAmPolicy struct {
 	PolicyAssociationID string
 	AccessType          models.AccessType
 	Rfsp                string
-	Triggers            []models.PcfAmPolicyControlRequestTrigger
+	Triggers            []models.Pcf_AMPolCtrl_RequestTrigger
 	/*Service Area Restriction */
 	RestrictionType models.RestrictionType
 	Areas           []models.Area

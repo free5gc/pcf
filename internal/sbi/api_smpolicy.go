@@ -52,7 +52,7 @@ func (s *Server) getSmPolicyRoutes() []Route {
 
 // SmPoliciesPost -
 func (s *Server) HTTPCreateSMPolicy(c *gin.Context) {
-	var smPolicyContextData models.SmPolicyContextData
+	var smPolicyContextData models.Pcf_SMPolCtrl_SmPolicyContextData
 	// step 1: retrieve http request body
 	requestBody, err := c.GetRawData()
 	if err != nil {
@@ -117,7 +117,7 @@ func (s *Server) HTTPGetSMPolicy(c *gin.Context) {
 }
 
 func (s *Server) HTTPUpdateSMPolicy(c *gin.Context) {
-	var smPolicyUpdateContextData models.SmPolicyUpdateContextData
+	var smPolicyUpdateContextData models.Pcf_SMPolCtrl_SmPolicyUpdateContextData
 	// step 1: retrieve http request body
 	requestBody, err := c.GetRawData()
 	if err != nil {
