@@ -76,7 +76,7 @@ func (s *Server) HTTPPcscfRestoration(c *gin.Context) {
 // api_application_session
 // HTTPPostAppSessions - Creates a new Individual Application Session Context resource
 func (s *Server) HTTPPostAppSessions(c *gin.Context) {
-	var appSessionContext models.AppSessionContext
+	var appSessionContext models.Pcf_PolAuth_AppSessionContext
 
 	requestBody, err := c.GetRawData()
 	if err != nil {
@@ -138,7 +138,7 @@ func (s *Server) HTTPDeleteEventsSubsc(c *gin.Context) {
 
 // HTTPUpdateEventsSubsc - creates or modifies an Events Subscription subresource
 func (s *Server) HTTPUpdateEventsSubsc(c *gin.Context) {
-	var eventsSubscReqData models.PcfPolicyAuthorizationEventsSubscReqData
+	var eventsSubscReqData models.Pcf_PolAuth_EventsSubscReqData
 
 	requestBody, err := c.GetRawData()
 	if err != nil {
@@ -191,7 +191,7 @@ func (s *Server) HTTPUpdateEventsSubsc(c *gin.Context) {
 }
 
 func (s *Server) HTTPDeleteAppSession(c *gin.Context) {
-	var eventsSubscReqData *models.PcfPolicyAuthorizationEventsSubscReqData
+	var eventsSubscReqData *models.Pcf_PolAuth_EventsSubscReqData
 
 	requestBody, err := c.GetRawData()
 	if err != nil {
@@ -256,7 +256,7 @@ func (s *Server) HTTPGetAppSession(c *gin.Context) {
 
 // HTTPModAppSession - Modifies an existing Individual Application Session Context
 func (s *Server) HTTPModAppSession(c *gin.Context) {
-	var appSessionContextUpdateData models.AppSessionContextUpdateData
+	var appSessionContextUpdateData models.Pcf_PolAuth_AppSessionContextUpdateData
 
 	requestBody, err := c.GetRawData()
 	if err != nil {

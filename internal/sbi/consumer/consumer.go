@@ -3,11 +3,11 @@ package consumer
 import (
 	"context"
 
-	"github.com/free5gc/openapi/amf/Communication"
-	"github.com/free5gc/openapi/nrf/NFDiscovery"
-	"github.com/free5gc/openapi/nrf/NFManagement"
-	"github.com/free5gc/openapi/pcf/AMPolicyControl"
-	"github.com/free5gc/openapi/udr/DataRepository"
+	"github.com/free5gc/openapi/amf/Comm"
+	"github.com/free5gc/openapi/nrf/NFDisc"
+	"github.com/free5gc/openapi/nrf/NFMgmt"
+	"github.com/free5gc/openapi/pcf/AMPolCtrl"
+	"github.com/free5gc/openapi/udr/DR"
 	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/pkg/factory"
 )
@@ -36,23 +36,23 @@ func NewConsumer(pcf pcf) (*Consumer, error) {
 
 	c.nnrfService = &nnrfService{
 		consumer:        c,
-		nfMngmntClients: make(map[string]*NFManagement.APIClient),
-		nfDiscClients:   make(map[string]*NFDiscovery.APIClient),
+		nfMngmntClients: make(map[string]*NFMgmt.APIClient),
+		nfDiscClients:   make(map[string]*NFDisc.APIClient),
 	}
 
 	c.namfService = &namfService{
 		consumer:     c,
-		nfComClients: make(map[string]*Communication.APIClient),
+		nfComClients: make(map[string]*Comm.APIClient),
 	}
 
 	c.nudrService = &nudrService{
 		consumer:         c,
-		nfDataSubClients: make(map[string]*DataRepository.APIClient),
+		nfDataSubClients: make(map[string]*DR.APIClient),
 	}
 
 	c.npcfService = &npcfService{
 		consumer:                c,
-		nfAMPolicyControlClient: make(map[string]*AMPolicyControl.APIClient),
+		nfAMPolicyControlClient: make(map[string]*AMPolCtrl.APIClient),
 	}
 
 	c.nbsfService = &nbsfService{

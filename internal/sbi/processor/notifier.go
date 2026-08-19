@@ -17,7 +17,7 @@ import (
 
 func (p *Processor) HandleAmfStatusChangeNotify(
 	c *gin.Context,
-	amfStatusChangeNotification models.AmfStatusChangeNotification,
+	amfStatusChangeNotification models.Amf_Comm_AmfStatusChangeNotification,
 ) {
 	logger.CallbackLog.Warnf("[PCF] Handle Amf Status Change Notify is not implemented.")
 
@@ -30,7 +30,7 @@ func (p *Processor) HandleAmfStatusChangeNotify(
 func (p *Processor) HandlePolicyDataChangeNotify(
 	c *gin.Context,
 	supi string,
-	policyDataChangeNotification models.PolicyDataChangeNotification,
+	policyDataChangeNotification models.Udr_DR_PolicyDataChangeNotification,
 ) {
 	logger.CallbackLog.Warnf("[PCF] Handle Policy Data Change Notify is not implemented.")
 
@@ -40,14 +40,14 @@ func (p *Processor) HandlePolicyDataChangeNotify(
 }
 
 // TODO: handle Policy Data Change Notify
-func PolicyDataChangeNotifyProcedure(supi string, notification models.PolicyDataChangeNotification) {
+func PolicyDataChangeNotifyProcedure(supi string, notification models.Udr_DR_PolicyDataChangeNotification) {
 }
 
 func (p *Processor) HandleInfluenceDataUpdateNotify(
 	c *gin.Context,
 	supi string,
 	pduSessionId string,
-	trafficInfluDataNotif []models.TrafficInfluDataNotif,
+	trafficInfluDataNotif []models.Udr_DR_TrafficInfluDataNotif,
 ) {
 	logger.CallbackLog.Infof("[PCF] Handle Influence Data Update Notify")
 
@@ -75,13 +75,13 @@ func (p *Processor) HandleInfluenceDataUpdateNotify(
 		// notifying deletion
 		if notification.TrafficInfluData == nil {
 			pccRuleID := influenceDataToPccRule[influenceID]
-			decision = &models.SmPolicyDecision{}
+			decision = &models.Pcf_SMPolCtrl_SmPolicyDecision{}
 			if err := smPolicy.RemovePccRule(pccRuleID, decision); err != nil {
 				logger.CallbackLog.Errorf("Remove PCC rule error: %+v", err)
 			}
 			delete(influenceDataToPccRule, influenceID)
 		} else {
-			var chgData *models.ChargingData
+			var chgData *models.Pcf_SMPolCtrl_ChargingData
 			var chargingInterface map[string]interface{}
 
 			trafficInfluData := *notification.TrafficInfluData
@@ -115,11 +115,11 @@ func (p *Processor) HandleInfluenceDataUpdateNotify(
 					c.JSON(int(problemDetails.Status), problemDetails)
 					return
 				}
-				chgData = &models.ChargingData{
+				chgData = &models.Pcf_SMPolCtrl_ChargingData{
 					ChgId:          util.GetChgId(smPolicy.ChargingIdGenerator),
 					RatingGroup:    int32(rg),
-					ReportingLevel: models.ReportingLevel_RAT_GR_LEVEL,
-					MeteringMethod: models.MeteringMethod_VOLUME,
+					ReportingLevel: models.Pcf_SMPolCtrl_ReportingLevel_RAT_GR_LEVEL,
+					MeteringMethod: models.Pcf_SMPolCtrl_MeteringMethod_VOLUME,
 				}
 
 				switch chargingInterface["chargingMethod"].(string) {
@@ -132,7 +132,7 @@ func (p *Processor) HandleInfluenceDataUpdateNotify(
 				}
 
 				if decision.ChgDecs == nil {
-					decision.ChgDecs = make(map[string]*models.ChargingData)
+					decision.ChgDecs = make(map[string]*models.Pcf_SMPolCtrl_ChargingData)
 				}
 
 				chargingInterface["ratingGroup"] = chgData.RatingGroup
@@ -166,8 +166,8 @@ func (p *Processor) HandleInfluenceDataUpdateNotify(
 			}
 		}
 	}
-	smPolicyNotification := models.SmPolicyNotification{
-		ResourceUri:      util.GetResourceUri(models.ServiceName_NPCF_SMPOLICYCONTROL, smPolicyID),
+	smPolicyNotification := models.Pcf_SMPolCtrl_SmPolicyNotification{
+		ResourceUri:      util.GetResourceUri(models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL, smPolicyID),
 		SmPolicyDecision: decision,
 	}
 	p.SendSMPolicyUpdateNotification(smPolicy.PolicyContext.NotificationUri, &smPolicyNotification)

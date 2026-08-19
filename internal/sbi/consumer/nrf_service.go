@@ -10,8 +10,8 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/free5gc/openapi/models"
-	"github.com/free5gc/openapi/nrf/NFDiscovery"
-	"github.com/free5gc/openapi/nrf/NFManagement"
+	"github.com/free5gc/openapi/nrf/NFDisc"
+	"github.com/free5gc/openapi/nrf/NFMgmt"
 	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/internal/util"
@@ -24,11 +24,11 @@ type nnrfService struct {
 	nfMngmntMu sync.RWMutex
 	nfDiscMu   sync.RWMutex
 
-	nfMngmntClients map[string]*NFManagement.APIClient
-	nfDiscClients   map[string]*NFDiscovery.APIClient
+	nfMngmntClients map[string]*NFMgmt.APIClient
+	nfDiscClients   map[string]*NFDisc.APIClient
 }
 
-func (s *nnrfService) getNFManagementClient(uri string) *NFManagement.APIClient {
+func (s *nnrfService) getNFManagementClient(uri string) *NFMgmt.APIClient {
 	if uri == "" {
 		return nil
 	}
@@ -39,10 +39,10 @@ func (s *nnrfService) getNFManagementClient(uri string) *NFManagement.APIClient 
 		return client
 	}
 
-	configuration := NFManagement.NewConfiguration()
+	configuration := NFMgmt.NewConfiguration()
 	configuration.SetBasePath(uri)
 	configuration.SetMetrics(sbi_metrics.SbiMetricHook)
-	client = NFManagement.NewAPIClient(configuration)
+	client = NFMgmt.NewAPIClient(configuration)
 
 	s.nfMngmntMu.RUnlock()
 	s.nfMngmntMu.Lock()
@@ -51,7 +51,7 @@ func (s *nnrfService) getNFManagementClient(uri string) *NFManagement.APIClient 
 	return client
 }
 
-func (s *nnrfService) getNFDiscClient(uri string) *NFDiscovery.APIClient {
+func (s *nnrfService) getNFDiscClient(uri string) *NFDisc.APIClient {
 	if uri == "" {
 		return nil
 	}
@@ -62,10 +62,10 @@ func (s *nnrfService) getNFDiscClient(uri string) *NFDiscovery.APIClient {
 		return client
 	}
 
-	configuration := NFDiscovery.NewConfiguration()
+	configuration := NFDisc.NewConfiguration()
 	configuration.SetBasePath(uri)
 	configuration.SetMetrics(sbi_metrics.SbiMetricHook)
-	client = NFDiscovery.NewAPIClient(configuration)
+	client = NFDisc.NewAPIClient(configuration)
 
 	s.nfDiscMu.RUnlock()
 	s.nfDiscMu.Lock()
@@ -75,13 +75,13 @@ func (s *nnrfService) getNFDiscClient(uri string) *NFDiscovery.APIClient {
 }
 
 func (s *nnrfService) SendSearchNFInstances(
-	nrfUri string, targetNfType, requestNfType models.NrfNfManagementNfType, param NFDiscovery.SearchNFInstancesRequest) (
-	*models.SearchResult, error,
+	nrfUri string, targetNfType, requestNfType models.Nrf_NFMgmt_NFType, param NFDisc.SearchNFInstancesRequest) (
+	*models.Nrf_NFDisc_SearchResult, error,
 ) {
 	// Set client and set url
 	client := s.getNFDiscClient(nrfUri)
 
-	ctx, _, err := s.consumer.Context().GetTokenCtx(models.ServiceName_NNRF_DISC, models.NrfNfManagementNfType_NRF)
+	ctx, _, err := s.consumer.Context().GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NNRF_DISC, models.Nrf_NFMgmt_NFType_NRF)
 	if err != nil {
 		return nil, err
 	}
@@ -92,17 +92,21 @@ func (s *nnrfService) SendSearchNFInstances(
 		logger.ConsumerLog.Errorf("SearchNFInstances failed: %+v", err)
 		return nil, err
 	}
+	// The search result is a pointer in the new openapi models, so it can be
+	// nil even when the call itself succeeded; callers walk NfInstances
+	// straight after checking err.
+	if res == nil || res.Nrf_NFDisc_SearchResult == nil {
+		return nil, errors.New("no search result from NRF")
+	}
 
-	result := res.SearchResult
-
-	return &result, nil
+	return res.Nrf_NFDisc_SearchResult, nil
 }
 
 func (s *nnrfService) SendNFInstancesUDR(nrfUri, id string) string {
-	targetNfType := models.NrfNfManagementNfType_UDR
-	requestNfType := models.NrfNfManagementNfType_PCF
-	localVarOptionals := NFDiscovery.SearchNFInstancesRequest{
-		// 	DataSet: optional.NewInterface(models.DataSetId_SUBSCRIPTION),
+	targetNfType := models.Nrf_NFMgmt_NFType_UDR
+	requestNfType := models.Nrf_NFMgmt_NFType_PCF
+	localVarOptionals := NFDisc.SearchNFInstancesRequest{
+		// 	DataSet: optional.NewInterface(models.Nrf_NFMgmt_DataSetId_SUBSCRIPTION),
 	}
 
 	result, err := s.SendSearchNFInstances(nrfUri, targetNfType, requestNfType, localVarOptionals)
@@ -111,7 +115,7 @@ func (s *nnrfService) SendNFInstancesUDR(nrfUri, id string) string {
 		return ""
 	}
 	for _, profile := range result.NfInstances {
-		if uri := util.SearchNFServiceUri(profile, models.ServiceName_NUDR_DR, models.NfServiceStatus_REGISTERED); uri != "" {
+		if uri := util.SearchNFServiceUri(profile, models.Nrf_NFMgmt_ServiceName_NUDR_DR, models.Nrf_NFMgmt_NFServiceStatus_REGISTERED); uri != "" { //nolint:lll
 			return uri
 		}
 	}
@@ -119,9 +123,9 @@ func (s *nnrfService) SendNFInstancesUDR(nrfUri, id string) string {
 }
 
 func (s *nnrfService) SendNFInstancesBSF(nrfUri string) string {
-	targetNfType := models.NrfNfManagementNfType_BSF
-	requestNfType := models.NrfNfManagementNfType_PCF
-	localVarOptionals := NFDiscovery.SearchNFInstancesRequest{}
+	targetNfType := models.Nrf_NFMgmt_NFType_BSF
+	requestNfType := models.Nrf_NFMgmt_NFType_PCF
+	localVarOptionals := NFDisc.SearchNFInstancesRequest{}
 
 	result, err := s.SendSearchNFInstances(nrfUri, targetNfType, requestNfType, localVarOptionals)
 	if err != nil {
@@ -129,19 +133,21 @@ func (s *nnrfService) SendNFInstancesBSF(nrfUri string) string {
 		return ""
 	}
 	for _, profile := range result.NfInstances {
-		if uri := util.SearchNFServiceUri(profile, models.ServiceName_NBSF_MANAGEMENT,
-			models.NfServiceStatus_REGISTERED); uri != "" {
+		if uri := util.SearchNFServiceUri(profile, models.Nrf_NFMgmt_ServiceName_NBSF_MANAGEMENT,
+			models.Nrf_NFMgmt_NFServiceStatus_REGISTERED); uri != "" {
 			return uri
 		}
 	}
 	return ""
 }
 
-func (s *nnrfService) SendNFInstancesAMF(nrfUri string, guami models.Guami, serviceName models.ServiceName) string {
-	targetNfType := models.NrfNfManagementNfType_AMF
-	requestNfType := models.NrfNfManagementNfType_PCF
+func (
+	s *nnrfService) SendNFInstancesAMF(nrfUri string, guami models.Guami, serviceName models.Nrf_NFMgmt_ServiceName,
+) string {
+	targetNfType := models.Nrf_NFMgmt_NFType_AMF
+	requestNfType := models.Nrf_NFMgmt_NFType_PCF
 
-	localVarOptionals := NFDiscovery.SearchNFInstancesRequest{
+	localVarOptionals := NFDisc.SearchNFInstancesRequest{
 		Guami: &guami,
 	}
 
@@ -151,7 +157,7 @@ func (s *nnrfService) SendNFInstancesAMF(nrfUri string, guami models.Guami, serv
 		return ""
 	}
 	for _, profile := range result.NfInstances {
-		return util.SearchNFServiceUri(profile, serviceName, models.NfServiceStatus_REGISTERED)
+		return util.SearchNFServiceUri(profile, serviceName, models.Nrf_NFMgmt_NFServiceStatus_REGISTERED)
 	}
 	return ""
 }
@@ -159,24 +165,24 @@ func (s *nnrfService) SendNFInstancesAMF(nrfUri string, guami models.Guami, serv
 // management
 func (s *nnrfService) BuildNFInstance(
 	context *pcf_context.PCFContext,
-) (profile models.NrfNfManagementNfProfile, err error) {
+) (profile models.Nrf_NFMgmt_NFProfile, err error) {
 	profile.NfInstanceId = context.NfId
-	profile.NfType = models.NrfNfManagementNfType_PCF
-	profile.NfStatus = models.NrfNfManagementNfStatus_REGISTERED
+	profile.NfType = models.Nrf_NFMgmt_NFType_PCF
+	profile.NfStatus = models.Nrf_NFMgmt_NFStatus_REGISTERED
 	profile.Ipv4Addresses = append(profile.Ipv4Addresses, context.RegisterIPv4)
-	services := []models.NrfNfManagementNfService{}
+	services := []models.Nrf_NFMgmt_NFService{}
 	for _, nfService := range context.NfService {
 		services = append(services, nfService)
 	}
 	if len(services) > 0 {
 		profile.NfServices = services
 	}
-	profile.PcfInfo = &models.PcfInfo{
+	profile.PcfInfo = &models.Nrf_NFMgmt_PcfInfo{
 		DnnList: []string{
 			"free5gc",
 			"internet",
 		},
-		// SupiRanges: &[]models.SupiRange{
+		// SupiRanges: &[]models.Nrf_NFMgmt_SupiRange{
 		// 	{
 		// 		//from TS 29.510 6.1.6.2.9 example2
 		//		//no need to set supirange in this moment 2019/10/4
@@ -205,8 +211,8 @@ func (s *nnrfService) SendRegisterNFInstance(ctx context.Context) (
 			errors.Wrap(err, "RegisterNFInstance buildNfProfile()")
 	}
 
-	var nf models.NrfNfManagementNfProfile
-	var res *NFManagement.RegisterNFInstanceResponse
+	var nf models.Nrf_NFMgmt_NFProfile
+	var res *NFMgmt.RegisterNFInstanceResponse
 
 	finish := false
 	for !finish {
@@ -214,9 +220,9 @@ func (s *nnrfService) SendRegisterNFInstance(ctx context.Context) (
 		case <-ctx.Done():
 			return "", "", fmt.Errorf("RegisterNFInstance context done")
 		default:
-			req := &NFManagement.RegisterNFInstanceRequest{
-				NfInstanceID:             &pcfContext.NfId,
-				NrfNfManagementNfProfile: &nfProfile,
+			req := &NFMgmt.RegisterNFInstanceRequest{
+				NfInstanceID: &pcfContext.NfId,
+				RequestBody:  &nfProfile,
 			}
 			res, err = client.NFInstanceIDDocumentApi.RegisterNFInstance(ctx, req)
 			if err != nil || res == nil {
@@ -224,7 +230,7 @@ func (s *nnrfService) SendRegisterNFInstance(ctx context.Context) (
 				time.Sleep(2 * time.Second)
 				continue
 			}
-			nf = res.NrfNfManagementNfProfile
+			nf = *res.Nrf_NFMgmt_NFProfile
 
 			if res.Location == "" {
 				// NFUpdate
@@ -236,8 +242,8 @@ func (s *nnrfService) SendRegisterNFInstance(ctx context.Context) (
 				retrieveNfInstanceID = resourceUri[strings.LastIndex(resourceUri, "/")+1:]
 
 				oauth2 := false
-				if nf.CustomInfo != nil {
-					v, ok := nf.CustomInfo["oauth2"].(bool)
+				if customInfo, isMap := nf.CustomInfo.(map[string]interface{}); isMap {
+					v, ok := customInfo["oauth2"].(bool)
 					if ok {
 						oauth2 = v
 						logger.MainLog.Infoln("OAuth2 setting receive from NRF:", oauth2)
@@ -259,14 +265,14 @@ func (s *nnrfService) SendRegisterNFInstance(ctx context.Context) (
 func (s *nnrfService) SendDeregisterNFInstance() (problemDetails *models.ProblemDetails, err error) {
 	logger.ConsumerLog.Infof("Send Deregister NFInstance")
 
-	ctx, pd, err := pcf_context.GetSelf().GetTokenCtx(models.ServiceName_NNRF_NFM, models.NrfNfManagementNfType_NRF)
+	ctx, pd, err := pcf_context.GetSelf().GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NNRF_NFM, models.Nrf_NFMgmt_NFType_NRF)
 	if err != nil {
 		return pd, err
 	}
 
 	pcfContext := s.consumer.Context()
 	client := s.getNFManagementClient(pcfContext.NrfUri)
-	request := &NFManagement.DeregisterNFInstanceRequest{
+	request := &NFMgmt.DeregisterNFInstanceRequest{
 		NfInstanceID: &pcfContext.NfId,
 	}
 
