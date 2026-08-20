@@ -7,7 +7,7 @@ import (
 
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/models"
-	"github.com/free5gc/openapi/udr/DataRepository"
+	"github.com/free5gc/openapi/udr/DR"
 	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/internal/util"
@@ -19,10 +19,10 @@ type nudrService struct {
 
 	nfDataSubMu sync.RWMutex
 
-	nfDataSubClients map[string]*DataRepository.APIClient
+	nfDataSubClients map[string]*DR.APIClient
 }
 
-func (s *nudrService) getDataSubscription(uri string) *DataRepository.APIClient {
+func (s *nudrService) getDataSubscription(uri string) *DR.APIClient {
 	if uri == "" {
 		return nil
 	}
@@ -33,10 +33,10 @@ func (s *nudrService) getDataSubscription(uri string) *DataRepository.APIClient 
 		return client
 	}
 
-	configuration := DataRepository.NewConfiguration()
+	configuration := DR.NewConfiguration()
 	configuration.SetBasePath(uri)
 	configuration.SetMetrics(sbi_metrics.SbiMetricHook)
-	client = DataRepository.NewAPIClient(configuration)
+	client = DR.NewAPIClient(configuration)
 
 	s.nfDataSubMu.RUnlock()
 	s.nfDataSubMu.Lock()
@@ -47,7 +47,7 @@ func (s *nudrService) getDataSubscription(uri string) *DataRepository.APIClient 
 
 func (s *nudrService) GetSessionManagementPolicyData(uri string,
 	ueId string, sliceInfo *models.Snssai, dnn string) (
-	resp *DataRepository.ReadSessionManagementPolicyDataResponse,
+	resp *DR.ReadSessionManagementPolicyDataResponse,
 	problemDetails *models.ProblemDetails, err error,
 ) {
 	if uri == "" {
@@ -74,7 +74,7 @@ func (s *nudrService) GetSessionManagementPolicyData(uri string,
 		return nil, &problemDetails, nil
 	}
 
-	ctx, pd, err := s.consumer.Context().GetTokenCtx(models.ServiceName_NUDR_DR, models.NrfNfManagementNfType_UDR)
+	ctx, pd, err := s.consumer.Context().GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NUDR_DR, models.Nrf_NFMgmt_NFType_UDR)
 	if err != nil {
 		return nil, nil, err
 	} else if pd != nil {
@@ -82,7 +82,7 @@ func (s *nudrService) GetSessionManagementPolicyData(uri string,
 	}
 
 	client := s.getDataSubscription(uri)
-	param := DataRepository.ReadSessionManagementPolicyDataRequest{
+	param := DR.ReadSessionManagementPolicyDataRequest{
 		UeId:   &ueId,
 		Snssai: sliceInfo,
 		Dnn:    &dnn,
@@ -103,7 +103,7 @@ func (s *nudrService) GetSessionManagementPolicyData(uri string,
 	return nil, nil, localErr
 }
 
-func (s *nudrService) CreateBdtData(uri string, bdtData *models.BdtData) (
+func (s *nudrService) CreateBdtData(uri string, bdtData *models.Udr_DR_BdtData) (
 	problemDetails *models.ProblemDetails, err error,
 ) {
 	if uri == "" {
@@ -112,7 +112,7 @@ func (s *nudrService) CreateBdtData(uri string, bdtData *models.BdtData) (
 		return &problemDetail, nil
 	}
 
-	ctx, pd, err := s.consumer.Context().GetTokenCtx(models.ServiceName_NUDR_DR, models.NrfNfManagementNfType_UDR)
+	ctx, pd, err := s.consumer.Context().GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NUDR_DR, models.Nrf_NFMgmt_NFType_UDR)
 	if err != nil {
 		return nil, err
 	} else if pd != nil {
@@ -120,8 +120,8 @@ func (s *nudrService) CreateBdtData(uri string, bdtData *models.BdtData) (
 	}
 
 	client := s.getDataSubscription(uri)
-	param := DataRepository.CreateIndividualBdtDataRequest{
-		BdtData:        bdtData,
+	param := DR.CreateIndividualBdtDataRequest{
+		RequestBody:    bdtData,
 		BdtReferenceId: &bdtData.BdtRefId,
 	}
 	_, localErr := client.IndividualBdtDataDocumentApi.CreateIndividualBdtData(ctx, &param)
@@ -140,15 +140,15 @@ func (s *nudrService) CreateBdtData(uri string, bdtData *models.BdtData) (
 	return nil, localErr
 }
 
-func (s *nudrService) CreateBdtPolicyContext(uri string, req *DataRepository.ReadBdtDataRequest) (
-	resp *DataRepository.ReadBdtDataResponse, problemDetails *models.ProblemDetails, err error,
+func (s *nudrService) CreateBdtPolicyContext(uri string, req *DR.ReadBdtDataRequest) (
+	resp *DR.ReadBdtDataResponse, problemDetails *models.ProblemDetails, err error,
 ) {
 	if uri == "" {
 		problemDetail := util.GetProblemDetail("Can't find any UDR which supported to this PCF",
 			"CreateBdtData Can't find UDR URI")
 		return nil, &problemDetail, nil
 	}
-	ctx, pd, err := s.consumer.Context().GetTokenCtx(models.ServiceName_NUDR_DR, models.NrfNfManagementNfType_UDR)
+	ctx, pd, err := s.consumer.Context().GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NUDR_DR, models.Nrf_NFMgmt_NFType_UDR)
 	if err != nil {
 		return nil, nil, err
 	} else if pd != nil {
@@ -173,7 +173,7 @@ func (s *nudrService) CreateBdtPolicyContext(uri string, req *DataRepository.Rea
 }
 
 func (s *nudrService) GetBdtData(uri string, bdtRefId string) (
-	resp *DataRepository.ReadIndividualBdtDataResponse, problemDetails *models.ProblemDetails, err error,
+	resp *DR.ReadIndividualBdtDataResponse, problemDetails *models.ProblemDetails, err error,
 ) {
 	if uri == "" {
 		problemDetail := util.GetProblemDetail("Can't find any UDR which supported to this PCF",
@@ -187,14 +187,14 @@ func (s *nudrService) GetBdtData(uri string, bdtRefId string) (
 		return nil, &problemDetail, nil
 	}
 
-	ctx, pd, err := s.consumer.Context().GetTokenCtx(models.ServiceName_NUDR_DR, models.NrfNfManagementNfType_UDR)
+	ctx, pd, err := s.consumer.Context().GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NUDR_DR, models.Nrf_NFMgmt_NFType_UDR)
 	if err != nil {
 		return nil, nil, err
 	} else if pd != nil {
 		return nil, pd, nil
 	}
 
-	readBdtDataReq := DataRepository.ReadIndividualBdtDataRequest{
+	readBdtDataReq := DR.ReadIndividualBdtDataRequest{
 		BdtReferenceId: &bdtRefId,
 	}
 
@@ -217,7 +217,7 @@ func (s *nudrService) GetBdtData(uri string, bdtRefId string) (
 }
 
 func (s *nudrService) GetAccessAndMobilityPolicyData(ue *pcf_context.UeContext) (
-	amPolicyData *models.AmPolicyData,
+	amPolicyData *models.Udr_DR_AmPolicyData,
 	problemDetails *models.ProblemDetails, err error,
 ) {
 	if ue.Supi == "" {
@@ -232,7 +232,7 @@ func (s *nudrService) GetAccessAndMobilityPolicyData(ue *pcf_context.UeContext) 
 		return nil, &problemDetail, nil
 	}
 
-	ctx, pd, err := s.consumer.Context().GetTokenCtx(models.ServiceName_NUDR_DR, models.NrfNfManagementNfType_UDR)
+	ctx, pd, err := s.consumer.Context().GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NUDR_DR, models.Nrf_NFMgmt_NFType_UDR)
 	if err != nil {
 		return nil, nil, err
 	} else if pd != nil {
@@ -240,12 +240,12 @@ func (s *nudrService) GetAccessAndMobilityPolicyData(ue *pcf_context.UeContext) 
 	}
 
 	client := s.getDataSubscription(ue.UdrUri)
-	param := DataRepository.ReadAccessAndMobilityPolicyDataRequest{
+	param := DR.ReadAccessAndMobilityPolicyDataRequest{
 		UeId: &ue.Supi,
 	}
 	resp, localErr := client.AccessAndMobilityPolicyDataDocumentApi.ReadAccessAndMobilityPolicyData(ctx, &param)
 	if localErr == nil {
-		return &resp.AmPolicyData, nil, nil
+		return resp.Udr_DR_AmPolicyData, nil, nil
 	}
 	if genericErr, ok := localErr.(openapi.GenericOpenAPIError); ok {
 		if problemDetails, ok := genericErr.Model().(models.ProblemDetails); ok {
@@ -259,7 +259,9 @@ func (s *nudrService) GetAccessAndMobilityPolicyData(ue *pcf_context.UeContext) 
 	return nil, nil, localErr
 }
 
-func (s *nudrService) CreateInfluenceDataSubscription(ue *pcf_context.UeContext, request models.SmPolicyContextData) (
+func (s *nudrService) CreateInfluenceDataSubscription(
+	ue *pcf_context.UeContext, request models.Pcf_SMPolCtrl_SmPolicyContextData,
+) (
 	subscriptionID string, problemDetails *models.ProblemDetails, err error,
 ) {
 	if ue.UdrUri == "" {
@@ -267,14 +269,14 @@ func (s *nudrService) CreateInfluenceDataSubscription(ue *pcf_context.UeContext,
 		logger.ConsumerLog.Warnf("Can't find corresponding UDR with UE[%s]", ue.Supi)
 		return "", &problemDetail, nil
 	}
-	ctx, pd, err := s.consumer.Context().GetTokenCtx(models.ServiceName_NUDR_DR, models.NrfNfManagementNfType_UDR)
+	ctx, pd, err := s.consumer.Context().GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NUDR_DR, models.Nrf_NFMgmt_NFType_UDR)
 	if err != nil {
 		return "", pd, err
 	}
 	client := s.getDataSubscription(ue.UdrUri)
 	trafficInfluSub := s.buildTrafficInfluSub(request)
-	individualInfluenceDataSubscReq := DataRepository.CreateIndividualInfluenceDataSubscriptionRequest{
-		TrafficInfluSub: &trafficInfluSub,
+	individualInfluenceDataSubscReq := DR.CreateIndividualInfluenceDataSubscriptionRequest{
+		RequestBody: &trafficInfluSub,
 	}
 	httpResp, localErr := client.InfluenceDataSubscriptionsCollectionApi.
 		CreateIndividualInfluenceDataSubscription(ctx, &individualInfluenceDataSubscReq)
@@ -296,8 +298,10 @@ func (s *nudrService) CreateInfluenceDataSubscription(ue *pcf_context.UeContext,
 	return "", nil, localErr
 }
 
-func (s *nudrService) buildTrafficInfluSub(request models.SmPolicyContextData) models.TrafficInfluSub {
-	trafficInfluSub := models.TrafficInfluSub{
+func (
+	s *nudrService) buildTrafficInfluSub(request models.Pcf_SMPolCtrl_SmPolicyContextData,
+) models.Udr_DR_TrafficInfluSub {
+	trafficInfluSub := models.Udr_DR_TrafficInfluSub{
 		Dnns:             []string{request.Dnn},
 		Snssais:          []models.Snssai{*request.SliceInfo},
 		InternalGroupIds: request.InterGrpIds,
@@ -318,12 +322,12 @@ func (s *nudrService) RemoveInfluenceDataSubscription(ue *pcf_context.UeContext,
 		logger.ConsumerLog.Warnf("Can't find corresponding UDR with UE[%s]", ue.Supi)
 		return &problemDetail, nil
 	}
-	ctx, pd, err := s.consumer.Context().GetTokenCtx(models.ServiceName_NUDR_DR, models.NrfNfManagementNfType_UDR)
+	ctx, pd, err := s.consumer.Context().GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NUDR_DR, models.Nrf_NFMgmt_NFType_UDR)
 	if err != nil {
 		return pd, err
 	}
 	client := s.getDataSubscription(ue.UdrUri)
-	deleteIndividualInfluenceDataSubscriptionReq := DataRepository.DeleteIndividualInfluenceDataSubscriptionRequest{
+	deleteIndividualInfluenceDataSubscriptionReq := DR.DeleteIndividualInfluenceDataSubscriptionRequest{
 		SubscriptionId: &subscriptionID,
 	}
 	_, localErr := client.IndividualInfluenceDataSubscriptionDocumentApi.

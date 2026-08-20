@@ -27,9 +27,9 @@ type PCFContext struct {
 	SBIPort         int
 	TimeFormat      string
 	DefaultBdtRefId string
-	NfService       map[models.ServiceName]models.NrfNfManagementNfService
-	PcfServiceUris  map[models.ServiceName]string
-	PcfSuppFeats    map[models.ServiceName]openapi.SupportedFeature
+	NfService       map[models.Nrf_NFMgmt_ServiceName]models.Nrf_NFMgmt_NFService
+	PcfServiceUris  map[models.Nrf_NFMgmt_ServiceName]string
+	PcfSuppFeats    map[models.Nrf_NFMgmt_ServiceName]openapi.SupportedFeature
 	NrfUri          string
 	NrfCertPem      string
 	DefaultUdrURI   string
@@ -61,12 +61,12 @@ type AMFStatusSubscriptionData struct {
 
 type AppSessionData struct {
 	AppSessionId      string
-	AppSessionContext *models.AppSessionContext
+	AppSessionContext *models.Pcf_PolAuth_AppSessionContext
 	// (compN/compN-subCompN/appId-%s) map to PccRule
 	RelatedPccRuleIds    map[string]string
 	PccRuleIdMapToCompId map[string]string
 	// EventSubscription
-	Events   map[models.PcfPolicyAuthorizationAfEvent]models.AfNotifMethod
+	Events   map[models.Pcf_PolAuth_AfEvent]models.Pcf_PolAuth_AfNotifMethod
 	EventUri string
 	// related Session
 	SmPolicyData *UeSmPolicyData
@@ -75,7 +75,7 @@ type AppSessionData struct {
 var pcfContext = PCFContext{}
 
 type NFContext interface {
-	AuthorizationCheck(token string, serviceName models.ServiceName) error
+	AuthorizationCheck(token string, serviceName models.Nrf_NFMgmt_ServiceName) error
 }
 
 var _ NFContext = &PCFContext{}
@@ -150,9 +150,9 @@ func Init() {
 	pcfContext.UriScheme = models.UriScheme_HTTPS
 	pcfContext.TimeFormat = "2006-01-02 15:04:05"
 	pcfContext.DefaultBdtRefId = "BdtPolicyId-"
-	pcfContext.NfService = make(map[models.ServiceName]models.NrfNfManagementNfService)
-	pcfContext.PcfServiceUris = make(map[models.ServiceName]string)
-	pcfContext.PcfSuppFeats = make(map[models.ServiceName]openapi.SupportedFeature)
+	pcfContext.NfService = make(map[models.Nrf_NFMgmt_ServiceName]models.Nrf_NFMgmt_NFService)
+	pcfContext.PcfServiceUris = make(map[models.Nrf_NFMgmt_ServiceName]string)
+	pcfContext.PcfSuppFeats = make(map[models.Nrf_NFMgmt_ServiceName]openapi.SupportedFeature)
 	pcfContext.BdtPolicyIDGenerator = idgenerator.NewGenerator(1, math.MaxInt64)
 	pcfContext.RatingGroupIdGenerator = idgenerator.NewGenerator(1, math.MaxInt64)
 	InitPcfContext(&pcfContext)
@@ -167,7 +167,7 @@ func GetTimeformat() string {
 	return pcfContext.TimeFormat
 }
 
-func GetUri(name models.ServiceName) string {
+func GetUri(name models.Nrf_NFMgmt_ServiceName) string {
 	return pcfContext.PcfServiceUris[name]
 }
 
@@ -194,23 +194,23 @@ func (c *PCFContext) InitNFService(serviceList []factory.Service, version string
 	tmpVersion := strings.Split(version, ".")
 	versionUri := "v" + tmpVersion[0]
 	for index, service := range serviceList {
-		name := models.ServiceName(service.ServiceName)
-		c.NfService[name] = models.NrfNfManagementNfService{
+		name := models.Nrf_NFMgmt_ServiceName(service.ServiceName)
+		c.NfService[name] = models.Nrf_NFMgmt_NFService{
 			ServiceInstanceId: strconv.Itoa(index),
 			ServiceName:       name,
-			Versions: []models.NfServiceVersion{
+			Versions: []models.Nrf_NFMgmt_NFServiceVersion{
 				{
 					ApiFullVersion:  version,
 					ApiVersionInUri: versionUri,
 				},
 			},
 			Scheme:          c.UriScheme,
-			NfServiceStatus: models.NfServiceStatus_REGISTERED,
+			NfServiceStatus: models.Nrf_NFMgmt_NFServiceStatus_REGISTERED,
 			ApiPrefix:       c.GetIPv4Uri(),
-			IpEndPoints: []models.IpEndPoint{
+			IpEndPoints: []models.Nrf_NFMgmt_IpEndPoint{
 				{
 					Ipv4Address: c.RegisterIPv4,
-					Transport:   models.NrfNfManagementTransportProtocol_TCP,
+					Transport:   models.Nrf_NFMgmt_TransportProtocol_TCP,
 					Port:        int32(c.SBIPort),
 				},
 			},
@@ -310,7 +310,9 @@ func (c *PCFContext) PcfUeFindByIPv6(v6 string) *UeContext {
 }
 
 // Find SMPolicy with AppSessionContext
-func ueSMPolicyFindByAppSessionContext(ue *UeContext, req *models.AppSessionContextReqData) (*UeSmPolicyData, error) {
+func ueSMPolicyFindByAppSessionContext(
+	ue *UeContext, req *models.Pcf_PolAuth_AppSessionContextReqData) (*UeSmPolicyData, error,
+) {
 	var policy *UeSmPolicyData
 	var err error
 
@@ -332,7 +334,7 @@ func ueSMPolicyFindByAppSessionContext(ue *UeContext, req *models.AppSessionCont
 }
 
 // SessionBinding from application request to get corresponding Sm policy
-func (c *PCFContext) SessionBinding(req *models.AppSessionContextReqData) (*UeSmPolicyData, error) {
+func (c *PCFContext) SessionBinding(req *models.Pcf_PolAuth_AppSessionContextReqData) (*UeSmPolicyData, error) {
 	var selectedUE *UeContext
 	var policy *UeSmPolicyData
 	var err error
@@ -441,17 +443,17 @@ func (c *PCFContext) NewAmfStatusSubscription(subscriptionID string, subscriptio
 	c.AMFStatusSubsData.Store(subscriptionID, subscriptionData)
 }
 
-func (c *PCFContext) GetTokenCtx(serviceName models.ServiceName, targetNF models.NrfNfManagementNfType) (
+func (c *PCFContext) GetTokenCtx(serviceName models.Nrf_NFMgmt_ServiceName, targetNF models.Nrf_NFMgmt_NFType) (
 	context.Context, *models.ProblemDetails, error,
 ) {
 	if !c.OAuth2Required {
 		return context.TODO(), nil, nil
 	}
-	return oauth.GetTokenCtx(models.NrfNfManagementNfType_PCF, targetNF,
+	return oauth.GetTokenCtx(models.Nrf_NFMgmt_NFType_PCF, targetNF,
 		c.NfId, c.NrfUri, string(serviceName))
 }
 
-func (c *PCFContext) AuthorizationCheck(token string, serviceName models.ServiceName) error {
+func (c *PCFContext) AuthorizationCheck(token string, serviceName models.Nrf_NFMgmt_ServiceName) error {
 	if !c.OAuth2Required {
 		logger.UtilLog.Debugf("PCFContext::AuthorizationCheck: OAuth2 not required\n")
 		return nil

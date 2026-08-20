@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"github.com/free5gc/openapi"
-	"github.com/free5gc/openapi/amf/Communication"
+	"github.com/free5gc/openapi/amf/Comm"
 	"github.com/free5gc/openapi/models"
 	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
@@ -19,10 +19,10 @@ type namfService struct {
 
 	nfComMu sync.RWMutex
 
-	nfComClients map[string]*Communication.APIClient
+	nfComClients map[string]*Comm.APIClient
 }
 
-func (s *namfService) getNFCommunicationClient(uri string) *Communication.APIClient {
+func (s *namfService) getNFCommunicationClient(uri string) *Comm.APIClient {
 	if uri == "" {
 		return nil
 	}
@@ -33,10 +33,10 @@ func (s *namfService) getNFCommunicationClient(uri string) *Communication.APICli
 		return client
 	}
 
-	configuration := Communication.NewConfiguration()
+	configuration := Comm.NewConfiguration()
 	configuration.SetBasePath(uri)
 	configuration.SetMetrics(sbi_metrics.SbiMetricHook)
-	client = Communication.NewAPIClient(configuration)
+	client = Comm.NewAPIClient(configuration)
 
 	s.nfComMu.RUnlock()
 	s.nfComMu.Lock()
@@ -54,13 +54,14 @@ func (s *namfService) AmfStatusChangeSubscribe(amfUri string, guamiList []models
 	// Set client and set url
 	client := s.getNFCommunicationClient(amfUri)
 
-	subscriptionData := models.AmfCommunicationSubscriptionData{
+	subscriptionData := models.Amf_Comm_SubscriptionData{
 		AmfStatusUri: fmt.Sprintf("%s"+factory.PcfCallbackResUriPrefix+"/amfstatus", pcfContext.GetIPv4Uri()),
 		GuamiList:    guamiList,
 	}
-	amfStausChangeRequest := &Communication.AMFStatusChangeSubscribeRequest{}
-	amfStausChangeRequest.SetAmfCommunicationSubscriptionData(subscriptionData)
-	ctx, pd, err := pcfContext.GetTokenCtx(models.ServiceName_NAMF_COMM, models.NrfNfManagementNfType_AMF)
+	amfStausChangeRequest := &Comm.AMFStatusChangeSubscribeRequest{
+		RequestBody: &subscriptionData,
+	}
+	ctx, pd, err := pcfContext.GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NAMF_COMM, models.Nrf_NFMgmt_NFType_AMF)
 	if err != nil {
 		return pd, err
 	}
@@ -74,8 +75,8 @@ func (s *namfService) AmfStatusChangeSubscribe(amfUri string, guamiList []models
 		subscriptionID := locationHeader[strings.LastIndex(locationHeader, "/")+1:]
 		amfStatusSubsData := pcf_context.AMFStatusSubscriptionData{
 			AmfUri:       amfUri,
-			AmfStatusUri: res.AmfCommunicationSubscriptionData.AmfStatusUri,
-			GuamiList:    res.AmfCommunicationSubscriptionData.GuamiList,
+			AmfStatusUri: res.Amf_Comm_SubscriptionData.AmfStatusUri,
+			GuamiList:    res.Amf_Comm_SubscriptionData.GuamiList,
 		}
 		pcfContext.NewAmfStatusSubscription(subscriptionID, amfStatusSubsData)
 	}

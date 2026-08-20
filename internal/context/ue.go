@@ -31,12 +31,12 @@ type UeContext struct {
 	// AppSessionIDGenerator uint64
 	AppSessionIDGenerator *idgenerator.IDGenerator
 	// PolicyAuth
-	AfRoutReq *models.AfRoutingRequirement
+	AfRoutReq *models.Pcf_PolAuth_AfRoutingRequirement
 	AspId     string
 	// Policy Decision
 	AppSessionIdStore           *AppSessionIdStore
-	PolicyDataSubscriptionStore *models.PolicyDataSubscription
-	PolicyDataChangeStore       *models.PolicyDataChangeNotification
+	PolicyDataSubscriptionStore *models.Udr_DR_PolicyDataSubscription
+	PolicyDataChangeStore       *models.Udr_DR_PolicyDataChangeNotification
 
 	// ChargingRatingGroup
 	RatingGroupData map[string][]int32 // use smPolicyId(ue.Supi-pduSessionId) as key
@@ -52,10 +52,10 @@ type UeAMPolicyData struct {
 	// TODO: AMF Status Change
 	AmfStatusUri string
 	Guami        *models.Guami
-	ServiceName  models.ServiceName
+	ServiceName  models.Nrf_NFMgmt_ServiceName
 	// TraceReq *TraceData
 	// Policy Association
-	Triggers    []models.PcfAmPolicyControlRequestTrigger
+	Triggers    []models.Pcf_AMPolCtrl_RequestTrigger
 	ServAreaRes *models.ServiceAreaRestriction
 	Rfsp        int32
 	UserLoc     *models.UserLocation
@@ -64,7 +64,7 @@ type UeAMPolicyData struct {
 	// about AF request
 	Pras map[string]models.PresenceInfo
 	// related to UDR Subscription Data
-	AmPolicyData *models.AmPolicyData // Svbscription Data
+	AmPolicyData *models.Udr_DR_AmPolicyData // Svbscription Data
 	// Corresponding UE
 	PcfUe *UeContext
 }
@@ -93,10 +93,10 @@ type UeSmPolicyData struct {
 	RemainGbrUL *float64
 	RemainGbrDL *float64
 	// related to UDR Subscription Data
-	SmPolicyData *models.SmPolicyData // Svbscription Data
+	SmPolicyData *models.Udr_DR_SmPolicyData // Svbscription Data
 	// related to Policy
-	PolicyContext  *models.SmPolicyContextData
-	PolicyDecision *models.SmPolicyDecision
+	PolicyContext  *models.Pcf_SMPolCtrl_SmPolicyContextData
+	PolicyDecision *models.Pcf_SMPolCtrl_SmPolicyDecision
 	// related to AppSession
 	AppSessions map[string]bool // related appSessionId
 	// Corresponding UE
@@ -110,7 +110,7 @@ type UeSmPolicyData struct {
 // NewUeAMPolicyData returns created UeAMPolicyData data and insert this data to Ue.AMPolicyData with assolId as key
 func (ue *UeContext) NewUeAMPolicyData(
 	assolId string,
-	req models.PcfAmPolicyControlPolicyAssociationRequest,
+	req models.Pcf_AMPolCtrl_PolicyAssociationRequest,
 ) *UeAMPolicyData {
 	ue.Gpsi = req.Gpsi
 	ue.Pei = req.Pei
@@ -127,7 +127,7 @@ func (ue *UeContext) NewUeAMPolicyData(
 		Rfsp:              req.Rfsp,
 		Guami:             req.Guami,
 		UserLoc:           req.UserLoc,
-		ServiceName:       req.ServiceName,
+		ServiceName:       req.ServiveName, // upstream field is spelled "ServiveName"
 		PcfUe:             ue,
 	}
 	ue.AMPolicyData[assolId].Pras = make(map[string]models.PresenceInfo)
@@ -136,7 +136,7 @@ func (ue *UeContext) NewUeAMPolicyData(
 
 // returns UeSmPolicyData and insert related info to Ue with smPolId
 func (ue *UeContext) NewUeSmPolicyData(
-	key string, request models.SmPolicyContextData, smData *models.SmPolicyData,
+	key string, request models.Pcf_SMPolCtrl_SmPolicyContextData, smData *models.Udr_DR_SmPolicyData,
 ) *UeSmPolicyData {
 	if smData == nil {
 		return nil
@@ -176,7 +176,9 @@ func (ue *UeContext) NewUeSmPolicyData(
 }
 
 // Remove Pcc rule which PccRuleId in the policy
-func (policy *UeSmPolicyData) RemovePccRule(pccRuleId string, deletedSmPolicyDec *models.SmPolicyDecision) error {
+func (
+	policy *UeSmPolicyData) RemovePccRule(pccRuleId string, deletedSmPolicyDec *models.Pcf_SMPolCtrl_SmPolicyDecision,
+) error {
 	decision := policy.PolicyDecision
 	if decision == nil {
 		return fmt.Errorf("can't find the Policy Decision")
@@ -184,7 +186,7 @@ func (policy *UeSmPolicyData) RemovePccRule(pccRuleId string, deletedSmPolicyDec
 	if rule, exist := decision.PccRules[pccRuleId]; exist {
 		if deletedSmPolicyDec != nil {
 			if deletedSmPolicyDec.PccRules == nil {
-				deletedSmPolicyDec.PccRules = make(map[string]*models.PccRule)
+				deletedSmPolicyDec.PccRules = make(map[string]*models.Pcf_SMPolCtrl_PccRule)
 			}
 			deletedSmPolicyDec.PccRules[pccRuleId] = nil
 		}
@@ -210,7 +212,7 @@ func (policy *UeSmPolicyData) RemovePccRule(pccRuleId string, deletedSmPolicyDec
 				}
 				if deletedSmPolicyDec != nil {
 					if deletedSmPolicyDec.Conds == nil {
-						deletedSmPolicyDec.Conds = make(map[string]*models.ConditionData)
+						deletedSmPolicyDec.Conds = make(map[string]*models.Pcf_SMPolCtrl_ConditionData)
 					}
 					deletedSmPolicyDec.Conds[rule.RefCondData] = nil
 				}
@@ -224,7 +226,7 @@ func (policy *UeSmPolicyData) RemovePccRule(pccRuleId string, deletedSmPolicyDec
 				}
 				if deletedSmPolicyDec != nil {
 					if deletedSmPolicyDec.ChgDecs == nil {
-						deletedSmPolicyDec.ChgDecs = make(map[string]*models.ChargingData)
+						deletedSmPolicyDec.ChgDecs = make(map[string]*models.Pcf_SMPolCtrl_ChargingData)
 					}
 					deletedSmPolicyDec.ChgDecs[id] = nil
 				}
@@ -240,7 +242,7 @@ func (policy *UeSmPolicyData) RemovePccRule(pccRuleId string, deletedSmPolicyDec
 				}
 				if deletedSmPolicyDec != nil {
 					if deletedSmPolicyDec.TraffContDecs == nil {
-						deletedSmPolicyDec.TraffContDecs = make(map[string]*models.TrafficControlData)
+						deletedSmPolicyDec.TraffContDecs = make(map[string]*models.Pcf_SMPolCtrl_TrafficControlData)
 					}
 					deletedSmPolicyDec.TraffContDecs[id] = nil
 				}
@@ -256,7 +258,7 @@ func (policy *UeSmPolicyData) RemovePccRule(pccRuleId string, deletedSmPolicyDec
 				}
 				if deletedSmPolicyDec != nil {
 					if deletedSmPolicyDec.UmDecs == nil {
-						deletedSmPolicyDec.UmDecs = make(map[string]*models.UsageMonitoringData)
+						deletedSmPolicyDec.UmDecs = make(map[string]*models.Pcf_SMPolCtrl_UsageMonitoringData)
 					}
 					deletedSmPolicyDec.UmDecs[id] = nil
 				}
@@ -300,7 +302,7 @@ func (policy *UeSmPolicyData) RemovePccRule(pccRuleId string, deletedSmPolicyDec
 }
 
 // Check if the afEvent exists in smPolicy
-func (policy *UeSmPolicyData) CheckRelatedAfEvent(event models.PcfPolicyAuthorizationAfEvent) (found bool) {
+func (policy *UeSmPolicyData) CheckRelatedAfEvent(event models.Pcf_PolAuth_AfEvent) (found bool) {
 	for appSessionId := range policy.AppSessions {
 		if val, ok := GetSelf().AppSessionPool.Load(appSessionId); ok {
 			appSession := val.(*AppSessionData)
@@ -316,22 +318,22 @@ func (policy *UeSmPolicyData) CheckRelatedAfEvent(event models.PcfPolicyAuthoriz
 
 // Arrange Exist Event policy Sm policy about afevents and return if it changes or not and
 func (policy *UeSmPolicyData) ArrangeExistEventSubscription() (changed bool) {
-	triggers := []models.PolicyControlRequestTrigger{}
+	triggers := []models.Pcf_SMPolCtrl_PolicyControlRequestTrigger{}
 	for _, trigger := range policy.PolicyDecision.PolicyCtrlReqTriggers {
-		var afEvent models.PcfPolicyAuthorizationAfEvent
+		var afEvent models.Pcf_PolAuth_AfEvent
 		switch trigger {
-		case models.PolicyControlRequestTrigger_PLMN_CH: // PLMN Change
-			afEvent = models.PcfPolicyAuthorizationAfEvent_PLMN_CHG
-		case models.PolicyControlRequestTrigger_QOS_NOTIF:
+		case models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_PLMN_CH: // PLMN Change
+			afEvent = models.Pcf_PolAuth_AfEvent_PLMN_CHG
+		case models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_QOS_NOTIF:
 			// SMF notify PCF when receiving from RAN that QoS can/can't be guaranteed (subsclause 4.2.4.20 in TS29512) (always)
-			afEvent = models.PcfPolicyAuthorizationAfEvent_QOS_NOTIF
-		case models.PolicyControlRequestTrigger_SUCC_RES_ALLO:
+			afEvent = models.Pcf_PolAuth_AfEvent_QOS_NOTIF
+		case models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_SUCC_RES_ALLO:
 			// Successful resource allocation (subsclause 4.2.6.5.5, 4.2.4.14 in TS29512)
-			afEvent = models.PcfPolicyAuthorizationAfEvent_SUCCESSFUL_RESOURCES_ALLOCATION
-		case models.PolicyControlRequestTrigger_AC_TY_CH: // Change of RatType
-			afEvent = models.PcfPolicyAuthorizationAfEvent_ACCESS_TYPE_CHANGE
-		case models.PolicyControlRequestTrigger_US_RE: // UMC
-			afEvent = models.PcfPolicyAuthorizationAfEvent_USAGE_REPORT
+			afEvent = models.Pcf_PolAuth_AfEvent_SUCCESSFUL_RESOURCES_ALLOCATION
+		case models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_AC_TY_CH: // Change of RatType
+			afEvent = models.Pcf_PolAuth_AfEvent_ACCESS_TYPE_CHANGE
+		case models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_US_RE: // UMC
+			afEvent = models.Pcf_PolAuth_AfEvent_USAGE_REPORT
 		}
 		if afEvent != "" && !policy.CheckRelatedAfEvent(afEvent) {
 			changed = true
@@ -373,7 +375,9 @@ func IncreaseRamainBitRate(remainBitRate *float64, reqBitRate string) (orig *flo
 }
 
 // Decrease remain GBR of this policy and returns UL DL GBR
-func (policy *UeSmPolicyData) DecreaseRemainGBR(req *models.RequestedQos) (gbrDl, gbrUl string, err error) {
+func (
+	policy *UeSmPolicyData) DecreaseRemainGBR(req *models.Pcf_SMPolCtrl_RequestedQos) (gbrDl, gbrUl string, err error,
+) {
 	if req == nil {
 		return "", "", nil
 	}
@@ -510,15 +514,15 @@ func (ue *UeContext) SMPolicyFindByIdentifiersIpv6(v6 string, sNssai *models.Sns
 // AppSessionIdStore -
 type AppSessionIdStore struct {
 	AppSessionId      string
-	AppSessionContext models.AppSessionContext
+	AppSessionContext models.Pcf_PolAuth_AppSessionContext
 }
 
 var AppSessionContextStore []AppSessionIdStore
 
 // BdtPolicyData_store -
 var (
-	BdtPolicyData_store    []models.BdtPolicyData
-	CreateFailBdtDateStore []models.BdtData
+	BdtPolicyData_store    []models.Pcf_BDTPolCtrl_BdtPolicyData
+	CreateFailBdtDateStore []models.Udr_DR_BdtData
 )
 
 // Convert bitRate string to float64 with uint Kbps

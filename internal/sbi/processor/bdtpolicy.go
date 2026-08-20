@@ -9,8 +9,8 @@ import (
 	"github.com/mohae/deepcopy"
 
 	"github.com/free5gc/openapi/models"
-	"github.com/free5gc/openapi/nrf/NFDiscovery"
-	"github.com/free5gc/openapi/udr/DataRepository"
+	"github.com/free5gc/openapi/nrf/NFDisc"
+	"github.com/free5gc/openapi/udr/DR"
 	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/internal/util"
@@ -28,7 +28,7 @@ func (p *Processor) HandleGetBDTPolicyContextRequest(
 	logger.BdtPolicyLog.Traceln("Handle BDT Policy GET")
 	// check bdtPolicyID from pcfUeContext
 	if value, ok := p.Context().BdtPolicyPool.Load(bdtPolicyID); ok {
-		bdtPolicy := value.(*models.BdtPolicy)
+		bdtPolicy := value.(*models.Pcf_BDTPolCtrl_BdtPolicy)
 		c.JSON(http.StatusOK, bdtPolicy)
 		return
 	} else {
@@ -45,7 +45,7 @@ func (p *Processor) HandleGetBDTPolicyContextRequest(
 func (p *Processor) HandleUpdateBDTPolicyContextProcedure(
 	c *gin.Context,
 	bdtPolicyID string,
-	bdtPolicyDataPatch models.PcfBdtPolicyControlBdtPolicyDataPatch,
+	bdtPolicyDataPatch models.Pcf_BDTPolCtrl_BdtPolicyDataPatch,
 ) {
 	// step 1: log
 	logger.BdtPolicyLog.Infof("Handle UpdateBDTPolicyContext")
@@ -55,9 +55,9 @@ func (p *Processor) HandleUpdateBDTPolicyContextProcedure(
 	// check bdtPolicyID from pcfUeContext
 	pcfSelf := p.Context()
 
-	var bdtPolicy *models.BdtPolicy
+	var bdtPolicy *models.Pcf_BDTPolCtrl_BdtPolicy
 	if value, ok := pcfSelf.BdtPolicyPool.Load(bdtPolicyID); ok {
-		bdtPolicy = value.(*models.BdtPolicy)
+		bdtPolicy = value.(*models.Pcf_BDTPolCtrl_BdtPolicy)
 	} else {
 		// not found
 		problemDetail := util.GetProblemDetail("Can't find bdtPolicyID related resource", util.CONTEXT_NOT_FOUND)
@@ -72,7 +72,7 @@ func (p *Processor) HandleUpdateBDTPolicyContextProcedure(
 			polData := bdtPolicy.BdtPolData
 			polReq := bdtPolicy.BdtReqData
 			polData.SelTransPolicyId = bdtPolicyDataPatch.SelTransPolicyId
-			bdtData := models.BdtData{
+			bdtData := models.Udr_DR_BdtData{
 				AspId:       polReq.AspId,
 				TransPolicy: &policy,
 				BdtRefId:    polData.BdtRefId,
@@ -124,7 +124,7 @@ func (p *Processor) HandleUpdateBDTPolicyContextProcedure(
 // CreateBDTPolicy - Create a new Individual BDT policy
 func (p *Processor) HandleCreateBDTPolicyContextRequest(
 	c *gin.Context,
-	requestMsg models.BdtReqData,
+	requestMsg models.Pcf_BDTPolCtrl_BdtReqData,
 ) {
 	// step 1: log
 	logger.BdtPolicyLog.Infof("Handle CreateBdtPolicyContext")
@@ -142,7 +142,7 @@ func (p *Processor) HandleCreateBDTPolicyContextRequest(
 
 	// // step 3: handle the message
 
-	response := &models.BdtPolicy{}
+	response := &models.Pcf_BDTPolCtrl_BdtPolicy{}
 	logger.BdtPolicyLog.Traceln("Handle BDT Policy Create")
 
 	pcfSelf := p.Context()
@@ -161,7 +161,7 @@ func (p *Processor) HandleCreateBDTPolicyContextRequest(
 	pcfSelf.DefaultUdrURI = udrUri
 
 	// Query BDT DATA array from UDR
-	req := DataRepository.ReadBdtDataRequest{}
+	req := DR.ReadBdtDataRequest{}
 	resp, problemDetails, err := p.Consumer().CreateBdtPolicyContext(udrUri, &req)
 	if err != nil {
 		problemDetails = &models.ProblemDetails{
@@ -178,12 +178,12 @@ func (p *Processor) HandleCreateBDTPolicyContextRequest(
 		return
 	}
 
-	bdtDatas := resp.BdtData
+	bdtDatas := resp.Udr_DR_BdtData
 	// TODO: decide BDT Policy from other bdt policy data
-	copiedBdtReqData := deepcopy.Copy(requestMsg).(models.BdtReqData)
+	copiedBdtReqData := deepcopy.Copy(requestMsg).(models.Pcf_BDTPolCtrl_BdtReqData)
 	response.BdtReqData = &copiedBdtReqData
-	var bdtData *models.BdtData
-	var bdtPolicyData models.PcfBdtPolicyControlBdtPolicyData
+	var bdtData *models.Udr_DR_BdtData
+	var bdtPolicyData models.Pcf_BDTPolCtrl_BdtPolicyData
 	for _, data := range bdtDatas {
 		// If ASP has exist, use its background data policy
 		if requestMsg.AspId == data.AspId {
@@ -198,7 +198,7 @@ func (p *Processor) HandleCreateBDTPolicyContextRequest(
 		bdtData.TransPolicy.RecTimeInt = requestMsg.DesTimeInt
 	} else {
 		// use default bdt policy, TODO: decide bdt transfer data policy
-		bdtData = &models.BdtData{
+		bdtData = &models.Udr_DR_BdtData{
 			AspId:       requestMsg.AspId,
 			BdtRefId:    uuid.New().String(),
 			TransPolicy: getDefaultTransferPolicy(1, *requestMsg.DesTimeInt),
@@ -240,7 +240,7 @@ func (p *Processor) HandleCreateBDTPolicyContextRequest(
 		return
 	}
 
-	locationHeader := util.GetResourceUri(models.ServiceName_NPCF_BDTPOLICYCONTROL, bdtPolicyID)
+	locationHeader := util.GetResourceUri(models.Nrf_NFMgmt_ServiceName_NPCF_BDTPOLICYCONTROL, bdtPolicyID)
 	logger.BdtPolicyLog.Tracef("BDT Policy Id[%s] Create", bdtPolicyID)
 
 	c.Header("Location", locationHeader)
@@ -253,13 +253,13 @@ func (p *Processor) getDefaultUdrUri(context *pcf_context.PCFContext) string {
 	if context.DefaultUdrURI != "" {
 		return context.DefaultUdrURI
 	}
-	param := NFDiscovery.SearchNFInstancesRequest{
-		ServiceNames: []models.ServiceName{models.ServiceName_NUDR_DR},
+	param := NFDisc.SearchNFInstancesRequest{
+		ServiceNames: []models.Nrf_NFMgmt_ServiceName{models.Nrf_NFMgmt_ServiceName_NUDR_DR},
 	}
 	resp, err := p.Consumer().SendSearchNFInstances(
 		context.NrfUri,
-		models.NrfNfManagementNfType_UDR,
-		models.NrfNfManagementNfType_PCF,
+		models.Nrf_NFMgmt_NFType_UDR,
+		models.Nrf_NFMgmt_NFType_PCF,
 		param,
 	)
 	if err != nil {
@@ -268,8 +268,8 @@ func (p *Processor) getDefaultUdrUri(context *pcf_context.PCFContext) string {
 	for _, nfProfile := range resp.NfInstances {
 		udruri := util.SearchNFServiceUri(
 			nfProfile,
-			models.ServiceName_NUDR_DR,
-			models.NfServiceStatus_REGISTERED,
+			models.Nrf_NFMgmt_ServiceName_NUDR_DR,
+			models.Nrf_NFMgmt_NFServiceStatus_REGISTERED,
 		)
 		if udruri != "" {
 			return udruri
@@ -281,9 +281,9 @@ func (p *Processor) getDefaultUdrUri(context *pcf_context.PCFContext) string {
 // get default background data transfer policy
 func getDefaultTransferPolicy(
 	transferPolicyId int32,
-	timeWindow models.TimeWindow,
-) *models.PcfBdtPolicyControlTransferPolicy {
-	return &models.PcfBdtPolicyControlTransferPolicy{
+	timeWindow models.Nef_TimeWindow,
+) *models.Pcf_BDTPolCtrl_TransferPolicy {
+	return &models.Pcf_BDTPolCtrl_TransferPolicy{
 		TransPolicyId: transferPolicyId,
 		RecTimeInt:    &timeWindow,
 		RatingGroup:   1,

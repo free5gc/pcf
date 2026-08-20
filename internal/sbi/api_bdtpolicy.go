@@ -48,7 +48,7 @@ func (s *Server) getBdtPolicyRoutes() []Route {
 }
 
 func (s *Server) HTTPCreateBDTPolicy(c *gin.Context) {
-	var bdtReqData models.BdtReqData
+	var bdtReqData models.Pcf_BDTPolCtrl_BdtReqData
 	// step 1: retrieve http request body
 	requestBody, err := c.GetRawData()
 	if err != nil {
@@ -98,7 +98,7 @@ func (s *Server) HTTPGetBDTPolicy(c *gin.Context) {
 
 // UpdateBDTPolicy - Update an Individual BDT policy
 func (s *Server) HTTPUpdateBDTPolicy(c *gin.Context) {
-	var bdtPolicyDataPatch models.PcfBdtPolicyControlBdtPolicyDataPatch
+	var bdtPolicyDataPatch models.Pcf_BDTPolCtrl_BdtPolicyDataPatch
 	// step 1: retrieve http request body
 	requestBody, err := c.GetRawData()
 	if err != nil {

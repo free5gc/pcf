@@ -10,7 +10,7 @@ func TestFindAMPolicy(t *testing.T) {
 	plmn := &models.PlmnIdNid{Mcc: "208", Mnc: "93"}
 	otherPlmn := &models.PlmnIdNid{Mcc: "001", Mnc: "01"}
 	policy3GPP := &UeAMPolicyData{
-		AccessType:  models.AccessType__3_GPP_ACCESS,
+		AccessType:  models.AccessType_3_GPP_ACCESS,
 		ServingPlmn: plmn,
 	}
 	tests := []struct {
@@ -25,7 +25,7 @@ func TestFindAMPolicy(t *testing.T) {
 			ue: &UeContext{AMPolicyData: map[string]*UeAMPolicyData{
 				"3gpp": policy3GPP,
 			}},
-			accessType: models.AccessType__3_GPP_ACCESS,
+			accessType: models.AccessType_3_GPP_ACCESS,
 			plmn:       plmn,
 			want:       policy3GPP,
 		},
@@ -41,7 +41,7 @@ func TestFindAMPolicy(t *testing.T) {
 			ue: &UeContext{AMPolicyData: map[string]*UeAMPolicyData{
 				"3gpp": policy3GPP,
 			}},
-			accessType: models.AccessType__3_GPP_ACCESS,
+			accessType: models.AccessType_3_GPP_ACCESS,
 		},
 		{
 			name: "nil policy entries do not panic",
@@ -53,9 +53,9 @@ func TestFindAMPolicy(t *testing.T) {
 		{
 			name: "nil serving PLMN does not panic",
 			ue: &UeContext{AMPolicyData: map[string]*UeAMPolicyData{
-				"incomplete": {AccessType: models.AccessType__3_GPP_ACCESS},
+				"incomplete": {AccessType: models.AccessType_3_GPP_ACCESS},
 			}},
-			accessType: models.AccessType__3_GPP_ACCESS,
+			accessType: models.AccessType_3_GPP_ACCESS,
 			plmn:       plmn,
 		},
 		{

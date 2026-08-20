@@ -7,8 +7,8 @@ import (
 )
 
 // SearchNFServiceUri returns NF Uri derived from NfProfile with corresponding service
-func SearchNFServiceUri(nfProfile models.NrfNfDiscoveryNfProfile, serviceName models.ServiceName,
-	nfServiceStatus models.NfServiceStatus,
+func SearchNFServiceUri(nfProfile models.Nrf_NFDisc_NFProfile, serviceName models.Nrf_NFMgmt_ServiceName,
+	nfServiceStatus models.Nrf_NFMgmt_NFServiceStatus,
 ) (nfUri string) {
 	if nfProfile.NfServices != nil {
 		for _, service := range nfProfile.NfServices {

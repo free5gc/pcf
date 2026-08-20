@@ -9,13 +9,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/free5gc/openapi/amf/Communication"
-	"github.com/free5gc/openapi/bsf/Management"
+	"github.com/free5gc/openapi/amf/Comm"
+	"github.com/free5gc/openapi/bsf/Mgmt"
 	"github.com/free5gc/openapi/models"
-	"github.com/free5gc/openapi/pcf/AMPolicyControl"
-	"github.com/free5gc/openapi/pcf/PolicyAuthorization"
-	"github.com/free5gc/openapi/pcf/SMPolicyControl"
-	"github.com/free5gc/openapi/udr/DataRepository"
+	"github.com/free5gc/openapi/pcf/AMPolCtrl"
+	"github.com/free5gc/openapi/pcf/PolAuth"
+	"github.com/free5gc/openapi/pcf/SMPolCtrl"
+	"github.com/free5gc/openapi/udr/DR"
 	"github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
 )
@@ -55,55 +55,55 @@ var (
 	}
 )
 
-func GetNpcfAMPolicyCallbackClient() *AMPolicyControl.APIClient {
-	configuration := AMPolicyControl.NewConfiguration()
-	client := AMPolicyControl.NewAPIClient(configuration)
+func GetNpcfAMPolicyCallbackClient() *AMPolCtrl.APIClient {
+	configuration := AMPolCtrl.NewConfiguration()
+	client := AMPolCtrl.NewAPIClient(configuration)
 	return client
 }
 
-func GetNpcfSMPolicyCallbackClient() *SMPolicyControl.APIClient {
-	configuration := SMPolicyControl.NewConfiguration()
-	client := SMPolicyControl.NewAPIClient(configuration)
+func GetNpcfSMPolicyCallbackClient() *SMPolCtrl.APIClient {
+	configuration := SMPolCtrl.NewConfiguration()
+	client := SMPolCtrl.NewAPIClient(configuration)
 	return client
 }
 
-func GetNpcfPolicyAuthorizationCallbackClient() *PolicyAuthorization.APIClient {
-	configuration := PolicyAuthorization.NewConfiguration()
-	client := PolicyAuthorization.NewAPIClient(configuration)
+func GetNpcfPolicyAuthorizationCallbackClient() *PolAuth.APIClient {
+	configuration := PolAuth.NewConfiguration()
+	client := PolAuth.NewAPIClient(configuration)
 	return client
 }
 
-func GetNudrClient(uri string) *DataRepository.APIClient {
-	configuration := DataRepository.NewConfiguration()
+func GetNudrClient(uri string) *DR.APIClient {
+	configuration := DR.NewConfiguration()
 	configuration.SetBasePath(uri)
-	client := DataRepository.NewAPIClient(configuration)
+	client := DR.NewAPIClient(configuration)
 	return client
 }
 
 // TODO: implement Nbsf
-func GetNbsfClient(uri string) *Management.APIClient {
-	configuration := Management.NewConfiguration()
+func GetNbsfClient(uri string) *Mgmt.APIClient {
+	configuration := Mgmt.NewConfiguration()
 	configuration.SetBasePath(uri)
-	client := Management.NewAPIClient(configuration)
+	client := Mgmt.NewAPIClient(configuration)
 	return client
 }
 
-func GetNamfClient(uri string) *Communication.APIClient {
-	configuration := Communication.NewConfiguration()
+func GetNamfClient(uri string) *Comm.APIClient {
+	configuration := Comm.NewConfiguration()
 	configuration.SetBasePath(uri)
-	client := Communication.NewAPIClient(configuration)
+	client := Comm.NewAPIClient(configuration)
 	return client
 }
 
-func GetDefaultDataRate() models.UsageThreshold {
-	var usageThreshold models.UsageThreshold
+func GetDefaultDataRate() models.Nef_UsageThreshold {
+	var usageThreshold models.Nef_UsageThreshold
 	usageThreshold.DownlinkVolume = 1024 * 1024 / 8 // 1 Mbps
 	usageThreshold.UplinkVolume = 1024 * 1024 / 8   // 1 Mbps
 	return usageThreshold
 }
 
-func GetDefaultTime() models.TimeWindow {
-	var timeWindow models.TimeWindow
+func GetDefaultTime() models.Nef_TimeWindow {
+	var timeWindow models.Nef_TimeWindow
 	startTime, err := time.Parse(time.RFC3339, time.Now().Format(time.RFC3339))
 	if err != nil {
 		logger.UtilLog.Errorf("startTime parsing error: %+v", err)
@@ -152,7 +152,9 @@ func GetProblemDetail(errString, cause string) models.ProblemDetails {
 }
 
 // GetSMPolicyDnnData returns SMPolicyDnnData derived from SmPolicy data which snssai and dnn match
-func GetSMPolicyDnnData(data models.SmPolicyData, snssai *models.Snssai, dnn string) (result *models.SmPolicyDnnData) {
+func GetSMPolicyDnnData(
+	data models.Udr_DR_SmPolicyData, snssai *models.Snssai, dnn string) (result *models.Udr_DR_SmPolicyDnnData,
+) {
 	if snssai == nil || dnn == "" || data.SmPolicySnssaiData == nil {
 		return
 	}
@@ -219,15 +221,15 @@ func GetNegotiateSuppFeat(suppFeat string, serviceSuppFeat []byte) string {
 	return hex.EncodeToString(negoSuppFeat)
 }
 
-var serviceUriMap = map[models.ServiceName]string{
-	models.ServiceName_NPCF_AM_POLICY_CONTROL:   "policies",
-	models.ServiceName_NPCF_SMPOLICYCONTROL:     "sm-policies",
-	models.ServiceName_NPCF_BDTPOLICYCONTROL:    "bdtpolicies",
-	models.ServiceName_NPCF_POLICYAUTHORIZATION: "app-sessions",
+var serviceUriMap = map[models.Nrf_NFMgmt_ServiceName]string{
+	models.Nrf_NFMgmt_ServiceName_NPCF_AM_POLICY_CONTROL:   "policies",
+	models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL:     "sm-policies",
+	models.Nrf_NFMgmt_ServiceName_NPCF_BDTPOLICYCONTROL:    "bdtpolicies",
+	models.Nrf_NFMgmt_ServiceName_NPCF_POLICYAUTHORIZATION: "app-sessions",
 }
 
 // Get Resource Uri (location Header) with param id string
-func GetResourceUri(name models.ServiceName, id string) string {
+func GetResourceUri(name models.Nrf_NFMgmt_ServiceName, id string) string {
 	return fmt.Sprintf("%s/%s/%s", context.GetUri(name), serviceUriMap[name], id)
 }
 
@@ -249,7 +251,7 @@ func CheckSuppFeat(suppFeat string, number int) bool {
 }
 
 func CheckPolicyControlReqTrig(
-	triggers []models.PolicyControlRequestTrigger, reqTrigger models.PolicyControlRequestTrigger,
+	triggers []models.Pcf_SMPolCtrl_PolicyControlRequestTrigger, reqTrigger models.Pcf_SMPolCtrl_PolicyControlRequestTrigger, //nolint:lll
 ) bool {
 	for _, trigger := range triggers {
 		if trigger == reqTrigger {
