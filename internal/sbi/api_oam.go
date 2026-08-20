@@ -15,32 +15,24 @@ const (
 	CorsConfigMaxAge = 86400
 )
 
-func (s *Server) setCorsHeader(c *gin.Context) {
-	// TODO: 1. turn these values into configurable variables
-	// TODO: 2. use the official cors middleware
-	s.router.Use(cors.New(cors.Config{
+func oamCorsMiddleware() gin.HandlerFunc {
+	// turn these values into configurable variables
+	return cors.New(cors.Config{
 		AllowMethods: []string{"GET", "POST", "OPTIONS", "PUT", "PATCH", "DELETE"},
 		AllowHeaders: []string{
 			"Origin", "Content-Length", "Content-Type", "User-Agent",
 			"Referrer", "Host", "Token", "X-Requested-With",
+			"Accept", "Accept-Encoding", "Authorization", "Cache-Control",
+			"X-CSRF-Token",
 		},
 		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: true,
 		AllowAllOrigins:  true,
 		MaxAge:           CorsConfigMaxAge,
-	}))
-
-	c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-	c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
-	c.Writer.Header().Set(
-		"Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, "+
-			"X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
-	c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, PATCH, DELETE")
+	})
 }
 
 func (s *Server) HTTPOAMGetAmPolicy(c *gin.Context) {
-	s.setCorsHeader(c)
-
 	supi := c.Params.ByName("supi")
 	if supi == "" {
 		problemDetails := &models.ProblemDetails{

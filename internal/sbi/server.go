@@ -104,6 +104,7 @@ func NewServer(pcf pcf, tlsKeyLogPath string) (*Server, error) {
 
 	oamRoutes := s.getOamRoutes()
 	oamGroup := s.router.Group(factory.PcfOamResUriPrefix)
+	oamGroup.Use(oamCorsMiddleware())
 	oamRouterAuthorizationCheck := util.NewRouterAuthorizationCheck(models.Nrf_NFMgmt_ServiceName_NPCF_OAM)
 	oamGroup.Use(func(c *gin.Context) {
 		oamRouterAuthorizationCheck.Check(c, s.Context())
