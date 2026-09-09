@@ -13,6 +13,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/free5gc/openapi/models"
+	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/internal/sbi/consumer"
 	"github.com/free5gc/pcf/internal/sbi/processor"
@@ -96,7 +97,7 @@ func NewServer(pcf pcf, tlsKeyLogPath string) (*Server, error) {
 
 	httpcallbackRoutes := s.getHttpCallBackRoutes()
 	httpcallbackGroup := s.router.Group(factory.PcfCallbackResUriPrefix)
-	pcfCallbackAuthCheck := util.NewRouterAuthorizationCheck(models.Nrf_NFMgmt_ServiceName("npcf-callback"))
+	pcfCallbackAuthCheck := util.NewRouterAuthorizationCheck(pcf_context.ServiceNameNPCFCallback)
 	httpcallbackGroup.Use(func(c *gin.Context) {
 		pcfCallbackAuthCheck.Check(c, s.Context())
 	})
@@ -142,11 +143,12 @@ func NewServer(pcf pcf, tlsKeyLogPath string) (*Server, error) {
 }
 
 func (s *Server) Run(traceCtx context.Context, wg *sync.WaitGroup) error {
-	var err error
-	_, s.Context().NfId, err = s.Consumer().SendRegisterNFInstance(s.CancelContext())
+	_, nfID, err := s.Consumer().SendRegisterNFInstance(s.CancelContext())
 	if err != nil {
 		logger.InitLog.Errorf("PCF register to NRF Error[%s]", err.Error())
+		return err
 	}
+	s.Context().NfId = nfID
 
 	wg.Add(1)
 	go s.startServer(wg)
