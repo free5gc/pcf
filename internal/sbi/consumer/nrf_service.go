@@ -3,7 +3,6 @@ package consumer
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -17,7 +16,10 @@ import (
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/internal/util"
 	sbi_metrics "github.com/free5gc/util/metrics/sbi"
+	"github.com/free5gc/util/nfheartbeat"
 )
+
+const registerRetryInterval = 2 * time.Second
 
 type nnrfService struct {
 	consumer *Consumer
@@ -27,6 +29,12 @@ type nnrfService struct {
 
 	nfMngmntClients map[string]*NFMgmt.APIClient
 	nfDiscClients   map[string]*NFDisc.APIClient
+
+	heartbeat *nfheartbeat.Runner
+
+	// Interval in seconds from the last registration response. Written before the heartbeat starts, then only on
+	// the heartbeat goroutine.
+	heartbeatTimer int32
 }
 
 func (s *nnrfService) getNFManagementClient(uri string) *NFMgmt.APIClient {
@@ -210,71 +218,120 @@ func (s *nnrfService) BuildNFInstance(
 	return profile, nil
 }
 
-func (s *nnrfService) SendRegisterNFInstance(ctx context.Context) (
-	resouceNrfUri string, retrieveNfInstanceID string, err error,
-) {
-	// Set client and set url
+// SendRegisterNFInstance PUTs the profile on the NF's own instance ID (3GPP TS 29.510 clause 5.2.2.2.2) until it
+// succeeds or ctx is done. Only the startup call may pass applyOAuth2: it writes OAuth2Required unsynchronized.
+func (s *nnrfService) SendRegisterNFInstance(ctx context.Context, applyOAuth2 bool) error {
 	pcfContext := s.consumer.Context()
-
 	client := s.getNFManagementClient(pcfContext.NrfUri)
+	if client == nil {
+		return fmt.Errorf("SendRegisterNFInstance: nrf not found")
+	}
+
 	nfProfile, err := s.BuildNFInstance(pcfContext)
 	if err != nil {
-		return "", "",
-			errors.Wrap(err, "RegisterNFInstance buildNfProfile()")
+		return fmt.Errorf("SendRegisterNFInstance BuildNFInstance(): %w", err)
 	}
 
-	var nf models.Nrf_NFMgmt_NFProfile
 	var res *NFMgmt.RegisterNFInstanceResponse
-
-	finish := false
-	for !finish {
+	registerNFInstanceRequest := &NFMgmt.RegisterNFInstanceRequest{
+		NfInstanceID: &pcfContext.NfId,
+		RequestBody:  &nfProfile,
+	}
+	for ctx.Err() == nil {
+		res, err = client.NFInstanceIDDocumentApi.RegisterNFInstance(ctx, registerNFInstanceRequest)
+		if err == nil && res != nil {
+			var nf models.Nrf_NFMgmt_NFProfile
+			if res.Nrf_NFMgmt_NFProfile != nil {
+				nf = *res.Nrf_NFMgmt_NFProfile
+			}
+			s.processRegisterResponse(pcfContext, nf, applyOAuth2)
+			return nil
+		}
+		logger.ConsumerLog.Errorf("PCF register to NRF Error[%v]", err)
 		select {
 		case <-ctx.Done():
-			return "", "", fmt.Errorf("RegisterNFInstance context done")
-		default:
-			req := &NFMgmt.RegisterNFInstanceRequest{
-				NfInstanceID: &pcfContext.NfId,
-				RequestBody:  &nfProfile,
-			}
-			res, err = client.NFInstanceIDDocumentApi.RegisterNFInstance(ctx, req)
-			if err != nil || res == nil {
-				logger.ConsumerLog.Errorf("PCF register to NRF Error[%v]", err)
-				time.Sleep(2 * time.Second)
-				continue
-			}
-			nf = *res.Nrf_NFMgmt_NFProfile
-
-			if res.Location == "" {
-				// NFUpdate
-				finish = true
-			} else {
-				// NFRegister
-				resourceUri := res.Location
-				resouceNrfUri = resourceUri[:strings.Index(resourceUri, "/nnrf-nfm/")]
-				retrieveNfInstanceID = resourceUri[strings.LastIndex(resourceUri, "/")+1:]
-
-				oauth2 := false
-				if customInfo, isMap := nf.CustomInfo.(map[string]interface{}); isMap {
-					v, ok := customInfo["oauth2"].(bool)
-					if ok {
-						oauth2 = v
-						logger.MainLog.Infoln("OAuth2 setting receive from NRF:", oauth2)
-					}
-				}
-				pcf_context.GetSelf().OAuth2Required = oauth2
-				if oauth2 && pcf_context.GetSelf().NrfCertPem == "" {
-					logger.CfgLog.Error("OAuth2 enable but no nrfCertPem provided in config.")
-				}
-
-				finish = true
-			}
+		case <-time.After(registerRetryInterval):
 		}
 	}
-
-	return resouceNrfUri, retrieveNfInstanceID, err
+	return fmt.Errorf("NFRegister aborted: %w (last error: %v)", ctx.Err(), err)
 }
 
-func (s *nnrfService) SendDeregisterNFInstance() (problemDetails *models.ProblemDetails, err error) {
+// processRegisterResponse adopts what the NRF answered to the NFRegister PUT: the
+// heartbeat interval and the oauth2 custom info.
+func (s *nnrfService) processRegisterResponse(
+	pcfContext *pcf_context.PCFContext,
+	nf models.Nrf_NFMgmt_NFProfile,
+	applyOAuth2 bool,
+) {
+	s.heartbeatTimer = nf.HeartBeatTimer
+
+	oauth2 := false
+	if customInfo, isMap := nf.CustomInfo.(map[string]interface{}); isMap {
+		if v, ok := customInfo["oauth2"].(bool); ok {
+			oauth2 = v
+			logger.MainLog.Infoln("OAuth2 setting receive from NRF:", oauth2)
+		}
+	}
+	if applyOAuth2 {
+		pcfContext.OAuth2Required = oauth2
+		if oauth2 && pcfContext.NrfCertPem == "" {
+			logger.CfgLog.Error("OAuth2 enable but no nrfCertPem provided in config.")
+		}
+	} else if oauth2 != pcfContext.OAuth2Required {
+		logger.ConsumerLog.Warnf("NRF OAuth2 setting changed to %v, restart PCF to apply it", oauth2)
+	}
+}
+
+// SendUpdateNFInstance sends an NFUpdate PATCH to the NRF, honoring ctx. The
+// raw err comes back alongside any ProblemDetails so callers can read its
+// GenericOpenAPIError status.
+func (s *nnrfService) SendUpdateNFInstance(ctx context.Context, patchItems []models.PatchItem) (
+	nf models.Nrf_NFMgmt_NFProfile, problemDetails *models.ProblemDetails, err error,
+) {
+	pcfContext := s.consumer.Context()
+	tokCtx, pd, err := pcfContext.GetTokenCtx(
+		models.Nrf_NFMgmt_ServiceName_NNRF_NFM,
+		models.Nrf_NFMgmt_NFType_NRF,
+	)
+	if err != nil {
+		return nf, pd, err
+	}
+	// GetTokenCtx takes no parent, so the token request stays uncancellable;
+	// transplanting the token lets at least the PATCH honor ctx.
+	if tok := tokCtx.Value(openapi.ContextOAuth2); tok != nil {
+		ctx = context.WithValue(ctx, openapi.ContextOAuth2, tok)
+	}
+
+	client := s.getNFManagementClient(pcfContext.NrfUri)
+	if client == nil {
+		return nf, nil, errors.Errorf("SendUpdateNFInstance: nrf not found")
+	}
+
+	request := &NFMgmt.UpdateNFInstanceRequest{
+		NfInstanceID: &pcfContext.NfId,
+		RequestBody:  patchItems,
+	}
+
+	res, err := client.NFInstanceIDDocumentApi.UpdateNFInstance(ctx, request)
+	if err != nil {
+		var apiErr openapi.GenericOpenAPIError
+		if errors.As(err, &apiErr) {
+			if updateErr, okModel := apiErr.Model().(NFMgmt.UpdateNFInstanceError); okModel {
+				return nf, updateErr.ProblemDetails, err
+			}
+		}
+		return nf, nil, err
+	}
+	if res == nil {
+		return nf, nil, errors.Errorf("empty NFUpdate response")
+	}
+	if res.Nrf_NFMgmt_NFProfile != nil {
+		nf = *res.Nrf_NFMgmt_NFProfile
+	}
+	return nf, nil, nil
+}
+
+func (s *nnrfService) SendDeregisterNFInstance() (*models.ProblemDetails, error) {
 	logger.ConsumerLog.Infof("Send Deregister NFInstance")
 
 	pcfContext := s.consumer.Context()

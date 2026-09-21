@@ -142,10 +142,12 @@ func NewServer(pcf pcf, tlsKeyLogPath string) (*Server, error) {
 }
 
 func (s *Server) Run(traceCtx context.Context, wg *sync.WaitGroup) error {
-	var err error
-	_, s.Context().NfId, err = s.Consumer().SendRegisterNFInstance(s.CancelContext())
-	if err != nil {
+	ctx := s.CancelContext()
+	if err := s.Consumer().SendRegisterNFInstance(ctx, true); err != nil {
 		logger.InitLog.Errorf("PCF register to NRF Error[%s]", err.Error())
+	} else {
+		// Only a registered profile has something to keep alive.
+		s.Consumer().StartHeartbeat(ctx, wg)
 	}
 
 	wg.Add(1)

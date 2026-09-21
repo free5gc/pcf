@@ -217,6 +217,10 @@ func (a *PcfApp) Terminate() {
 func (a *PcfApp) terminateProcedure() {
 	logger.MainLog.Infof("Terminating PCF...")
 	a.CallServerStop()
+
+	// no heartbeat PATCH or re-registration PUT may land after the deregistration
+	a.Consumer().WaitHeartbeatStopped()
+
 	// deregister with NRF
 	problemDetails, err := a.Consumer().SendDeregisterNFInstance()
 	if problemDetails != nil {
