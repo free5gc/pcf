@@ -2,6 +2,7 @@ package util
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/free5gc/openapi/models"
 )
@@ -14,11 +15,11 @@ func SearchNFServiceUri(nfProfile models.Nrf_NFDisc_NFProfile, serviceName model
 		for _, service := range nfProfile.NfServices {
 			if service.ServiceName == serviceName && service.NfServiceStatus == nfServiceStatus {
 				if nfProfile.Fqdn != "" {
-					nfUri = nfProfile.Fqdn
+					nfUri = addSchemeIfMissing(service.Scheme, nfProfile.Fqdn)
 				} else if service.Fqdn != "" {
-					nfUri = service.Fqdn
+					nfUri = addSchemeIfMissing(service.Scheme, service.Fqdn)
 				} else if service.ApiPrefix != "" {
-					nfUri = service.ApiPrefix
+					nfUri = addSchemeIfMissing(service.Scheme, service.ApiPrefix)
 				} else if service.IpEndPoints != nil {
 					point := (service.IpEndPoints)[0]
 					if point.Ipv4Address != "" {
@@ -35,6 +36,13 @@ func SearchNFServiceUri(nfProfile models.Nrf_NFDisc_NFProfile, serviceName model
 	}
 
 	return
+}
+
+func addSchemeIfMissing(scheme models.UriScheme, uri string) string {
+	if strings.HasPrefix(uri, "http://") || strings.HasPrefix(uri, "https://") {
+		return uri
+	}
+	return fmt.Sprintf("%s://%s", scheme, uri)
 }
 
 func getSbiUri(scheme models.UriScheme, ipv4Address string, port int32) (uri string) {
