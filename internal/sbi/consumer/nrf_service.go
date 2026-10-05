@@ -9,6 +9,7 @@ import (
 
 	"github.com/pkg/errors"
 
+	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/openapi/nrf/NFDisc"
 	"github.com/free5gc/openapi/nrf/NFMgmt"
@@ -88,6 +89,9 @@ func (s *nnrfService) SendSearchNFInstances(
 ) {
 	// Set client and set url
 	client := s.getNFDiscClient(nrfUri)
+	if client == nil {
+		return nil, errors.Errorf("SendSearchNFInstances: nrf not found")
+	}
 
 	ctx, _, err := s.consumer.Context().GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NNRF_DISC, models.Nrf_NFMgmt_NFType_NRF)
 	if err != nil {
@@ -273,18 +277,26 @@ func (s *nnrfService) SendRegisterNFInstance(ctx context.Context) (
 func (s *nnrfService) SendDeregisterNFInstance() (problemDetails *models.ProblemDetails, err error) {
 	logger.ConsumerLog.Infof("Send Deregister NFInstance")
 
-	ctx, pd, err := pcf_context.GetSelf().GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NNRF_NFM, models.Nrf_NFMgmt_NFType_NRF)
+	pcfContext := s.consumer.Context()
+	ctx, pd, err := pcfContext.GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NNRF_NFM, models.Nrf_NFMgmt_NFType_NRF)
 	if err != nil {
 		return pd, err
 	}
 
-	pcfContext := s.consumer.Context()
 	client := s.getNFManagementClient(pcfContext.NrfUri)
+	if client == nil {
+		return nil, errors.Errorf("SendDeregisterNFInstance: nrf not found")
+	}
 	request := &NFMgmt.DeregisterNFInstanceRequest{
 		NfInstanceID: &pcfContext.NfId,
 	}
 
 	_, err = client.NFInstanceIDDocumentApi.DeregisterNFInstance(ctx, request)
-
-	return problemDetails, err
+	var apiErr openapi.GenericOpenAPIError
+	if errors.As(err, &apiErr) {
+		if deregNfError, okDeg := apiErr.Model().(NFMgmt.DeregisterNFInstanceError); okDeg {
+			return deregNfError.ProblemDetails, err
+		}
+	}
+	return nil, err
 }
