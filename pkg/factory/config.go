@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/free5gc/pcf/internal/logger"
+	"github.com/free5gc/util/nfheartbeat"
 )
 
 const (
@@ -80,6 +81,9 @@ type Configuration struct {
 	ServiceList     []Service `yaml:"serviceList,omitempty" valid:"required"`
 	Mongodb         *Mongodb  `yaml:"mongodb" valid:"required"`
 	Locality        string    `yaml:"locality,omitempty" valid:"-"`
+	// NfHeartBeatTimer is the fallback heartbeat interval in seconds, from 1 to
+	// 3600 as the NRF accepts. The interval the NRF assigns always wins.
+	NfHeartBeatTimer int32 `yaml:"nfHeartBeatTimer,omitempty" valid:"optional,range(1|3600)"`
 }
 
 type Logger struct {
@@ -193,6 +197,17 @@ func (s *Service) validate() (bool, error) {
 	}
 
 	return true, nil
+}
+
+// GetNfHeartBeatTimer returns the fallback heartbeat interval in seconds.
+func (c *Config) GetNfHeartBeatTimer() int32 {
+	c.RLock()
+	defer c.RUnlock()
+
+	if c.Configuration != nil && c.Configuration.NfHeartBeatTimer > 0 {
+		return c.Configuration.NfHeartBeatTimer
+	}
+	return nfheartbeat.DefaultTimer
 }
 
 func (c *Config) GetNfInstanceId() string {
