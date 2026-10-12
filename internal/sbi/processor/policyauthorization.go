@@ -67,8 +67,10 @@ func transferMedCompRmToMedComp(medCompRm *models.Pcf_PolAuth_MediaComponentRm) 
 }
 
 // Handle Create/ Modify  Media SubComponent
+// createdRuleIds, when not nil, collects the id of each rule this call newly installs into the
+// stored decision, so the caller can roll them back if the request is rejected later on.
 func handleMediaSubComponent(smPolicy *pcf_context.UeSmPolicyData, medComp *models.Pcf_PolAuth_MediaComponent,
-	medSubComp *models.Pcf_PolAuth_MediaSubComponent, var5qi int32,
+	medSubComp *models.Pcf_PolAuth_MediaSubComponent, var5qi int32, createdRuleIds *[]string,
 ) (*models.Pcf_SMPolCtrl_PccRule, *models.ProblemDetails) {
 	var flowInfos []models.Pcf_SMPolCtrl_FlowInformation
 	if tempFlowInfos, err := getFlowInfos(medSubComp); err != nil {
@@ -105,6 +107,9 @@ func handleMediaSubComponent(smPolicy *pcf_context.UeSmPolicyData, medComp *mode
 		tcData := util.CreateTcData(smPolicy.PccRuleIdGenerator, "", medSubComp.FStatus)
 		util.SetPccRuleRelatedData(smPolicy.PolicyDecision, pccRule, tcData, &qosData, nil, nil)
 		smPolicy.PccRuleIdGenerator++
+		if createdRuleIds != nil {
+			*createdRuleIds = append(*createdRuleIds, pccRule.PccRuleId)
+		}
 	} else {
 		// update qos
 		var qosData models.Pcf_SMPolCtrl_QosData
@@ -123,6 +128,65 @@ func handleMediaSubComponent(smPolicy *pcf_context.UeSmPolicyData, medComp *mode
 	}
 	smPolicy.PolicyDecision.PccRules[pccRule.PccRuleId] = pccRule
 	return pccRule, nil
+}
+
+// policyAuthSnapshot records the part of the stored SM policy decision that an app-session
+// create/modify request is allowed to extend, so that a rejected request can be undone.
+//
+// free5gc issues #1181, #1184 and #1185: both postAppSessCtxProcedure and
+// HandleModAppSessionContext install each requested PCC rule into smPolicy.PolicyDecision
+// while they build it, but the Application Session that owns the rule - and whose
+// RelatedPccRuleIds HandleDeleteAppSessionContext walks in order to reach RemovePccRule -
+// is only recorded at the very end of the handler. Every error exit in between (sponsored
+// connectivity unsupported, missing evSubsc, extractUmData,
+// handleSponsoredConnectivityInformation) therefore returned with the rule already in the
+// decision and owned by nothing, so no delete could ever free it: the rule and its
+// QoS/TC/UM data stayed for the whole life of the PDU session, one per distinct afAppId.
+type policyAuthSnapshot struct {
+	triggers      int
+	pccRuleIDGen  int32
+	packFiltIDGen int32
+}
+
+func snapshotPolicyAuth(smPolicy *pcf_context.UeSmPolicyData) policyAuthSnapshot {
+	snap := policyAuthSnapshot{
+		pccRuleIDGen:  smPolicy.PccRuleIdGenerator,
+		packFiltIDGen: smPolicy.PackFiltIdGenerator,
+	}
+	if decision := smPolicy.PolicyDecision; decision != nil {
+		snap.triggers = len(decision.PolicyCtrlReqTriggers)
+	}
+	return snap
+}
+
+// rollbackPolicyAuth releases exactly the PCC rules the rejected request created, through the
+// same primitive a normal app-session delete uses, so each rule's QoS, traffic-control, charging
+// and usage-monitoring data, its packet-filter mapping and the GBR it reserved are reverted
+// together with it. The ids come from the request itself, not from diffing the rule set: the
+// handlers of one SM policy run concurrently with no lock, so a snapshot diff would also delete
+// rules another request added meanwhile. Rules the request merely reused (afAppId / flow-info
+// dedup) are not in the list and stay untouched.
+func rollbackPolicyAuth(smPolicy *pcf_context.UeSmPolicyData, snap policyAuthSnapshot, createdRuleIds []string) {
+	decision := smPolicy.PolicyDecision
+	if decision == nil {
+		return
+	}
+	for _, pccRuleID := range createdRuleIds {
+		if _, exist := decision.PccRules[pccRuleID]; !exist {
+			continue
+		}
+		if err := smPolicy.RemovePccRule(pccRuleID, nil); err != nil {
+			logger.PolicyAuthLog.Warnf("Roll back PCC rule[%s] added by the rejected request failed: %s",
+				pccRuleID, err.Error())
+			continue
+		}
+		logger.PolicyAuthLog.Infof("Roll back PCC rule[%s] added by the rejected request", pccRuleID)
+	}
+	if len(decision.PolicyCtrlReqTriggers) > snap.triggers {
+		decision.PolicyCtrlReqTriggers = decision.PolicyCtrlReqTriggers[:snap.triggers]
+	}
+	smPolicy.PccRuleIdGenerator = snap.pccRuleIDGen
+	smPolicy.PackFiltIdGenerator = snap.packFiltIDGen
 }
 
 // HandlePostAppSessionsContext - Creates a new Individual Application Session Context resource
@@ -202,6 +266,19 @@ func (p *Processor) postAppSessCtxProcedure(appSessCtx *models.Pcf_PolAuth_AppSe
 	ue := smPolicy.PcfUe
 	updateSMpolicy := false
 
+	// Every rule this request installs into the stored decision below is meant to be owned
+	// by the Application Session created at the end of the function; if the request is
+	// rejected on the way there, roll back exactly those created rules so a 403 leaves no
+	// orphaned rule.
+	policyAuthSnap := snapshotPolicyAuth(smPolicy)
+	var createdRuleIds []string
+	committed := false
+	defer func() {
+		if !committed {
+			rollbackPolicyAuth(smPolicy, policyAuthSnap, createdRuleIds)
+		}
+	}()
+
 	var requestSuppFeat openapi.SupportedFeature
 	if tempRequestSuppFeat, err := openapi.NewSupportedFeature(ascReqData.SuppFeat); err != nil {
 		logger.PolicyAuthLog.Error(err.Error())
@@ -230,7 +307,7 @@ func (p *Processor) postAppSessCtxProcedure(appSessCtx *models.Pcf_PolAuth_AppSe
 			if medComp.MedSubComps != nil {
 				for _, medSubComp := range medComp.MedSubComps {
 					if tempPccRule, problemDetail := handleMediaSubComponent(smPolicy,
-						&medComp, &medSubComp, var5qi); problemDetail != nil {
+						&medComp, &medSubComp, var5qi, &createdRuleIds); problemDetail != nil {
 						return nil, "", problemDetail
 					} else {
 						pccRule = tempPccRule
@@ -268,6 +345,7 @@ func (p *Processor) postAppSessCtxProcedure(appSessCtx *models.Pcf_PolAuth_AppSe
 					}
 				}
 				util.SetPccRuleRelatedData(smPolicy.PolicyDecision, pccRule, nil, &qosData, nil, nil)
+				createdRuleIds = append(createdRuleIds, pccRule.PccRuleId)
 				smPolicy.PccRuleIdGenerator++
 				if precedence < Precedence_Maximum {
 					precedence++
@@ -443,6 +521,7 @@ func (p *Processor) postAppSessCtxProcedure(appSessCtx *models.Pcf_PolAuth_AppSe
 		}
 		go p.SendSMPolicyUpdateNotification(smPolicy.PolicyContext.NotificationUri, &notification)
 	}
+	committed = true
 	return appSessCtx, locationHeader, nil
 }
 
@@ -578,6 +657,18 @@ func (p *Processor) HandleModAppSessionContext(
 		c.JSON(int(problemDetail.Status), problemDetail)
 		return
 	}
+	// The rules installed below are handed to the app session only by the RelatedPccRuleIds
+	// write-back at the end of this handler; until then a rejected modify would strand them
+	// in the stored decision with no owner able to release them. Roll back exactly the rules
+	// this request created.
+	policyAuthSnap := snapshotPolicyAuth(smPolicy)
+	var createdRuleIds []string
+	committed := false
+	defer func() {
+		if !committed {
+			rollbackPolicyAuth(smPolicy, policyAuthSnap, createdRuleIds)
+		}
+	}()
 	// InfluenceOnTrafficRouting = 1 in 29514 &  Traffic Steering Control support = 1 in 29512
 	traffRoutSupp := util.CheckSuppFeat(appSessCtx.AscRespData.SuppFeat,
 		1) && util.CheckSuppFeat(smPolicy.PolicyDecision.SuppFeat, 1)
@@ -613,7 +704,7 @@ func (p *Processor) HandleModAppSessionContext(
 			if medComp.MedSubComps != nil {
 				for _, medSubComp := range medComp.MedSubComps {
 					if tempPccRule, problemDetail := handleMediaSubComponent(smPolicy, medComp,
-						&medSubComp, var5qi); problemDetail != nil {
+						&medSubComp, var5qi, &createdRuleIds); problemDetail != nil {
 						c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
 						c.JSON(int(problemDetail.Status), problemDetail)
 						return
@@ -657,6 +748,7 @@ func (p *Processor) HandleModAppSessionContext(
 					}
 				}
 				util.SetPccRuleRelatedData(smPolicy.PolicyDecision, pccRule, nil, &qosData, nil, nil)
+				createdRuleIds = append(createdRuleIds, pccRule.PccRuleId)
 				smPolicy.PccRuleIdGenerator++
 				if precedence < Precedence_Maximum {
 					precedence++
@@ -804,6 +896,9 @@ func (p *Processor) HandleModAppSessionContext(
 		appSession.RelatedPccRuleIds = relatedPccRuleIds
 		appSession.PccRuleIdMapToCompId = reverseStringMap(relatedPccRuleIds)
 	}
+	// The app session now owns every rule this modify installed, so the stored decision is
+	// committed and must no longer be rolled back.
+	committed = true
 	appSessCtx.EvsNotif = &models.Pcf_PolAuth_EventsNotification{}
 	// Set Event Subsciption related Data
 	if len(eventSubs) > 0 {
