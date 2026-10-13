@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/asaskevich/govalidator"
 	"github.com/google/uuid"
@@ -68,18 +69,19 @@ type Info struct {
 }
 
 type Configuration struct {
-	PcfName         string    `yaml:"pcfName,omitempty" valid:"required, type(string)"`
-	NfInstanceId    string    `yaml:"nfInstanceId,omitempty" valid:"optional,uuidv4"`
-	Sbi             *Sbi      `yaml:"sbi,omitempty" valid:"required"`
-	Metrics         *Metrics  `yaml:"metrics,omitempty" valid:"optional"`
-	TimeFormat      string    `yaml:"timeFormat,omitempty" valid:"required"`
-	DefaultBdtRefId string    `yaml:"defaultBdtRefId,omitempty" valid:"required, type(string)"`
-	NrfUri          string    `yaml:"nrfUri,omitempty" valid:"required, url"`
-	NrfCertPem      string    `yaml:"nrfCertPem,omitempty" valid:"optional"`
-	Bsf             *Bsf      `yaml:"bsf,omitempty" valid:"optional"`
-	ServiceList     []Service `yaml:"serviceList,omitempty" valid:"required"`
-	Mongodb         *Mongodb  `yaml:"mongodb" valid:"required"`
-	Locality        string    `yaml:"locality,omitempty" valid:"-"`
+	IdleTimeout     *time.Duration `yaml:"idleTimeout,omitempty" valid:"optional"`
+	PcfName         string         `yaml:"pcfName,omitempty" valid:"required, type(string)"`
+	NfInstanceId    string         `yaml:"nfInstanceId,omitempty" valid:"optional,uuidv4"`
+	Sbi             *Sbi           `yaml:"sbi,omitempty" valid:"required"`
+	Metrics         *Metrics       `yaml:"metrics,omitempty" valid:"optional"`
+	TimeFormat      string         `yaml:"timeFormat,omitempty" valid:"required"`
+	DefaultBdtRefId string         `yaml:"defaultBdtRefId,omitempty" valid:"required, type(string)"`
+	NrfUri          string         `yaml:"nrfUri,omitempty" valid:"required, url"`
+	NrfCertPem      string         `yaml:"nrfCertPem,omitempty" valid:"optional"`
+	Bsf             *Bsf           `yaml:"bsf,omitempty" valid:"optional"`
+	ServiceList     []Service      `yaml:"serviceList,omitempty" valid:"required"`
+	Mongodb         *Mongodb       `yaml:"mongodb" valid:"required"`
+	Locality        string         `yaml:"locality,omitempty" valid:"-"`
 }
 
 type Logger struct {
@@ -533,4 +535,15 @@ func (c *Config) GetMetricsNamespace() string {
 		return c.Configuration.Metrics.Namespace
 	}
 	return PcfMetricsDefaultNamespace
+}
+
+// GetIdleTimeout returns the HTTP server idle timeout. Omitted values preserve
+// the previous 1ms timeout; an explicit zero disables the timeout.
+func (c *Config) GetIdleTimeout() time.Duration {
+	c.RLock()
+	defer c.RUnlock()
+	if c.Configuration == nil || c.Configuration.IdleTimeout == nil {
+		return time.Millisecond
+	}
+	return *c.Configuration.IdleTimeout
 }

@@ -78,7 +78,7 @@ func NewApp(
 	customMetrics := make(map[utils.MetricTypeEnabled][]prometheus.Collector)
 	if cfg.AreMetricsEnabled() {
 		if pcf.metricsServer, err = metrics.NewServer(
-			getInitMetrics(cfg, features, customMetrics), tlsKeyLogPath, logger.InitLog); err != nil {
+			getInitMetrics(cfg, features, customMetrics), tlsKeyLogPath, logger.InitLog, cfg.GetIdleTimeout()); err != nil {
 			return nil, err
 		}
 	}
