@@ -7,6 +7,7 @@ import (
 	"runtime/debug"
 	"sync"
 
+	"github.com/free5gc/openapi"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 
@@ -44,6 +45,9 @@ func NewApp(
 	cfg *factory.Config,
 	tlsKeyLogPath string,
 ) (*PcfApp, error) {
+	if err := openapi.ConfigureHTTP2Clients(cfg.GetReadIdleTimeout(), cfg.GetPingTimeout()); err != nil {
+		return nil, err
+	}
 	pcf := &PcfApp{
 		cfg: cfg,
 		wg:  sync.WaitGroup{},
