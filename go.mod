@@ -5,8 +5,8 @@ go 1.26.2
 require (
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d
 	github.com/cydev/zero v0.0.0-20160322155811-4a4535dd56e7
-	github.com/free5gc/openapi v1.3.0
-	github.com/free5gc/util v1.4.0
+	github.com/free5gc/openapi v1.3.1-0.20261014070323-89accd9890ce
+	github.com/free5gc/util v1.4.1-0.20261014070359-d865b0ce854b
 	github.com/gin-contrib/cors v1.6.0
 	github.com/gin-gonic/gin v1.10.0
 	github.com/go-playground/assert/v2 v2.2.0
