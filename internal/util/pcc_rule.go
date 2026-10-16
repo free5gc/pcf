@@ -2,7 +2,6 @@ package util
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/free5gc/openapi/models"
@@ -237,23 +236,6 @@ func SetPccRuleRelatedData(decision *models.Pcf_SMPolCtrl_SmPolicyDecision, pccR
 func SetSmPolicyDecisionByDefault(decision *models.Pcf_SMPolCtrl_SmPolicyDecision, id int32) {
 	pccrule := CreateDefaultPccRules(id)
 	decision.PccRules[pccrule.PccRuleId] = pccrule
-}
-
-// Set SMpilicy decision with the PCC rule generated from the trafficInfluData
-func SetSmPolicyDecisionByTrafficInfluData(decision *models.Pcf_SMPolCtrl_SmPolicyDecision,
-	pccRule *models.Pcf_SMPolCtrl_PccRule, trafficInfluData models.Udr_DR_TrafficInfluData, chgData *models.Pcf_SMPolCtrl_ChargingData, //nolint:lll
-) {
-	tcData := convertToTrafficControlData(&trafficInfluData)
-	tcData.TcId = strings.ReplaceAll(pccRule.PccRuleId, "PccRuleId", "TcId")
-	flowInfos := convertToFlowinfos(&trafficInfluData)
-	pccRule.FlowInfos = flowInfos
-	// Routing-only TI rules use the default QoS flow (TS 29.512, 4.2.6.2.10).
-	// Each rule owns its QoS data so removing it cannot affect another rule.
-	qosData := &models.Pcf_SMPolCtrl_QosData{
-		QosId:                strings.ReplaceAll(pccRule.PccRuleId, "PccRuleId", "QosId"),
-		DefQosFlowIndication: true,
-	}
-	SetPccRuleRelatedData(decision, pccRule, tcData, qosData, chgData, nil)
 }
 
 func convertToFlowinfos(trafficInfluData *models.Udr_DR_TrafficInfluData) []models.Pcf_SMPolCtrl_FlowInformation {

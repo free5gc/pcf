@@ -100,9 +100,10 @@ type UeSmPolicyData struct {
 	// related to AppSession
 	AppSessions map[string]bool // related appSessionId
 	// Corresponding UE
-	PcfUe                  *UeContext
-	InfluenceDataToPccRule map[string]string
-	SubscriptionID         string
+	PcfUe                   *UeContext
+	InfluenceDataToPccRule  map[string][]string
+	InfluencePccRuleSources map[string]string
+	SubscriptionID          string
 	// BSF Integration
 	BsfBindingId string
 }
@@ -171,7 +172,8 @@ func (ue *UeContext) NewUeSmPolicyData(
 
 	data.PcfUe = ue
 	ue.SmPolicyData[key] = &data
-	data.InfluenceDataToPccRule = make(map[string]string)
+	data.InfluenceDataToPccRule = make(map[string][]string)
+	data.InfluencePccRuleSources = make(map[string]string)
 	return &data
 }
 
@@ -184,6 +186,18 @@ func (
 		return fmt.Errorf("can't find the Policy Decision")
 	}
 	if rule, exist := decision.PccRules[pccRuleId]; exist {
+		// Derived TI rules cannot outlive the service authorization they preserve.
+		var derived []string
+		for id, source := range policy.InfluencePccRuleSources {
+			if source == pccRuleId {
+				derived = append(derived, id)
+			}
+		}
+		for _, id := range derived {
+			if err := policy.RemovePccRule(id, deletedSmPolicyDec); err != nil {
+				return err
+			}
+		}
 		if deletedSmPolicyDec != nil {
 			if deletedSmPolicyDec.PccRules == nil {
 				deletedSmPolicyDec.PccRules = make(map[string]*models.Pcf_SMPolCtrl_PccRule)
@@ -191,9 +205,14 @@ func (
 			deletedSmPolicyDec.PccRules[pccRuleId] = nil
 		}
 		for _, info := range rule.FlowInfos {
-			delete(policy.PackFiltMapToPccRuleId, info.PackFiltId)
+			if policy.PackFiltMapToPccRuleId[info.PackFiltId] == pccRuleId {
+				delete(policy.PackFiltMapToPccRuleId, info.PackFiltId)
+			}
 		}
 		for _, id := range rule.RefQosData {
+			if policy.qosReferencedByOtherRule(pccRuleId, id) {
+				continue
+			}
 			if decision.QosDecs != nil {
 				policy.IncreaseRemainGBR(id)
 				delete(decision.QosDecs, id)
@@ -204,7 +223,7 @@ func (
 				break
 			}
 		}
-		if rule.RefCondData != "" {
+		if rule.RefCondData != "" && !policy.dataReferencedByOtherRule(pccRuleId, rule.RefCondData, "Cond") {
 			if decision.Conds != nil {
 				delete(decision.Conds, rule.RefCondData)
 				if len(decision.Conds) == 0 {
@@ -219,6 +238,9 @@ func (
 			}
 		}
 		for _, id := range rule.RefChgData {
+			if policy.dataReferencedByOtherRule(pccRuleId, id, "Chg") {
+				continue
+			}
 			if decision.ChgDecs != nil {
 				delete(decision.ChgDecs, id)
 				if len(decision.ChgDecs) == 0 {
@@ -235,6 +257,9 @@ func (
 			}
 		}
 		for _, id := range rule.RefTcData {
+			if policy.dataReferencedByOtherRule(pccRuleId, id, "Tc") {
+				continue
+			}
 			if decision.TraffContDecs != nil {
 				delete(decision.TraffContDecs, id)
 				if len(decision.TraffContDecs) == 0 {
@@ -251,6 +276,9 @@ func (
 			}
 		}
 		for _, id := range rule.RefUmData {
+			if policy.dataReferencedByOtherRule(pccRuleId, id, "Um") {
+				continue
+			}
 			if decision.UmDecs != nil {
 				delete(decision.UmDecs, id)
 				if len(decision.UmDecs) == 0 {
@@ -290,9 +318,18 @@ func (
 			}
 		}
 
-		for influenceID, mappedPccRuleId := range policy.InfluenceDataToPccRule {
-			if mappedPccRuleId == pccRuleId {
+		delete(policy.InfluencePccRuleSources, pccRuleId)
+		for influenceID, ids := range policy.InfluenceDataToPccRule {
+			remaining := make([]string, 0, len(ids))
+			for _, id := range ids {
+				if id != pccRuleId {
+					remaining = append(remaining, id)
+				}
+			}
+			if len(remaining) == 0 {
 				delete(policy.InfluenceDataToPccRule, influenceID)
+			} else {
+				policy.InfluenceDataToPccRule[influenceID] = remaining
 			}
 		}
 	} else {

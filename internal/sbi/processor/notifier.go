@@ -6,9 +6,11 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/mohae/deepcopy"
 	"go.mongodb.org/mongo-driver/bson"
 
 	"github.com/free5gc/openapi/models"
+	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/internal/util"
 	"github.com/free5gc/util/metrics/sbi"
@@ -60,13 +62,22 @@ func (p *Processor) HandleInfluenceDataUpdateNotify(
 		c.JSON(int(problemDetail.Status), problemDetail)
 		return
 	}
-	smPolicy := ue.SmPolicyData[smPolicyID]
-	smPolicy.InfluenceDataMu.Lock()
-	defer smPolicy.InfluenceDataMu.Unlock()
+	storedPolicy := ue.SmPolicyData[smPolicyID]
+	storedPolicy.InfluenceDataMu.Lock()
+	defer storedPolicy.InfluenceDataMu.Unlock()
+
+	// Commit the routing policy only after the entire notification batch succeeds.
+	smPolicy := &pcf_context.UeSmPolicyData{
+		PolicyContext:           storedPolicy.PolicyContext,
+		PolicyDecision:          deepcopy.Copy(storedPolicy.PolicyDecision).(*models.Pcf_SMPolCtrl_SmPolicyDecision),
+		PccRuleIdGenerator:      storedPolicy.PccRuleIdGenerator,
+		ChargingIdGenerator:     storedPolicy.ChargingIdGenerator,
+		InfluenceDataToPccRule:  deepcopy.Copy(storedPolicy.InfluenceDataToPccRule).(map[string][]string),
+		InfluencePccRuleSources: deepcopy.Copy(storedPolicy.InfluencePccRuleSources).(map[string]string),
+	}
+	removed := make(map[string]bool)
 
 	decision := smPolicy.PolicyDecision
-	influenceDataToPccRule := smPolicy.InfluenceDataToPccRule
-	precedence := getAvailablePrecedence(smPolicy.PolicyDecision.PccRules)
 	for _, notification := range trafficInfluDataNotif {
 		influenceID := getInfluenceID(notification.ResUri)
 		if influenceID == "" {
@@ -74,12 +85,13 @@ func (p *Processor) HandleInfluenceDataUpdateNotify(
 		}
 		// notifying deletion
 		if notification.TrafficInfluData == nil {
-			pccRuleID := influenceDataToPccRule[influenceID]
-			decision = &models.Pcf_SMPolCtrl_SmPolicyDecision{}
-			if err := smPolicy.RemovePccRule(pccRuleID, decision); err != nil {
-				logger.CallbackLog.Errorf("Remove PCC rule error: %+v", err)
+			var err error
+			decision, err = util.RemoveTrafficInfluencePolicy(smPolicy, influenceID)
+			if err != nil {
+				logger.CallbackLog.Errorf("Remove TI rules: %v", err)
+				c.Status(http.StatusInternalServerError)
+				return
 			}
-			delete(influenceDataToPccRule, influenceID)
 		} else {
 			var chgData *models.Pcf_SMPolCtrl_ChargingData
 			var chargingInterface map[string]interface{}
@@ -149,21 +161,29 @@ func (p *Processor) HandleInfluenceDataUpdateNotify(
 				ue.RatingGroupData[smPolicyID] = append(ue.RatingGroupData[smPolicyID], chgData.RatingGroup)
 			}
 
-			if pccRuleID, ok := influenceDataToPccRule[influenceID]; ok {
-				// notifying Individual Influence Data update
-				pccRule := decision.PccRules[pccRuleID]
-				util.SetSmPolicyDecisionByTrafficInfluData(decision, pccRule, trafficInfluData, chgData)
-			} else {
-				// notifying Individual Influence Data creation
-
-				pccRule := util.CreatePccRule(smPolicy.PccRuleIdGenerator, precedence, nil, trafficInfluData.AfAppId)
-				util.SetSmPolicyDecisionByTrafficInfluData(decision, pccRule, trafficInfluData, chgData)
-				influenceDataToPccRule[influenceID] = pccRule.PccRuleId
-				smPolicy.PccRuleIdGenerator++
-				if precedence < Precedence_Maximum {
-					precedence++
-				}
+			decision, err = util.SetTrafficInfluencePolicy(smPolicy, influenceID, trafficInfluData, chgData)
+			if err != nil {
+				problem := util.GetProblemDetail(err.Error(), util.ERROR_REQUEST_PARAMETERS)
+				logger.CallbackLog.Warnf("Cannot apply TI routing policy: %v", err)
+				c.Set(sbi.IN_PB_DETAILS_CTX_STR, problem.Cause)
+				c.JSON(int(problem.Status), problem)
+				return
 			}
+		}
+		for id, rule := range decision.PccRules {
+			if rule == nil {
+				removed[id] = true
+			}
+		}
+	}
+	*storedPolicy.PolicyDecision = *smPolicy.PolicyDecision
+	storedPolicy.PccRuleIdGenerator = smPolicy.PccRuleIdGenerator
+	storedPolicy.ChargingIdGenerator = smPolicy.ChargingIdGenerator
+	storedPolicy.InfluenceDataToPccRule = smPolicy.InfluenceDataToPccRule
+	storedPolicy.InfluencePccRuleSources = smPolicy.InfluencePccRuleSources
+	for id := range removed {
+		if storedPolicy.PolicyDecision.PccRules[id] == nil {
+			decision.PccRules[id] = nil
 		}
 	}
 	smPolicyNotification := models.Pcf_SMPolCtrl_SmPolicyNotification{

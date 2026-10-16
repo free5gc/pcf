@@ -395,7 +395,6 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 	logger.SmPolicyLog.Infof("Matched [%d] trafficInfluDatas from UDR", len(trafficInfluDatas))
 	if len(trafficInfluDatas) != 0 {
 		// UE identity in UDR appData and apply appData to sm poliocy
-		var precedence int32 = 23
 		for _, tiData := range trafficInfluDatas {
 			var chgData *models.Pcf_SMPolCtrl_ChargingData
 			var chargingInterface map[string]interface{}
@@ -453,15 +452,12 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 				ue.RatingGroupData[smPolicyID] = append(ue.RatingGroupData[smPolicyID], chgData.RatingGroup)
 			}
 
-			pccRule := util.CreatePccRule(smPolicyData.PccRuleIdGenerator, precedence, nil, tiData.AfAppId)
-			util.SetSmPolicyDecisionByTrafficInfluData(&decision, pccRule, tiData, chgData)
 			influenceID := getInfluenceID(tiData.ResUri)
-			if influenceID != "" {
-				smPolicyData.InfluenceDataToPccRule[influenceID] = pccRule.PccRuleId
+			if influenceID == "" {
+				continue
 			}
-			smPolicyData.PccRuleIdGenerator++
-			if precedence < Precedence_Maximum {
-				precedence++
+			if _, err := util.SetTrafficInfluencePolicy(smPolicyData, influenceID, tiData, chgData); err != nil {
+				logger.SmPolicyLog.Errorf("Cannot apply initial TI routing policy %s: %v", influenceID, err)
 			}
 		}
 	}
