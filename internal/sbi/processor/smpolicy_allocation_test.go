@@ -154,12 +154,14 @@ func TestCreateSmPolicyAllocationFailures(t *testing.T) {
 		influences      int
 		maxID           int64
 		wantSuccess     bool
+		deleteFailure   bool
 	}{
-		{"1202_default", true, false, 0, 1, false},
-		{"1204_first_flow", false, true, 0, 1, false},
-		{"1204_flow_after_default", true, true, 0, 2, false},
-		{"1203_second_influence", true, true, 2, 4, false},
-		{"successful_create", true, true, 2, 5, true},
+		{"1202_default", true, false, 0, 1, false, false},
+		{"1204_first_flow", false, true, 0, 1, false, false},
+		{"1204_flow_after_default", true, true, 0, 2, false, false},
+		{"1203_second_influence", true, true, 2, 4, false, false},
+		{"1203_rollback_delete_failure", true, true, 2, 4, false, true},
+		{"successful_create", true, true, 2, 5, true, false},
 	} {
 		mt.Run(tc.name, func(mt *mtest.T) {
 			p, ue, request := allocationTestProcessor(mt.T, mt, tc.maxID, tc.influences)
@@ -205,6 +207,12 @@ func TestCreateSmPolicyAllocationFailures(t *testing.T) {
 			}
 			if !tc.wantSuccess {
 				for i := 0; i < allocated; i++ {
+					if tc.deleteFailure && i == 0 {
+						mt.AddMockResponses(mtest.CreateCommandErrorResponse(mtest.CommandError{
+							Code: 2, Message: "injected delete failure",
+						}))
+						continue
+					}
 					mt.AddMockResponses(mtest.CreateSuccessResponse(bson.E{Key: "n", Value: 1}))
 				}
 			}
@@ -236,9 +244,13 @@ func TestCreateSmPolicyAllocationFailures(t *testing.T) {
 				if getResponse.Code != http.StatusNotFound {
 					mt.Fatalf("GET failed policy: %d", getResponse.Code)
 				}
-				for i := int64(0); i < tc.maxID-1; i++ {
+				reusable := tc.maxID - 1
+				if tc.deleteFailure {
+					reusable-- // The first charging copy remains in MongoDB.
+				}
+				for i := int64(0); i < reusable; i++ {
 					id, allocErr := generator.Allocate()
-					if allocErr != nil || id == holder {
+					if allocErr != nil || id == holder || (tc.deleteFailure && id == holder+1) {
 						mt.Fatalf("rating group leaked or holder freed: %d %v", id, allocErr)
 					}
 				}
@@ -277,42 +289,52 @@ func TestCreateSmPolicyAllocationFailures(t *testing.T) {
 
 func TestFailedCreatePreservesReplacedPolicy(t *testing.T) {
 	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
-	mt.Run("existing_policy", func(mt *mtest.T) {
-		p, ue, request := allocationTestProcessor(mt.T, mt, 2, 0)
-		generator := p.Context().RatingGroupIdGenerator
-		holder, err := generator.Allocate()
-		if err != nil {
-			mt.Fatal(err)
-		}
-		policyID := ue.Supi + "-2"
-		previous := ue.NewUeSmPolicyData(policyID, request, &models.Udr_DR_SmPolicyData{})
-		previous.PolicyDecision = &models.Pcf_SMPolCtrl_SmPolicyDecision{}
-		ue.RatingGroupData[policyID] = []int32{int32(holder)}
-		mt.AddMockResponses(mockFind(qosFlowDataColl), mockFind(flowRuleDataColl,
-			bson.D{
-				{Key: "filter", Value: "10.70.0.0/16"},
-				{Key: "precedence", Value: float64(128)},
-				{Key: "qosRef", Value: float64(1)},
-			}),
-			mockFind(chargingDataColl, chargingSeed()))
-		mockChargingInsert(mt)
-		mt.AddMockResponses(mockFind(chargingDataColl, chargingSeed()),
-			mtest.CreateSuccessResponse(bson.E{Key: "n", Value: 1}))
-		response := httptest.NewRecorder()
-		c, _ := gin.CreateTestContext(response)
-		p.HandleCreateSmPolicyRequest(c, request)
-		assertProblem(mt.T, response, http.StatusInternalServerError, util.INSUFFICIENT_RESOURCES)
-		if ue.SmPolicyData[policyID] != previous ||
-			!reflect.DeepEqual(ue.RatingGroupData[policyID], []int32{int32(holder)}) {
-			mt.Fatal("failed replacement removed the existing session")
-		}
-		if id, allocErr := generator.Allocate(); allocErr != nil || id == holder {
-			mt.Fatalf("replacement rating group leaked or existing group freed: %d %v", id, allocErr)
-		}
-		if _, allocErr := generator.Allocate(); allocErr == nil {
-			mt.Fatal("existing rating group freed")
-		}
-	})
+	for _, deleteFailure := range []bool{false, true} {
+		mt.Run(fmt.Sprintf("existing_policy_delete_failure_%t", deleteFailure), func(mt *mtest.T) {
+			p, ue, request := allocationTestProcessor(mt.T, mt, 2, 0)
+			generator := p.Context().RatingGroupIdGenerator
+			holder, err := generator.Allocate()
+			if err != nil {
+				mt.Fatal(err)
+			}
+			policyID := ue.Supi + "-2"
+			previous := ue.NewUeSmPolicyData(policyID, request, &models.Udr_DR_SmPolicyData{})
+			previous.PolicyDecision = &models.Pcf_SMPolCtrl_SmPolicyDecision{}
+			ue.RatingGroupData[policyID] = []int32{int32(holder)}
+			mt.AddMockResponses(mockFind(qosFlowDataColl), mockFind(flowRuleDataColl,
+				bson.D{
+					{Key: "filter", Value: "10.70.0.0/16"},
+					{Key: "precedence", Value: float64(128)},
+					{Key: "qosRef", Value: float64(1)},
+				}),
+				mockFind(chargingDataColl, chargingSeed()))
+			mockChargingInsert(mt)
+			mt.AddMockResponses(mockFind(chargingDataColl, chargingSeed()))
+			if deleteFailure {
+				mt.AddMockResponses(mtest.CreateCommandErrorResponse(mtest.CommandError{
+					Code: 2, Message: "injected delete failure",
+				}))
+			} else {
+				mt.AddMockResponses(mtest.CreateSuccessResponse(bson.E{Key: "n", Value: 1}))
+			}
+			response := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(response)
+			p.HandleCreateSmPolicyRequest(c, request)
+			assertProblem(mt.T, response, http.StatusInternalServerError, util.INSUFFICIENT_RESOURCES)
+			if ue.SmPolicyData[policyID] != previous ||
+				!reflect.DeepEqual(ue.RatingGroupData[policyID], []int32{int32(holder)}) {
+				mt.Fatal("failed replacement removed the existing session")
+			}
+			if !deleteFailure {
+				if id, allocErr := generator.Allocate(); allocErr != nil || id == holder {
+					mt.Fatalf("replacement rating group leaked or existing group freed: %d %v", id, allocErr)
+				}
+			}
+			if _, allocErr := generator.Allocate(); allocErr == nil {
+				mt.Fatal("existing rating group freed")
+			}
+		})
+	}
 }
 
 // Successful replacement must relinquish the previous policy's rating groups.
@@ -322,9 +344,12 @@ func TestSuccessfulCreateReleasesReplacedPolicyGroups(t *testing.T) {
 	for _, tc := range []struct {
 		name           string
 		createCharging bool
+		deleteFailure  bool
 	}{
 		{name: "new_charging_group", createCharging: true},
 		{name: "no_new_charging", createCharging: false},
+		{name: "delete_failure_with_new_charging", createCharging: true, deleteFailure: true},
+		{name: "delete_failure_without_new_charging", createCharging: false, deleteFailure: true},
 	} {
 		mt.Run(tc.name, func(mt *mtest.T) {
 			p, ue, request := allocationTestProcessor(mt.T, mt, 2, 0)
@@ -345,8 +370,14 @@ func TestSuccessfulCreateReleasesReplacedPolicyGroups(t *testing.T) {
 			} else {
 				mt.AddMockResponses(mockFind(chargingDataColl))
 			}
-			// Delete the old generation's charging copy at commit time.
-			mt.AddMockResponses(mtest.CreateSuccessResponse(bson.E{Key: "n", Value: 1}))
+			// Exercise a non-retryable MongoDB command error during commit.
+			if tc.deleteFailure {
+				mt.AddMockResponses(mtest.CreateCommandErrorResponse(mtest.CommandError{
+					Code: 2, Message: "injected delete failure",
+				}))
+			} else {
+				mt.AddMockResponses(mtest.CreateSuccessResponse(bson.E{Key: "n", Value: 1}))
+			}
 
 			response := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(response)
@@ -387,11 +418,13 @@ func TestSuccessfulCreateReleasesReplacedPolicyGroups(t *testing.T) {
 			// Reacquire the released old ID. Any newly created group must remain
 			// reserved until this replacement itself is deleted.
 			gotOld := false
+			reusable := 0
 			for i := 0; i < 2; i++ {
 				id, err := generator.Allocate()
 				if err != nil {
 					break
 				}
+				reusable++
 				if tc.createCharging && id == int64(newGroups[0]) {
 					mt.Fatal("new policy's rating group was freed")
 				}
@@ -399,8 +432,18 @@ func TestSuccessfulCreateReleasesReplacedPolicyGroups(t *testing.T) {
 					gotOld = true
 				}
 			}
-			if !gotOld {
-				mt.Fatal("old rating group was not released")
+			if gotOld == tc.deleteFailure {
+				mt.Fatalf("old group reusable = %v, delete failure = %v", gotOld, tc.deleteFailure)
+			}
+			wantReusable := 2
+			if tc.createCharging {
+				wantReusable--
+			}
+			if tc.deleteFailure {
+				wantReusable--
+			}
+			if reusable != wantReusable {
+				mt.Fatalf("reusable groups = %d, want %d", reusable, wantReusable)
 			}
 		})
 	}
