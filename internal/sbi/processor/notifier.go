@@ -6,9 +6,11 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/mohae/deepcopy"
 	"go.mongodb.org/mongo-driver/bson"
 
 	"github.com/free5gc/openapi/models"
+	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/internal/util"
 	"github.com/free5gc/util/metrics/sbi"
@@ -60,13 +62,18 @@ func (p *Processor) HandleInfluenceDataUpdateNotify(
 		c.JSON(int(problemDetail.Status), problemDetail)
 		return
 	}
-	smPolicy := ue.SmPolicyData[smPolicyID]
-	smPolicy.InfluenceDataMu.Lock()
-	defer smPolicy.InfluenceDataMu.Unlock()
+	storedPolicy := ue.SmPolicyData[smPolicyID]
+	storedPolicy.InfluenceDataMu.Lock()
+	defer storedPolicy.InfluenceDataMu.Unlock()
 
-	decision := smPolicy.PolicyDecision
-	influenceDataToPccRule := smPolicy.InfluenceDataToPccRule
-	precedence := getAvailablePrecedence(smPolicy.PolicyDecision.PccRules)
+	// Commit the routing policy only after the entire notification batch succeeds.
+	smPolicy := &pcf_context.UeSmPolicyData{
+		PolicyContext:       storedPolicy.PolicyContext,
+		PolicyDecision:      deepcopy.Copy(storedPolicy.PolicyDecision).(*models.Pcf_SMPolCtrl_SmPolicyDecision),
+		PccRuleIdGenerator:  storedPolicy.PccRuleIdGenerator,
+		ChargingIdGenerator: storedPolicy.ChargingIdGenerator,
+		TrafficInfluence:    deepcopy.Copy(storedPolicy.TrafficInfluence).(*pcf_context.TrafficInfluenceState),
+	}
 	for _, notification := range trafficInfluDataNotif {
 		influenceID := getInfluenceID(notification.ResUri)
 		if influenceID == "" {
@@ -74,15 +81,15 @@ func (p *Processor) HandleInfluenceDataUpdateNotify(
 		}
 		// notifying deletion
 		if notification.TrafficInfluData == nil {
-			pccRuleID := influenceDataToPccRule[influenceID]
-			decision = &models.Pcf_SMPolCtrl_SmPolicyDecision{}
-			if err := smPolicy.RemovePccRule(pccRuleID, decision); err != nil {
-				logger.CallbackLog.Errorf("Remove PCC rule error: %+v", err)
+			var err error
+			_, err = util.RemoveTrafficInfluencePolicy(smPolicy, influenceID)
+			if err != nil {
+				logger.CallbackLog.Errorf("Remove TI rules: %v", err)
+				c.Status(http.StatusInternalServerError)
+				return
 			}
-			delete(influenceDataToPccRule, influenceID)
 		} else {
 			var chgData *models.Pcf_SMPolCtrl_ChargingData
-			var chargingInterface map[string]interface{}
 
 			trafficInfluData := *notification.TrafficInfluData
 			if trafficInfluData.Snssai == nil {
@@ -96,81 +103,87 @@ func (p *Processor) HandleInfluenceDataUpdateNotify(
 				return
 			}
 
-			filterCharging := bson.M{
-				"ueId":   ue.Supi,
-				"snssai": util.SnssaiModelsToHex(*trafficInfluData.Snssai),
-				"dnn":    "",
-				"filter": "",
-			}
-			chargingInterface, err := mongoapi.RestfulAPIGetOne(chargingDataColl, filterCharging, 2)
+			needsDefault, err := util.TrafficInfluenceNeedsDefault(smPolicy, trafficInfluData)
 			if err != nil {
-				logger.SmPolicyLog.Errorf("Fail to get charging data to mongoDB err: %+v", err)
-				chgData = nil
-			} else if chargingInterface != nil {
-				rg, err1 := p.Context().RatingGroupIdGenerator.Allocate()
-				if err1 != nil {
-					logger.SmPolicyLog.Error("rating group allocate error")
-					problemDetails := util.GetProblemDetail("rating group allocate error", util.ERROR_IDGENERATOR)
-					c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetails.Cause)
-					c.JSON(int(problemDetails.Status), problemDetails)
-					return
+				problem := util.GetProblemDetail(err.Error(), util.ERROR_REQUEST_PARAMETERS)
+				c.Set(sbi.IN_PB_DETAILS_CTX_STR, problem.Cause)
+				c.JSON(int(problem.Status), problem)
+				return
+			}
+			if needsDefault {
+				filterCharging := bson.M{
+					"ueId":   ue.Supi,
+					"snssai": util.SnssaiModelsToHex(*trafficInfluData.Snssai),
+					"dnn":    "",
+					"filter": "",
 				}
-				chgData = &models.Pcf_SMPolCtrl_ChargingData{
-					ChgId:          util.GetChgId(smPolicy.ChargingIdGenerator),
-					RatingGroup:    int32(rg),
-					ReportingLevel: models.Pcf_SMPolCtrl_ReportingLevel_RAT_GR_LEVEL,
-					MeteringMethod: models.Pcf_SMPolCtrl_MeteringMethod_VOLUME,
-				}
+				chargingInterface, err := mongoapi.RestfulAPIGetOne(chargingDataColl, filterCharging, 2)
+				if err != nil {
+					logger.SmPolicyLog.Errorf("Fail to get charging data to mongoDB err: %+v", err)
+					chgData = nil
+				} else if chargingInterface != nil {
+					rg, err1 := p.Context().RatingGroupIdGenerator.Allocate()
+					if err1 != nil {
+						logger.SmPolicyLog.Error("rating group allocate error")
+						problemDetails := util.GetProblemDetail("rating group allocate error", util.ERROR_IDGENERATOR)
+						c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetails.Cause)
+						c.JSON(int(problemDetails.Status), problemDetails)
+						return
+					}
+					chgData = &models.Pcf_SMPolCtrl_ChargingData{
+						ChgId:          util.GetChgId(smPolicy.ChargingIdGenerator),
+						RatingGroup:    int32(rg),
+						ReportingLevel: models.Pcf_SMPolCtrl_ReportingLevel_RAT_GR_LEVEL,
+						MeteringMethod: models.Pcf_SMPolCtrl_MeteringMethod_VOLUME,
+					}
 
-				switch chargingInterface["chargingMethod"].(string) {
-				case "Online":
-					chgData.Online = true
-					chgData.Offline = false
-				case "Offline":
-					chgData.Online = false
-					chgData.Offline = true
-				}
+					switch chargingInterface["chargingMethod"].(string) {
+					case "Online":
+						chgData.Online = true
+						chgData.Offline = false
+					case "Offline":
+						chgData.Online = false
+						chgData.Offline = true
+					}
 
-				if decision.ChgDecs == nil {
-					decision.ChgDecs = make(map[string]*models.Pcf_SMPolCtrl_ChargingData)
+					chargingInterface["ratingGroup"] = chgData.RatingGroup
+					logger.SmPolicyLog.Tracef("put ratingGroup[%+v] for [%+v] to MongoDB", chgData.RatingGroup, ue.Supi)
+					if _, err = mongoapi.RestfulAPIPutOne(
+						chargingDataColl, chargingInterface, chargingInterface, 2); err != nil {
+						logger.SmPolicyLog.Errorf("Fail to put charging data to mongoDB err: %+v", err)
+					} else {
+						smPolicy.ChargingIdGenerator++
+					}
+					if ue.RatingGroupData == nil {
+						ue.RatingGroupData = make(map[string][]int32)
+					}
+					ue.RatingGroupData[smPolicyID] = append(ue.RatingGroupData[smPolicyID], chgData.RatingGroup)
 				}
-
-				chargingInterface["ratingGroup"] = chgData.RatingGroup
-				logger.SmPolicyLog.Tracef("put ratingGroup[%+v] for [%+v] to MongoDB", chgData.RatingGroup, ue.Supi)
-				if _, err = mongoapi.RestfulAPIPutOne(
-					chargingDataColl, chargingInterface, chargingInterface, 2); err != nil {
-					logger.SmPolicyLog.Errorf("Fail to put charging data to mongoDB err: %+v", err)
-				} else {
-					smPolicy.ChargingIdGenerator++
-				}
-				if ue.RatingGroupData == nil {
-					ue.RatingGroupData = make(map[string][]int32)
-				}
-				ue.RatingGroupData[smPolicyID] = append(ue.RatingGroupData[smPolicyID], chgData.RatingGroup)
 			}
 
-			if pccRuleID, ok := influenceDataToPccRule[influenceID]; ok {
-				// notifying Individual Influence Data update
-				pccRule := decision.PccRules[pccRuleID]
-				util.SetSmPolicyDecisionByTrafficInfluData(decision, pccRule, trafficInfluData, chgData)
-			} else {
-				// notifying Individual Influence Data creation
-
-				pccRule := util.CreatePccRule(smPolicy.PccRuleIdGenerator, precedence, nil, trafficInfluData.AfAppId)
-				util.SetSmPolicyDecisionByTrafficInfluData(decision, pccRule, trafficInfluData, chgData)
-				influenceDataToPccRule[influenceID] = pccRule.PccRuleId
-				smPolicy.PccRuleIdGenerator++
-				if precedence < Precedence_Maximum {
-					precedence++
-				}
+			_, err = util.SetTrafficInfluencePolicy(smPolicy, influenceID, trafficInfluData, chgData)
+			if err != nil {
+				problem := util.GetProblemDetail(err.Error(), util.ERROR_REQUEST_PARAMETERS)
+				logger.CallbackLog.Warnf("Cannot apply TI routing policy: %v", err)
+				c.Set(sbi.IN_PB_DETAILS_CTX_STR, problem.Cause)
+				c.JSON(int(problem.Status), problem)
+				return
 			}
 		}
 	}
+	decision := util.TrafficInfluencePolicyChanges(storedPolicy.PolicyDecision, smPolicy.PolicyDecision)
+	*storedPolicy.PolicyDecision = *smPolicy.PolicyDecision
+	storedPolicy.PccRuleIdGenerator = smPolicy.PccRuleIdGenerator
+	storedPolicy.ChargingIdGenerator = smPolicy.ChargingIdGenerator
+	storedPolicy.TrafficInfluence = smPolicy.TrafficInfluence
 	smPolicyNotification := models.Pcf_SMPolCtrl_SmPolicyNotification{
 		ResourceUri:      util.GetResourceUri(models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL, smPolicyID),
 		SmPolicyDecision: decision,
 	}
-	p.SendSMPolicyUpdateNotification(smPolicy.PolicyContext.NotificationUri, &smPolicyNotification)
+	if len(decision.PccRules) != 0 || len(decision.TraffContDecs) != 0 ||
+		len(decision.QosDecs) != 0 || len(decision.ChgDecs) != 0 {
+		p.SendSMPolicyUpdateNotification(smPolicy.PolicyContext.NotificationUri, &smPolicyNotification)
+	}
 	c.Status(http.StatusNoContent)
 }
 
