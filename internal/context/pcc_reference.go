@@ -6,6 +6,19 @@ func (policy *UeSmPolicyData) qosReferencedByOtherRule(ruleID, dataID string) bo
 }
 
 func (policy *UeSmPolicyData) dataReferencedByOtherRule(ruleID, dataID, kind string) bool {
+	// Routing references saved for TI withdrawal still own their original data.
+	if kind == "Tc" && policy.TrafficInfluence != nil {
+		for owner, refs := range policy.TrafficInfluence.OriginalRoutes {
+			if owner == ruleID || policy.PolicyDecision.PccRules[owner] == nil {
+				continue
+			}
+			for _, ref := range refs {
+				if ref == dataID {
+					return true
+				}
+			}
+		}
+	}
 	for id, rule := range policy.PolicyDecision.PccRules {
 		if id == ruleID || rule == nil {
 			continue

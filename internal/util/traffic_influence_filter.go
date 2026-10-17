@@ -38,7 +38,7 @@ func strictIPFilter(description string) (*flowdesc.IPFilterRule, error) {
 			}
 		}
 	}
-	if rule.Proto == 0 && input[2] != "ip" {
+	if rule.Proto == flowdesc.ProtocolNumberAny && input[2] != "ip" {
 		return nil, fmt.Errorf("unsupported TI filter: %s", description)
 	}
 	return rule, nil
@@ -156,4 +156,34 @@ func intersectTIFlow(base, ti models.Pcf_SMPolCtrl_FlowInformation, assigned []s
 	result.FlowDescription, err = flowdesc.Encode(a)
 	result.PackFiltId = "" // The new rule does not own the source rule's packet filter ID.
 	return result, true, err
+}
+
+func trafficInfluenceIntersections(base, filters []models.Pcf_SMPolCtrl_FlowInformation, assigned []string) (
+	[]models.Pcf_SMPolCtrl_FlowInformation, error,
+) {
+	var result []models.Pcf_SMPolCtrl_FlowInformation
+	for _, original := range base {
+		for _, filter := range filters {
+			flow, matches, err := intersectTIFlow(original, filter, assigned)
+			if err != nil {
+				return nil, err
+			}
+			if matches {
+				result = append(result, flow)
+			}
+		}
+	}
+	return result, nil
+}
+
+func coveredByServices(filters []models.Pcf_SMPolCtrl_FlowInformation,
+	bases []*models.Pcf_SMPolCtrl_PccRule, assigned []string,
+) (bool, error) {
+	var services []models.Pcf_SMPolCtrl_FlowInformation
+	for _, base := range bases {
+		if base.Precedence != 255 && base.AppId == "" {
+			services = append(services, base.FlowInfos...)
+		}
+	}
+	return trafficInfluenceCovered(filters, services, assigned)
 }

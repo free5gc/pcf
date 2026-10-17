@@ -100,10 +100,9 @@ type UeSmPolicyData struct {
 	// related to AppSession
 	AppSessions map[string]bool // related appSessionId
 	// Corresponding UE
-	PcfUe                   *UeContext
-	InfluenceDataToPccRule  map[string][]string
-	InfluencePccRuleSources map[string]string
-	SubscriptionID          string
+	PcfUe            *UeContext
+	TrafficInfluence *TrafficInfluenceState
+	SubscriptionID   string
 	// BSF Integration
 	BsfBindingId string
 }
@@ -172,8 +171,6 @@ func (ue *UeContext) NewUeSmPolicyData(
 
 	data.PcfUe = ue
 	ue.SmPolicyData[key] = &data
-	data.InfluenceDataToPccRule = make(map[string][]string)
-	data.InfluencePccRuleSources = make(map[string]string)
 	return &data
 }
 
@@ -186,9 +183,20 @@ func (
 		return fmt.Errorf("can't find the Policy Decision")
 	}
 	if rule, exist := decision.PccRules[pccRuleId]; exist {
+		if policy.TrafficInfluence != nil {
+			if refs, ok := policy.TrafficInfluence.OriginalRoutes[pccRuleId]; ok &&
+				len(rule.RefTcData) == 1 && IsTrafficInfluenceRoute(pccRuleId, rule.RefTcData[0]) {
+				for _, id := range rule.RefTcData {
+					if !policy.dataReferencedByOtherRule(pccRuleId, id, "Tc") {
+						delete(decision.TraffContDecs, id)
+					}
+				}
+				rule.RefTcData = refs
+			}
+		}
 		// Derived TI rules cannot outlive the service authorization they preserve.
 		var derived []string
-		for id, source := range policy.InfluencePccRuleSources {
+		for id, source := range policy.trafficInfluenceRuleSources() {
 			if source == pccRuleId {
 				derived = append(derived, id)
 			}
@@ -318,18 +326,15 @@ func (
 			}
 		}
 
-		delete(policy.InfluencePccRuleSources, pccRuleId)
-		for influenceID, ids := range policy.InfluenceDataToPccRule {
-			remaining := make([]string, 0, len(ids))
-			for _, id := range ids {
-				if id != pccRuleId {
-					remaining = append(remaining, id)
+		if policy.TrafficInfluence != nil {
+			delete(policy.TrafficInfluence.RuleSources, pccRuleId)
+			delete(policy.TrafficInfluence.OriginalRoutes, pccRuleId)
+			for i := range policy.TrafficInfluence.Requests {
+				for sourceID, id := range policy.TrafficInfluence.Requests[i].RuleIDs {
+					if id == pccRuleId || sourceID == pccRuleId {
+						delete(policy.TrafficInfluence.Requests[i].RuleIDs, sourceID)
+					}
 				}
-			}
-			if len(remaining) == 0 {
-				delete(policy.InfluenceDataToPccRule, influenceID)
-			} else {
-				policy.InfluenceDataToPccRule[influenceID] = remaining
 			}
 		}
 	} else {
