@@ -293,7 +293,7 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 			pccRule := util.CreatePccRule(smPolicyData.PccRuleIdGenerator, precedence, []models.Pcf_SMPolCtrl_FlowInformation{
 				{
 					FlowDescription: FlowDescriptionStr,
-					FlowDirection:   models.Pcf_SMPolCtrl_FlowDirectionRm_DOWNLINK,
+					FlowDirection: models.Pcf_SMPolCtrl_FlowDirectionRm_BIDIRECTIONAL,
 				},
 			}, "")
 
