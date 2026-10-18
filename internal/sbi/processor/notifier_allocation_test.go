@@ -37,14 +37,17 @@ func TestInfluenceNotificationAllocation(t *testing.T) {
 		maxID       int64
 		invalidLast bool
 		success     bool
+		panicCase   string
 	}{
-		{"first_allocation_failure", "new", 1, false, false},
-		{"later_allocation_failure", "new", 2, false, false},
-		{"update_before_failure", "existing", 2, false, false},
-		{"delete_before_failure", "delete", 1, false, false},
-		{"validation_after_reservation", "new", 2, true, false},
-		{"successful_batch", "new", 3, false, true},
-		{"successful_update", "existing", 3, false, true},
+		{"first_allocation_failure", "new", 1, false, false, ""},
+		{"later_allocation_failure", "new", 2, false, false, ""},
+		{"update_before_failure", "existing", 2, false, false, ""},
+		{"delete_before_failure", "delete", 1, false, false, ""},
+		{"validation_after_reservation", "new", 2, true, false, ""},
+		{"successful_batch", "new", 3, false, true, ""},
+		{"successful_update", "existing", 3, false, true, ""},
+		{"panic_after_transfer", "existing", 3, false, false, "mixed"},
+		{"panic_before_transfer", "new", 3, false, false, "charging"},
 	} {
 		mt.Run(tc.name, func(mt *mtest.T) {
 			gin.SetMode(gin.TestMode)
@@ -133,12 +136,20 @@ func TestInfluenceNotificationAllocation(t *testing.T) {
 			if tc.invalidLast {
 				batch[1].TrafficInfluData.Snssai = nil
 			}
+			if tc.panicCase == "mixed" {
+				policy.InfluenceDataToPccRule["deleted"] = "PccRuleId-delete"
+				policy.PolicyDecision.PccRules["PccRuleId-delete"] = &models.Pcf_SMPolCtrl_PccRule{PccRuleId: "PccRuleId-delete"}
+				batch = append([]models.Udr_DR_TrafficInfluDataNotif{{ResUri: "/influenceData/deleted"}}, batch...)
+			}
 			seed := bson.D{
 				{Key: "ueId", Value: ue.Supi},
 				{Key: "snssai", Value: "01010203"},
 				{Key: "dnn", Value: ""},
 				{Key: "filter", Value: ""},
 				{Key: "chargingMethod", Value: "Online"},
+			}
+			if tc.panicCase == "charging" {
+				seed[len(seed)-1].Value = 123 // Existing type assertion panics before ownership transfer.
 			}
 			find := func(docs ...bson.D) bson.D {
 				return mtest.CreateCursorResponse(0, "pcf_influence_test."+chargingDataColl, mtest.FirstBatch, docs...)
@@ -155,8 +166,43 @@ func TestInfluenceNotificationAllocation(t *testing.T) {
 					mt.AddMockResponses(find(), mtest.CreateSuccessResponse(bson.E{Key: "n", Value: 1}))
 				}
 			}
+			if tc.panicCase == "mixed" {
+				mt.AddMockResponses(find(), mtest.CreateSuccessResponse(bson.E{Key: "n", Value: 1}))
+			}
 			response := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(response)
+			if tc.panicCase != "" {
+				var recovered interface{}
+				func() {
+					defer func() { recovered = recover() }()
+					p.HandleInfluenceDataUpdateNotify(c, ue.Supi, "1", batch)
+				}()
+				if recovered == nil {
+					mt.Fatal("fixture did not reach the existing apply-stage panic")
+				}
+				owned := []int32{int32(holder)}
+				firstFree := int64(2)
+				if tc.panicCase == "mixed" {
+					owned = append(owned, 2)
+					firstFree = 3
+				}
+				if !reflect.DeepEqual(ue.RatingGroupData[policyID], owned) {
+					mt.Fatalf("unexpected ownership after panic: %v", ue.RatingGroupData[policyID])
+				}
+				for want := firstFree; want <= tc.maxID; want++ {
+					id, allocErr := generator.Allocate()
+					if allocErr != nil || id != want {
+						mt.Fatalf("untransferred reservation leaked or owned ID freed: got %d (%v), want %d", id, allocErr, want)
+					}
+				}
+				if _, allocErr := generator.Allocate(); allocErr == nil {
+					mt.Fatal("owned rating group released after panic")
+				}
+				if calls.Load() != 0 {
+					mt.Fatal("panicking batch notified SMF")
+				}
+				return
+			}
 			p.HandleInfluenceDataUpdateNotify(c, ue.Supi, "1", batch)
 			c.Writer.WriteHeaderNow()
 			if tc.success {

@@ -73,6 +73,16 @@ func (p *Processor) HandleInfluenceDataUpdateNotify(
 		return
 	}
 
+	// Retain request ownership until each reservation is registered to the session.
+	// This also releases untransferred IDs if applying the batch panics.
+	defer func() {
+		for _, item := range prepared {
+			if item.chargingData != nil && !item.transferred {
+				p.Context().RatingGroupIdGenerator.FreeID(item.ratingGroup)
+			}
+		}
+	}()
+
 	decision := smPolicy.PolicyDecision
 	influenceDataToPccRule := smPolicy.InfluenceDataToPccRule
 	precedence := getAvailablePrecedence(smPolicy.PolicyDecision.PccRules)
@@ -127,6 +137,7 @@ func (p *Processor) HandleInfluenceDataUpdateNotify(
 					ue.RatingGroupData = make(map[string][]int32)
 				}
 				ue.RatingGroupData[smPolicyID] = append(ue.RatingGroupData[smPolicyID], chgData.RatingGroup)
+				prepared[i].transferred = true
 			}
 
 			if pccRuleID, ok := influenceDataToPccRule[influenceID]; ok {
@@ -163,6 +174,7 @@ func getInfluenceID(resUri string) string {
 type preparedInfluenceData struct {
 	chargingData map[string]interface{}
 	ratingGroup  int64
+	transferred  bool
 }
 
 func (p *Processor) prepareInfluenceDataUpdate(ue *pcf_context.UeContext,
