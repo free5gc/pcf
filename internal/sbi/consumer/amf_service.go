@@ -2,6 +2,7 @@ package consumer
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 	"sync"
 
@@ -24,6 +25,12 @@ type namfService struct {
 
 func (s *namfService) getNFCommunicationClient(uri string) *Comm.APIClient {
 	if uri == "" {
+		return nil
+	}
+	parsed, err := url.Parse(uri)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") ||
+		parsed.Hostname() == "" || parsed.User != nil || parsed.RawQuery != "" ||
+		parsed.ForceQuery || parsed.Fragment != "" {
 		return nil
 	}
 	s.nfComMu.RLock()
@@ -53,6 +60,9 @@ func (s *namfService) AmfStatusChangeSubscribe(amfUri string, guamiList []models
 
 	// Set client and set url
 	client := s.getNFCommunicationClient(amfUri)
+	if client == nil {
+		return nil, fmt.Errorf("invalid AMF service API root %q", amfUri)
+	}
 
 	subscriptionData := models.Amf_Comm_SubscriptionData{
 		AmfStatusUri: fmt.Sprintf("%s"+factory.PcfCallbackResUriPrefix+"/amfstatus", pcfContext.GetIPv4Uri()),
