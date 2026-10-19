@@ -157,7 +157,9 @@ func (
 		return ""
 	}
 	for _, profile := range result.NfInstances {
-		return util.SearchNFServiceUri(profile, serviceName, models.Nrf_NFMgmt_NFServiceStatus_REGISTERED)
+		if uri := util.SearchNFServiceUri(profile, serviceName, models.Nrf_NFMgmt_NFServiceStatus_REGISTERED); uri != "" {
+			return uri
+		}
 	}
 	return ""
 }
