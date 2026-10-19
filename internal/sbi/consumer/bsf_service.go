@@ -3,11 +3,14 @@ package consumer
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/openapi/nrf/NFDisc"
@@ -27,7 +30,16 @@ func (s *nbsfService) getHTTPClient() *http.Client {
 	s.httpClientMu.RLock()
 	defer s.httpClientMu.RUnlock()
 	if s.httpClient == nil {
-		s.httpClient = &http.Client{}
+		s.httpClient = &http.Client{Transport: &http.Transport{
+			Proxy:                 http.ProxyFromEnvironment,
+			DialContext:           (&net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}).DialContext,
+			ForceAttemptHTTP2:     true,
+			MaxIdleConns:          100,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: time.Second,
+			TLSClientConfig:       &tls.Config{InsecureSkipVerify: !s.consumer.Config().GetTLSVerify()}, // #nosec G402 -- NF configuration
+		}}
 	}
 	return s.httpClient
 }
