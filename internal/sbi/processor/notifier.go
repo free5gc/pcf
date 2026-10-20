@@ -9,6 +9,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 
 	"github.com/free5gc/openapi/models"
+	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/internal/util"
 	"github.com/free5gc/util/metrics/sbi"
@@ -64,10 +65,28 @@ func (p *Processor) HandleInfluenceDataUpdateNotify(
 	smPolicy.InfluenceDataMu.Lock()
 	defer smPolicy.InfluenceDataMu.Unlock()
 
+	// Reserve the entire batch before changing the live policy or writing charging copies.
+	prepared, problem := p.prepareInfluenceDataUpdate(ue, trafficInfluDataNotif)
+	if problem != nil {
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problem.Cause)
+		c.JSON(int(problem.Status), problem)
+		return
+	}
+
+	// Retain request ownership until each reservation is registered to the session.
+	// This also releases untransferred IDs if applying the batch panics.
+	defer func() {
+		for _, item := range prepared {
+			if item.chargingData != nil && !item.transferred {
+				p.Context().RatingGroupIdGenerator.FreeID(item.ratingGroup)
+			}
+		}
+	}()
+
 	decision := smPolicy.PolicyDecision
 	influenceDataToPccRule := smPolicy.InfluenceDataToPccRule
 	precedence := getAvailablePrecedence(smPolicy.PolicyDecision.PccRules)
-	for _, notification := range trafficInfluDataNotif {
+	for i, notification := range trafficInfluDataNotif {
 		influenceID := getInfluenceID(notification.ResUri)
 		if influenceID == "" {
 			continue
@@ -82,39 +101,10 @@ func (p *Processor) HandleInfluenceDataUpdateNotify(
 			delete(influenceDataToPccRule, influenceID)
 		} else {
 			var chgData *models.Pcf_SMPolCtrl_ChargingData
-			var chargingInterface map[string]interface{}
-
 			trafficInfluData := *notification.TrafficInfluData
-			if trafficInfluData.Snssai == nil {
-				problemDetail := util.GetProblemDetail(
-					"Errorneous/Missing Mandotory IE: trafficInfluData.snssai",
-					util.ERROR_REQUEST_PARAMETERS,
-				)
-				logger.CallbackLog.Warnf("Influence data notify validation failed: %+v", problemDetail)
-				c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
-				c.JSON(int(problemDetail.Status), problemDetail)
-				return
-			}
-
-			filterCharging := bson.M{
-				"ueId":   ue.Supi,
-				"snssai": util.SnssaiModelsToHex(*trafficInfluData.Snssai),
-				"dnn":    "",
-				"filter": "",
-			}
-			chargingInterface, err := mongoapi.RestfulAPIGetOne(chargingDataColl, filterCharging, 2)
-			if err != nil {
-				logger.SmPolicyLog.Errorf("Fail to get charging data to mongoDB err: %+v", err)
-				chgData = nil
-			} else if chargingInterface != nil {
-				rg, err1 := p.Context().RatingGroupIdGenerator.Allocate()
-				if err1 != nil {
-					logger.SmPolicyLog.Error("rating group allocate error")
-					problemDetails := util.GetProblemDetail("rating group allocate error", util.ERROR_IDGENERATOR)
-					c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetails.Cause)
-					c.JSON(int(problemDetails.Status), problemDetails)
-					return
-				}
+			chargingInterface := prepared[i].chargingData
+			if chargingInterface != nil {
+				rg := prepared[i].ratingGroup
 				chgData = &models.Pcf_SMPolCtrl_ChargingData{
 					ChgId:          util.GetChgId(smPolicy.ChargingIdGenerator),
 					RatingGroup:    int32(rg),
@@ -137,7 +127,7 @@ func (p *Processor) HandleInfluenceDataUpdateNotify(
 
 				chargingInterface["ratingGroup"] = chgData.RatingGroup
 				logger.SmPolicyLog.Tracef("put ratingGroup[%+v] for [%+v] to MongoDB", chgData.RatingGroup, ue.Supi)
-				if _, err = mongoapi.RestfulAPIPutOne(
+				if _, err := mongoapi.RestfulAPIPutOne(
 					chargingDataColl, chargingInterface, chargingInterface, 2); err != nil {
 					logger.SmPolicyLog.Errorf("Fail to put charging data to mongoDB err: %+v", err)
 				} else {
@@ -147,6 +137,7 @@ func (p *Processor) HandleInfluenceDataUpdateNotify(
 					ue.RatingGroupData = make(map[string][]int32)
 				}
 				ue.RatingGroupData[smPolicyID] = append(ue.RatingGroupData[smPolicyID], chgData.RatingGroup)
+				prepared[i].transferred = true
 			}
 
 			if pccRuleID, ok := influenceDataToPccRule[influenceID]; ok {
@@ -177,4 +168,56 @@ func (p *Processor) HandleInfluenceDataUpdateNotify(
 func getInfluenceID(resUri string) string {
 	temp := strings.Split(resUri, "/")
 	return temp[len(temp)-1]
+}
+
+// preparedInfluenceData holds request-owned reservations, not live policy state.
+type preparedInfluenceData struct {
+	chargingData map[string]interface{}
+	ratingGroup  int64
+	transferred  bool
+}
+
+func (p *Processor) prepareInfluenceDataUpdate(ue *pcf_context.UeContext,
+	notifications []models.Udr_DR_TrafficInfluDataNotif,
+) ([]preparedInfluenceData, *models.ProblemDetails) {
+	prepared := make([]preparedInfluenceData, len(notifications))
+	allocated := make([]int64, 0, len(notifications))
+	ready := false
+	defer func() {
+		if !ready {
+			for _, id := range allocated {
+				p.Context().RatingGroupIdGenerator.FreeID(id)
+			}
+		}
+	}()
+	for i, notification := range notifications {
+		if getInfluenceID(notification.ResUri) == "" || notification.TrafficInfluData == nil {
+			continue
+		}
+		data := notification.TrafficInfluData
+		if data.Snssai == nil {
+			problem := util.GetProblemDetail(
+				"Erroneous/Missing Mandatory IE: trafficInfluData.snssai", util.ERROR_REQUEST_PARAMETERS)
+			return nil, &problem
+		}
+		filter := bson.M{"ueId": ue.Supi, "snssai": util.SnssaiModelsToHex(*data.Snssai), "dnn": "", "filter": ""}
+		charging, err := mongoapi.RestfulAPIGetOne(chargingDataColl, filter, 2)
+		if err != nil {
+			logger.SmPolicyLog.Errorf("Fail to get charging data to mongoDB err: %+v", err)
+			continue
+		}
+		if charging == nil {
+			continue
+		}
+		id, err := p.Context().RatingGroupIdGenerator.Allocate()
+		if err != nil {
+			logger.SmPolicyLog.Error("rating group allocate error")
+			problem := util.GetProblemDetail("rating group allocate error", util.INSUFFICIENT_RESOURCES)
+			return nil, &problem
+		}
+		allocated = append(allocated, id)
+		prepared[i] = preparedInfluenceData{chargingData: charging, ratingGroup: id}
+	}
+	ready = true
+	return prepared, nil
 }
