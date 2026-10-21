@@ -205,8 +205,9 @@ func (p *Processor) PostPoliciesProcedure(polAssoId string,
 	if val, ok := pcfSelf.UePool.Load(policyAssociationRequest.Supi); ok {
 		ue = val.(*pcf_context.UeContext)
 	}
-	if ue == nil {
-		if newUe, err := pcfSelf.NewPCFUe(policyAssociationRequest.Supi); err != nil {
+	newUE := ue == nil
+	if newUE {
+		if newUe, err := pcf_context.NewUeContext(policyAssociationRequest.Supi); err != nil {
 			// supi format dose not match "imsi-..."
 			problemDetail := util.GetProblemDetail("Supi Format Error", util.ERROR_REQUEST_PARAMETERS)
 			logger.AmPolicyLog.Errorln(err.Error())
@@ -215,10 +216,12 @@ func (p *Processor) PostPoliciesProcedure(polAssoId string,
 			ue = newUe
 		}
 	}
+	ue.AMPolicyCreateMu.Lock()
+	defer ue.AMPolicyCreateMu.Unlock()
+
 	udrUri := p.getUdrUri(ue)
 	if udrUri == "" {
 		// Can't find any UDR support this Ue
-		pcfSelf.UePool.Delete(ue.Supi)
 		problemDetail := util.GetProblemDetail("Ue is not supported in PCF", util.USER_UNKNOWN)
 		logger.AmPolicyLog.Errorf("Ue[%s] is not supported in PCF", ue.Supi)
 		return nil, "", &problemDetail
@@ -239,6 +242,14 @@ func (p *Processor) PostPoliciesProcedure(polAssoId string,
 			logger.AmPolicyLog.Errorf("Get Access And Mobility Policy Data Failed Problem[%+v]", problemDetail)
 			problemDetail := util.GetProblemDetail("Get Access And Mobility Policy Data Failed[%+v]", problemDetail.Cause)
 			return nil, "", &problemDetail
+		}
+
+		if newUE {
+			// Publish only after UDR validation. A concurrent successful create may
+			// already own this SUPI; use its context rather than replacing it.
+			if _, loaded := pcfSelf.UePool.LoadOrStore(ue.Supi, ue); loaded {
+				return p.PostPoliciesProcedure(polAssoId, policyAssociationRequest)
+			}
 		}
 
 		if amPolicy == nil {

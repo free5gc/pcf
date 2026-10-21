@@ -15,6 +15,8 @@ import (
 
 // key is supi
 type UeContext struct {
+	AMPolicyCreateMu sync.Mutex // Serializes AM association creation for this UE.
+
 	// Ue Context
 	Supi                      string
 	Gpsi                      string
