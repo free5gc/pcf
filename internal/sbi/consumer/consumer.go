@@ -9,7 +9,9 @@ import (
 	"github.com/free5gc/openapi/pcf/AMPolCtrl"
 	"github.com/free5gc/openapi/udr/DR"
 	pcf_context "github.com/free5gc/pcf/internal/context"
+	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/pkg/factory"
+	"github.com/free5gc/util/nfheartbeat"
 )
 
 type pcf interface {
@@ -39,6 +41,15 @@ func NewConsumer(pcf pcf) (*Consumer, error) {
 		nfMngmntClients: make(map[string]*NFMgmt.APIClient),
 		nfDiscClients:   make(map[string]*NFDisc.APIClient),
 	}
+	heartbeat, err := nfheartbeat.NewRunner(
+		nrfRegistrar{c.nnrfService},
+		func() int32 { return c.Config().GetNfHeartBeatTimer() },
+		logger.ConsumerLog,
+	)
+	if err != nil {
+		return nil, err
+	}
+	c.nnrfService.heartbeat = heartbeat
 
 	c.namfService = &namfService{
 		consumer:     c,
