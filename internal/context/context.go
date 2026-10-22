@@ -135,7 +135,7 @@ func InitPcfContext(context *PCFContext) {
 	context.DefaultBdtRefId = configuration.DefaultBdtRefId
 	for _, service := range context.NfService {
 		var err error
-		context.PcfServiceUris[service.ServiceName] = service.ApiPrefix +
+		context.PcfServiceUris[service.ServiceName] = context.GetIPv4Uri() + service.ApiPrefix +
 			"/" + string(service.ServiceName) + "/" + (service.Versions)[0].ApiVersionInUri
 		context.PcfSuppFeats[service.ServiceName], err = openapi.NewSupportedFeature(service.SupportedFeatures)
 		if err != nil {
@@ -206,7 +206,6 @@ func (c *PCFContext) InitNFService(serviceList []factory.Service, version string
 			},
 			Scheme:          c.UriScheme,
 			NfServiceStatus: models.Nrf_NFMgmt_NFServiceStatus_REGISTERED,
-			ApiPrefix:       c.GetIPv4Uri(),
 			IpEndPoints: []models.Nrf_NFMgmt_IpEndPoint{
 				{
 					Ipv4Address: c.RegisterIPv4,
