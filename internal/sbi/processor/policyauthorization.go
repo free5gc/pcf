@@ -578,6 +578,37 @@ func (p *Processor) HandleModAppSessionContext(
 		c.JSON(int(problemDetail.Status), problemDetail)
 		return
 	}
+	// Validate sponsored connectivity before media processing mutates shared policy state.
+	// A rejected update must not leave rules without app-session ownership (issue #1185).
+	var umData *models.Pcf_SMPolCtrl_UsageMonitoringData
+	if appSessionContextUpdateData.AspId != "" && appSessionContextUpdateData.SponId != "" {
+		if appSessionContextUpdateData.EvSubsc == nil {
+			problemDetail := util.GetProblemDetail("Missing evSubsc for sponsored connectivity", util.ERROR_REQUEST_PARAMETERS)
+			c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
+			c.JSON(int(problemDetail.Status), problemDetail)
+			return
+		}
+		sponsoredEvents := make(map[models.Pcf_PolAuth_AfEvent]models.Pcf_PolAuth_AfNotifMethod)
+		for _, subscription := range appSessionContextUpdateData.EvSubsc.Events {
+			sponsoredEvents[subscription.Event] = subscription.NotifMethod
+		}
+		umID := util.GetUmId(appSessionContextUpdateData.AspId, appSessionContextUpdateData.SponId)
+		if tempUmData, err := extractUmData(umID, sponsoredEvents,
+			threshRmToThresh(appSessionContextUpdateData.EvSubsc.UsgThres)); err != nil {
+			problemDetail := util.GetProblemDetail(err.Error(), util.REQUESTED_SERVICE_NOT_AUTHORIZED)
+			c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
+			c.JSON(int(problemDetail.Status), problemDetail)
+			return
+		} else {
+			umData = tempUmData
+		}
+		if err := validateSponsoredUsageMonitoring(smPolicy, appSessionContextUpdateData.SponStatus, umData); err != nil {
+			problemDetail := util.GetProblemDetail(err.Error(), util.REQUESTED_SERVICE_NOT_AUTHORIZED)
+			c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
+			c.JSON(int(problemDetail.Status), problemDetail)
+			return
+		}
+	}
 	// InfluenceOnTrafficRouting = 1 in 29514 &  Traffic Steering Control support = 1 in 29512
 	traffRoutSupp := util.CheckSuppFeat(appSessCtx.AscRespData.SuppFeat,
 		1) && util.CheckSuppFeat(smPolicy.PolicyDecision.SuppFeat, 1)
@@ -772,25 +803,8 @@ func (p *Processor) HandleModAppSessionContext(
 		appSessCtx.AscReqData.EvSubsc = nil
 	}
 
-	// Moification provisioning of sponsored connectivity information
+	// Modification provisioning of sponsored connectivity information
 	if appSessionContextUpdateData.AspId != "" && appSessionContextUpdateData.SponId != "" {
-		if appSessionContextUpdateData.EvSubsc == nil {
-			problemDetail := util.GetProblemDetail("Missing evSubsc for sponsored connectivity", util.ERROR_REQUEST_PARAMETERS)
-			c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
-			c.JSON(int(problemDetail.Status), problemDetail)
-			return
-		}
-		umID := util.GetUmId(appSessionContextUpdateData.AspId, appSessionContextUpdateData.SponId)
-		var umData *models.Pcf_SMPolCtrl_UsageMonitoringData
-		if tempUmData, err := extractUmData(umID, eventSubs,
-			threshRmToThresh(appSessionContextUpdateData.EvSubsc.UsgThres)); err != nil {
-			problemDetail := util.GetProblemDetail(err.Error(), util.REQUESTED_SERVICE_NOT_AUTHORIZED)
-			c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
-			c.JSON(int(problemDetail.Status), problemDetail)
-			return
-		} else {
-			umData = tempUmData
-		}
 		if err := handleSponsoredConnectivityInformation(smPolicy, relatedPccRuleIds, appSessionContextUpdateData.AspId,
 			appSessionContextUpdateData.SponId, appSessionContextUpdateData.SponStatus, umData, &updateSMpolicy); err != nil {
 			problemDetail := util.GetProblemDetail(err.Error(), util.REQUESTED_SERVICE_NOT_AUTHORIZED)
@@ -1196,11 +1210,26 @@ func (p *Processor) handleBDTPolicyInd(pcfSelf *pcf_context.PCFContext,
 	return nil
 }
 
+// validateSponsoredUsageMonitoring performs no policy mutations. Disabling sponsorship
+// retains the existing behavior of not requiring UMC support.
+func validateSponsoredUsageMonitoring(smPolicy *pcf_context.UeSmPolicyData,
+	sponStatus models.Pcf_PolAuth_SponsoringStatus, umData *models.Pcf_SMPolCtrl_UsageMonitoringData,
+) error {
+	if sponStatus != models.Pcf_PolAuth_SponsoringStatus_DISABLED && umData != nil &&
+		!util.CheckSuppFeat(smPolicy.PolicyDecision.SuppFeat, 5) { // TS 29.512: UMC, feature 5
+		return fmt.Errorf("usage Monitor Control is not supported in SMF")
+	}
+	return nil
+}
+
 // provisioning of sponsored connectivity information
 func handleSponsoredConnectivityInformation(smPolicy *pcf_context.UeSmPolicyData, relatedPccRuleIds map[string]string,
 	aspID, sponID string, sponStatus models.Pcf_PolAuth_SponsoringStatus, umData *models.Pcf_SMPolCtrl_UsageMonitoringData,
 	updateSMpolicy *bool,
 ) error {
+	if err := validateSponsoredUsageMonitoring(smPolicy, sponStatus, umData); err != nil {
+		return err
+	}
 	if sponStatus == models.Pcf_PolAuth_SponsoringStatus_DISABLED {
 		logger.PolicyAuthLog.Debugf("Sponsored Connectivity is disabled by AF")
 		umID := util.GetUmId(aspID, sponID)
@@ -1226,13 +1255,6 @@ func handleSponsoredConnectivityInformation(smPolicy *pcf_context.UeSmPolicyData
 			delete(smPolicy.PolicyDecision.UmDecs, umID)
 		}
 	} else {
-		if umData != nil {
-			supp := util.CheckSuppFeat(smPolicy.PolicyDecision.SuppFeat, 5) // UMC support = 5 in 29512
-			if !supp {
-				err := fmt.Errorf("usage Monitor Control is not supported in SMF")
-				return err
-			}
-		}
 		chgIDUsed := false
 		chgID := util.GetChgId(smPolicy.ChargingIdGenerator)
 		for _, pccRuleID := range relatedPccRuleIds {
