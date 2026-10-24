@@ -45,7 +45,9 @@ func NewApp(
 	cfg *factory.Config,
 	tlsKeyLogPath string,
 ) (*PcfApp, error) {
-	if err := openapi.ConfigureHTTP2Clients(cfg.GetReadIdleTimeout(), cfg.GetPingTimeout(), cfg.GetTLSVerify()); err != nil {
+	if err := openapi.ConfigureHTTP2Clients(
+		cfg.GetReadIdleTimeout(), cfg.GetPingTimeout(), cfg.GetTLSVerify(),
+	); err != nil {
 		return nil, err
 	}
 	pcf := &PcfApp{
