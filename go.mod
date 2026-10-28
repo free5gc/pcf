@@ -5,8 +5,8 @@ go 1.26.2
 require (
 	github.com/asaskevich/govalidator v0.0.0-20210307081110-f21760c49a8d
 	github.com/cydev/zero v0.0.0-20160322155811-4a4535dd56e7
-	github.com/free5gc/openapi v1.3.0
-	github.com/free5gc/util v1.4.0
+	github.com/free5gc/openapi v1.3.1-0.20261014070323-89accd9890ce
+	github.com/free5gc/util v1.4.1-0.20261014070359-d865b0ce854b
 	github.com/gin-contrib/cors v1.6.0
 	github.com/gin-gonic/gin v1.10.0
 	github.com/go-playground/assert/v2 v2.2.0
@@ -47,10 +47,10 @@ require (
 	github.com/goccy/go-json v0.10.2 // indirect
 	github.com/golang-jwt/jwt/v5 v5.2.2 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
-	github.com/h2non/gock v1.2.0 // indirect
+	github.com/h2non/gock v1.2.0
 	github.com/h2non/parth v0.0.0-20190131123155-b4df798d6542 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/klauspost/compress v1.17.11 // indirect
+	github.com/klauspost/compress v1.18.7 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.7 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect

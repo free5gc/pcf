@@ -9,11 +9,13 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/asaskevich/govalidator"
 	"github.com/google/uuid"
 
 	"github.com/free5gc/pcf/internal/logger"
+	"github.com/free5gc/util/nfheartbeat"
 )
 
 const (
@@ -68,18 +70,24 @@ type Info struct {
 }
 
 type Configuration struct {
-	PcfName         string    `yaml:"pcfName,omitempty" valid:"required, type(string)"`
-	NfInstanceId    string    `yaml:"nfInstanceId,omitempty" valid:"optional,uuidv4"`
-	Sbi             *Sbi      `yaml:"sbi,omitempty" valid:"required"`
-	Metrics         *Metrics  `yaml:"metrics,omitempty" valid:"optional"`
-	TimeFormat      string    `yaml:"timeFormat,omitempty" valid:"required"`
-	DefaultBdtRefId string    `yaml:"defaultBdtRefId,omitempty" valid:"required, type(string)"`
-	NrfUri          string    `yaml:"nrfUri,omitempty" valid:"required, url"`
-	NrfCertPem      string    `yaml:"nrfCertPem,omitempty" valid:"optional"`
-	Bsf             *Bsf      `yaml:"bsf,omitempty" valid:"optional"`
-	ServiceList     []Service `yaml:"serviceList,omitempty" valid:"required"`
-	Mongodb         *Mongodb  `yaml:"mongodb" valid:"required"`
-	Locality        string    `yaml:"locality,omitempty" valid:"-"`
+	ReadIdleTimeout *time.Duration `yaml:"readIdleTimeout,omitempty" valid:"optional"`
+	PingTimeout     *time.Duration `yaml:"pingTimeout,omitempty" valid:"optional"`
+	IdleTimeout     *time.Duration `yaml:"idleTimeout,omitempty" valid:"optional"`
+	PcfName         string         `yaml:"pcfName,omitempty" valid:"required, type(string)"`
+	NfInstanceId    string         `yaml:"nfInstanceId,omitempty" valid:"optional,uuidv4"`
+	Sbi             *Sbi           `yaml:"sbi,omitempty" valid:"required"`
+	Metrics         *Metrics       `yaml:"metrics,omitempty" valid:"optional"`
+	TimeFormat      string         `yaml:"timeFormat,omitempty" valid:"required"`
+	DefaultBdtRefId string         `yaml:"defaultBdtRefId,omitempty" valid:"required, type(string)"`
+	NrfUri          string         `yaml:"nrfUri,omitempty" valid:"required, url"`
+	NrfCertPem      string         `yaml:"nrfCertPem,omitempty" valid:"optional"`
+	Bsf             *Bsf           `yaml:"bsf,omitempty" valid:"optional"`
+	ServiceList     []Service      `yaml:"serviceList,omitempty" valid:"required"`
+	Mongodb         *Mongodb       `yaml:"mongodb" valid:"required"`
+	Locality        string         `yaml:"locality,omitempty" valid:"-"`
+	// NfHeartBeatTimer is the fallback heartbeat interval in seconds, from 1 to
+	// 3600 as the NRF accepts. The interval the NRF assigns always wins.
+	NfHeartBeatTimer int32 `yaml:"nfHeartBeatTimer,omitempty" valid:"optional,range(1|3600)"`
 }
 
 type Logger struct {
@@ -193,6 +201,17 @@ func (s *Service) validate() (bool, error) {
 	}
 
 	return true, nil
+}
+
+// GetNfHeartBeatTimer returns the fallback heartbeat interval in seconds.
+func (c *Config) GetNfHeartBeatTimer() int32 {
+	c.RLock()
+	defer c.RUnlock()
+
+	if c.Configuration != nil && c.Configuration.NfHeartBeatTimer > 0 {
+		return c.Configuration.NfHeartBeatTimer
+	}
+	return nfheartbeat.DefaultTimer
 }
 
 func (c *Config) GetNfInstanceId() string {
@@ -533,4 +552,35 @@ func (c *Config) GetMetricsNamespace() string {
 		return c.Configuration.Metrics.Namespace
 	}
 	return PcfMetricsDefaultNamespace
+}
+
+// GetIdleTimeout returns the HTTP server idle timeout. Omitted values preserve
+// the previous 1ms timeout; an explicit zero disables the timeout.
+func (c *Config) GetIdleTimeout() time.Duration {
+	c.RLock()
+	defer c.RUnlock()
+	if c.Configuration == nil || c.Configuration.IdleTimeout == nil {
+		return time.Millisecond
+	}
+	return *c.Configuration.IdleTimeout
+}
+
+// GetReadIdleTimeout returns the HTTP/2 client health-check timeout.
+func (c *Config) GetReadIdleTimeout() time.Duration {
+	c.RLock()
+	defer c.RUnlock()
+	if c.Configuration == nil || c.Configuration.ReadIdleTimeout == nil {
+		return time.Second
+	}
+	return *c.Configuration.ReadIdleTimeout
+}
+
+// GetPingTimeout returns the HTTP/2 client health-check timeout.
+func (c *Config) GetPingTimeout() time.Duration {
+	c.RLock()
+	defer c.RUnlock()
+	if c.Configuration == nil || c.Configuration.PingTimeout == nil {
+		return 2 * time.Second
+	}
+	return *c.Configuration.PingTimeout
 }

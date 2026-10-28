@@ -80,9 +80,11 @@ func (p *Processor) HandleUpdatePostPoliciesPolAssoId(
 	response, problemDetails := p.UpdatePostPoliciesPolAssoIdProcedure(polAssoId, policyAssociationUpdateRequest)
 	if response != nil {
 		c.JSON(http.StatusOK, response)
+		return
 	} else if problemDetails != nil {
 		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetails.Cause)
 		c.JSON(int(problemDetails.Status), problemDetails)
+		return
 	}
 
 	problemDetails = &models.ProblemDetails{

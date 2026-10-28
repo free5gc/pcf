@@ -132,7 +132,9 @@ func NewServer(pcf pcf, tlsKeyLogPath string) (*Server, error) {
 	bindAddr := cfg.GetSbiBindingAddr()
 	logger.SBILog.Infof("Binding addr: [%s]", bindAddr)
 	var err error
-	if s.httpServer, err = httpwrapper.NewHttp2Server(bindAddr, tlsKeyLogPath, s.router); err != nil {
+	if s.httpServer, err = httpwrapper.NewHttp2Server(
+		bindAddr, tlsKeyLogPath, s.router, cfg.GetIdleTimeout(),
+	); err != nil {
 		logger.InitLog.Errorf("Initialize HTTP server failed: %v", err)
 		return nil, err
 	}
@@ -142,10 +144,12 @@ func NewServer(pcf pcf, tlsKeyLogPath string) (*Server, error) {
 }
 
 func (s *Server) Run(traceCtx context.Context, wg *sync.WaitGroup) error {
-	var err error
-	_, s.Context().NfId, err = s.Consumer().SendRegisterNFInstance(s.CancelContext())
-	if err != nil {
+	ctx := s.CancelContext()
+	if err := s.Consumer().SendRegisterNFInstance(ctx, true); err != nil {
 		logger.InitLog.Errorf("PCF register to NRF Error[%s]", err.Error())
+	} else {
+		// Only a registered profile has something to keep alive.
+		s.Consumer().StartHeartbeat(ctx, wg)
 	}
 
 	wg.Add(1)
