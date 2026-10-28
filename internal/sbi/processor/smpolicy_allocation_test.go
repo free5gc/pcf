@@ -66,7 +66,13 @@ func allocationTestProcessor(t *testing.T, mt *mtest.T, maxID int64, influences 
 			data := make([]models.Udr_DR_TrafficInfluData, 0, influences)
 			for i := 0; i < influences; i++ {
 				data = append(data, models.Udr_DR_TrafficInfluData{
-					ResUri: fmt.Sprintf("/influenceData/ti-%d", i), AfAppId: fmt.Sprintf("app-%d", i),
+					ResUri: fmt.Sprintf("/influenceData/ti-%d", i),
+					// Keep TI outside the existing 10.70.0.0/16 service rule so
+					// each request exercises default-flow charging allocation.
+					TrafficFilters: []models.Nef_FlowInfo{{FlowDescriptions: []string{
+						fmt.Sprintf("permit out ip from 10.%d.0.0/16 to assigned", 80+i),
+					}}},
+					TrafficRoutes: []models.RouteToLocation{{Dnai: "mec"}},
 				})
 			}
 			if err := json.NewEncoder(w).Encode(data); err != nil {
@@ -98,6 +104,8 @@ func allocationTestProcessor(t *testing.T, mt *mtest.T, maxID int64, influences 
 		SliceInfo:      &models.Snssai{Sst: 1, Sd: "010203"},
 		ServingNetwork: &models.PlmnIdNid{Mcc: "001", Mnc: "01"},
 		AccessType:     models.AccessType_3_GPP_ACCESS,
+		Ipv4Address:    "10.60.0.1",
+		SubsDefQos:     &models.SubscribedDefaultQos{Var5qi: 9},
 	}
 	ue := &pcf_context.UeContext{
 		Supi: request.Supi, UdrUri: server.URL,
