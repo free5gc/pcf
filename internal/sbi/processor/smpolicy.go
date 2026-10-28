@@ -110,9 +110,8 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 	if ue.Pei == "" {
 		ue.Pei = request.Pei
 	}
-	if smPolicyData != nil {
-		delete(ue.SmPolicyData, smPolicyID)
-	}
+	creation := newSmPolicyCreation(ue, smPolicyID, pcfSelf.RatingGroupIdGenerator)
+	defer creation.rollback()
 	smPolicyData = ue.NewUeSmPolicyData(smPolicyID, request, &smData)
 	// Policy Decision
 	decision := models.Pcf_SMPolCtrl_SmPolicyDecision{
@@ -211,10 +210,10 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 		logger.SmPolicyLog.Errorf("chargingInterface %+v", chargingInterface)
 		util.SetPccRuleRelatedData(&decision, pcc, nil, nil, nil, nil)
 	} else if chargingInterface != nil {
-		rg, err1 := p.Context().RatingGroupIdGenerator.Allocate()
+		rg, err1 := creation.allocateRatingGroup()
 		if err1 != nil {
 			logger.SmPolicyLog.Error("rating group allocate error")
-			problemDetails := util.GetProblemDetail("rating group allocate error", util.ERROR_IDGENERATOR)
+			problemDetails := util.GetProblemDetail("rating group allocate error", util.INSUFFICIENT_RESOURCES)
 			c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetails.Cause)
 			c.JSON(int(problemDetails.Status), problemDetails)
 			return
@@ -238,8 +237,7 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 
 		chargingInterface["ratingGroup"] = chgData.RatingGroup
 		logger.SmPolicyLog.Tracef("put ratingGroup[%+v] for [%+v] to MongoDB", chgData.RatingGroup, ue.Supi)
-		if _, err = mongoapi.RestfulAPIPutOne(
-			chargingDataColl, chargingInterface, chargingInterface, queryStrength); err != nil {
+		if err = creation.putChargingData(chargingInterface, queryStrength); err != nil {
 			logger.SmPolicyLog.Errorf("Fail to put charging data to mongoDB err: %+v", err)
 		}
 		if ue.RatingGroupData == nil {
@@ -308,10 +306,10 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 			if err != nil {
 				logger.SmPolicyLog.Errorf("Fail to get charging data to mongoDB err: %+v", err)
 			} else {
-				rg, err1 := p.Context().RatingGroupIdGenerator.Allocate()
+				rg, err1 := creation.allocateRatingGroup()
 				if err1 != nil {
 					logger.SmPolicyLog.Error("rating group allocate error")
-					problemDetails := util.GetProblemDetail("rating group allocate error", util.ERROR_IDGENERATOR)
+					problemDetails := util.GetProblemDetail("rating group allocate error", util.INSUFFICIENT_RESOURCES)
 					c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetails.Cause)
 					c.JSON(int(problemDetails.Status), problemDetails)
 					return
@@ -338,8 +336,7 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 
 				chargingInterface["ratingGroup"] = chgData.RatingGroup
 				logger.SmPolicyLog.Tracef("put ratingGroup[%+v] for [%+v] to MongoDB", chgData.RatingGroup, ue.Supi)
-				if _, err = mongoapi.RestfulAPIPutOne(
-					chargingDataColl, chargingInterface, chargingInterface, queryStrength); err != nil {
+				if err = creation.putChargingData(chargingInterface, queryStrength); err != nil {
 					logger.SmPolicyLog.Errorf("Fail to put charging data to mongoDB err: %+v", err)
 				} else {
 					util.SetPccRuleRelatedData(&decision, pccRule, nil, nil, chgData, nil)
@@ -416,10 +413,10 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 					logger.SmPolicyLog.Errorf("Fail to get charging data to mongoDB err: %+v", err)
 					chgData = nil
 				} else if chargingInterface != nil {
-					rg, err1 := p.Context().RatingGroupIdGenerator.Allocate()
+					rg, err1 := creation.allocateRatingGroup()
 					if err1 != nil {
 						logger.SmPolicyLog.Error("rating group allocate error")
-						problemDetails := util.GetProblemDetail("rating group allocate error", util.ERROR_IDGENERATOR)
+						problemDetails := util.GetProblemDetail("rating group allocate error", util.INSUFFICIENT_RESOURCES)
 						c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetails.Cause)
 						c.JSON(int(problemDetails.Status), problemDetails)
 						return
@@ -446,8 +443,7 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 
 					chargingInterface["ratingGroup"] = chgData.RatingGroup
 					logger.SmPolicyLog.Tracef("put ratingGroup[%+v] for [%+v] to MongoDB", chgData.RatingGroup, ue.Supi)
-					if _, err = mongoapi.RestfulAPIPutOne(
-						chargingDataColl, chargingInterface, chargingInterface, queryStrength); err != nil {
+					if err = creation.putChargingData(chargingInterface, queryStrength); err != nil {
 						logger.SmPolicyLog.Errorf("Fail to put charging data to mongoDB err: %+v", err)
 					} else {
 						smPolicyData.ChargingIdGenerator++
@@ -490,6 +486,7 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 	locationHeader := util.GetResourceUri(models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL, smPolicyID)
 	c.Header("Location", locationHeader)
 	logger.SmPolicyLog.Tracef("SMPolicy PduSessionId[%d] Create", request.PduSessionId)
+	creation.commit()
 	c.JSON(http.StatusCreated, decision)
 }
 
