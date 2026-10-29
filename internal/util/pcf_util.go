@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
-	"strings"
 	"time"
 
+	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/amf/Comm"
 	"github.com/free5gc/openapi/bsf/Mgmt"
 	"github.com/free5gc/openapi/models"
@@ -158,17 +158,25 @@ func GetSMPolicyDnnData(
 	if snssai == nil || dnn == "" || data.SmPolicySnssaiData == nil {
 		return
 	}
-	snssaiStr := SnssaiModelsToHex(*snssai)
-	for key, snssaiData := range data.SmPolicySnssaiData {
-		if !strings.EqualFold(key, snssaiStr) {
+	var matched *models.Udr_DR_SmPolicySnssaiData
+	for _, snssaiData := range data.SmPolicySnssaiData {
+		if snssaiData.Snssai == nil {
+			logger.UtilLog.Warn("SM policy entry is missing snssai")
 			continue
 		}
-		if snssaiData.SmPolicyDnnData == nil {
-			return
+		if !openapi.SnssaiEqualFold(*snssaiData.Snssai, *snssai) {
+			continue
 		}
-		if dnnInfo, exist := snssaiData.SmPolicyDnnData[dnn]; exist {
+		if matched != nil {
+			logger.UtilLog.Warn("Multiple SM policy entries match the requested S-NSSAI")
+			return nil
+		}
+		entry := snssaiData
+		matched = &entry
+	}
+	if matched != nil {
+		if dnnInfo, exist := matched.SmPolicyDnnData[dnn]; exist {
 			result = &dnnInfo
-			return
 		}
 	}
 	return
