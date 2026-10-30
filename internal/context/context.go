@@ -16,6 +16,7 @@ import (
 	"github.com/free5gc/pcf/pkg/factory"
 	"github.com/free5gc/util/idgenerator"
 	"github.com/free5gc/util/mongoapi"
+	"github.com/free5gc/util/serviceuri"
 )
 
 type PCFContext struct {
@@ -135,7 +136,7 @@ func InitPcfContext(context *PCFContext) {
 	context.DefaultBdtRefId = configuration.DefaultBdtRefId
 	for _, service := range context.NfService {
 		var err error
-		context.PcfServiceUris[service.ServiceName] = context.GetIPv4Uri() + service.ApiPrefix +
+		context.PcfServiceUris[service.ServiceName] = context.GetIPv4Uri() +
 			"/" + string(service.ServiceName) + "/" + (service.Versions)[0].ApiVersionInUri
 		context.PcfSuppFeats[service.ServiceName], err = openapi.NewSupportedFeature(service.SupportedFeatures)
 		if err != nil {
@@ -193,6 +194,7 @@ func (c *PCFContext) GetIPv4Uri() string {
 func (c *PCFContext) InitNFService(serviceList []factory.Service, version string) {
 	tmpVersion := strings.Split(version, ".")
 	versionUri := "v" + tmpVersion[0]
+	addr := serviceuri.NewAddressing(c.RegisterIPv4)
 	for index, service := range serviceList {
 		name := models.Nrf_NFMgmt_ServiceName(service.ServiceName)
 		c.NfService[name] = models.Nrf_NFMgmt_NFService{
@@ -204,15 +206,10 @@ func (c *PCFContext) InitNFService(serviceList []factory.Service, version string
 					ApiVersionInUri: versionUri,
 				},
 			},
-			Scheme:          c.UriScheme,
-			NfServiceStatus: models.Nrf_NFMgmt_NFServiceStatus_REGISTERED,
-			IpEndPoints: []models.Nrf_NFMgmt_IpEndPoint{
-				{
-					Ipv4Address: c.RegisterIPv4,
-					Transport:   models.Nrf_NFMgmt_TransportProtocol_TCP,
-					Port:        int32(c.SBIPort),
-				},
-			},
+			Scheme:            c.UriScheme,
+			NfServiceStatus:   models.Nrf_NFMgmt_NFServiceStatus_REGISTERED,
+			Fqdn:              addr.FQDN,
+			IpEndPoints:       addr.IpEndPoints(int32(c.SBIPort)),
 			SupportedFeatures: service.SuppFeat,
 		}
 	}

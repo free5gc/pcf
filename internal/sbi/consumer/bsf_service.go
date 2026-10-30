@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -16,6 +15,7 @@ import (
 	"github.com/free5gc/pcf/internal/logger"
 	pcf_util "github.com/free5gc/pcf/internal/util"
 	"github.com/free5gc/pcf/pkg/factory"
+	"github.com/free5gc/util/serviceuri"
 )
 
 type nbsfService struct {
@@ -71,33 +71,20 @@ func (s *nbsfService) BSFSelection() (string, error) {
 		return "", fmt.Errorf("no BSF instances found")
 	}
 
-	for _, bsfProfile := range result.NfInstances {
-		uri := pcf_util.SearchNFServiceUri(bsfProfile,
-			models.Nrf_NFMgmt_ServiceName_NBSF_MANAGEMENT, models.Nrf_NFMgmt_NFServiceStatus_REGISTERED)
-		if uri != "" {
-			return uri, nil
-		}
+	if uri := pcf_util.SearchNFServiceUri(result.NfInstances, models.Nrf_NFMgmt_ServiceName_NBSF_MANAGEMENT); uri != "" {
+		return uri, nil
 	}
-
 	return "", fmt.Errorf("BSF management service not found")
 }
 
-// pcfBindingIdentity exposes a PCF hostname (never a URL) and/or IP endpoints.
-// TS 29.521 PcfBinding: pcfFqdn is an FQDN, not an apiPrefix or API root.
+// pcfBindingIdentity returns pcfFqdn and pcfIpEndPoints of the PcfBinding
+// (TS 29.521): an FQDN, never a URL, and/or IP endpoints.
 func pcfBindingIdentity(ctx *pcf_context.PCFContext) (string, []models.Nrf_NFMgmt_IpEndPoint) {
-	if policyAuthService, ok := ctx.NfService[models.Nrf_NFMgmt_ServiceName_NPCF_POLICYAUTHORIZATION]; ok {
-		if policyAuthService.Fqdn != "" || len(policyAuthService.IpEndPoints) > 0 {
-			return policyAuthService.Fqdn, policyAuthService.IpEndPoints
-		}
+	if s, ok := ctx.NfService[models.Nrf_NFMgmt_ServiceName_NPCF_POLICYAUTHORIZATION]; ok {
+		return s.Fqdn, s.IpEndPoints
 	}
-	if net.ParseIP(ctx.RegisterIPv4) != nil {
-		return "", []models.Nrf_NFMgmt_IpEndPoint{{
-			Ipv4Address: ctx.RegisterIPv4,
-			Port:        int32(ctx.SBIPort),
-		}}
-	}
-	// Deployment hostname supplied in RegisterIPv4; keep the hostname only.
-	return ctx.RegisterIPv4, nil
+	addr := serviceuri.NewAddressing(ctx.RegisterIPv4)
+	return addr.FQDN, addr.IpEndPoints(int32(ctx.SBIPort))
 }
 
 // RegisterPCFBinding registers PCF binding for a PDU session context
