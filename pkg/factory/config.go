@@ -88,6 +88,7 @@ type Configuration struct {
 	// NfHeartBeatTimer is the fallback heartbeat interval in seconds, from 1 to
 	// 3600 as the NRF accepts. The interval the NRF assigns always wins.
 	NfHeartBeatTimer int32 `yaml:"nfHeartBeatTimer,omitempty" valid:"optional,range(1|3600)"`
+	NrfNfInstanceId string `yaml:"nrfNfInstanceId,omitempty" valid:"optional,uuidv4"`
 }
 
 type Logger struct {
