@@ -192,6 +192,11 @@ func (s *nnrfService) BuildNFInstance(
 	profile.Ipv4Addresses = append(profile.Ipv4Addresses, context.RegisterIPv4)
 	services := []models.Nrf_NFMgmt_NFService{}
 	for _, nfService := range context.NfService {
+		allowedNfTypes, known := pcf_context.AllowedNfTypesForService(nfService.ServiceName)
+		if !known {
+			return profile, fmt.Errorf("no AllowedNfTypes policy for service %q", nfService.ServiceName)
+		}
+		nfService.AllowedNfTypes = allowedNfTypes
 		services = append(services, nfService)
 	}
 	if len(services) > 0 {

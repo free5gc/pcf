@@ -20,6 +20,10 @@ type npcfService struct {
 	nfAMPolicyControlClient map[string]*AMPolCtrl.APIClient
 }
 
+func amfCallbackTokenTarget() (models.Nrf_NFMgmt_ServiceName, models.Nrf_NFMgmt_NFType) {
+	return pcf_context.ServiceNameNAMFCallback, models.Nrf_NFMgmt_NFType_AMF
+}
+
 func (s *npcfService) getAMPolicyControl(uri string) *AMPolCtrl.APIClient {
 	if uri == "" {
 		return nil
@@ -69,8 +73,8 @@ func (s *npcfService) SendAMPolicyUpdateNotification(ue *pcf_context.UeContext,
 		return
 	}
 
-	ctx, problemDetails, err := s.consumer.Context().GetTokenCtx(models.Nrf_NFMgmt_ServiceName("namf-callback"),
-		models.Nrf_NFMgmt_NFType_AMF)
+	serviceName, targetNF := amfCallbackTokenTarget()
+	ctx, problemDetails, err := s.consumer.Context().GetTokenCtx(serviceName, targetNF)
 	if err != nil {
 		logger.ConsumerLog.Warnf("Policy Update Notification Error[%s]", err.Error())
 		return
@@ -114,9 +118,8 @@ func (s *npcfService) SendAMPolicyAssociationPolicyAssocitionTerminationRequestN
 		return &problemDetail, nil
 	}
 
-	ctx, problemDetails, err := s.consumer.Context().GetTokenCtx(
-		models.Nrf_NFMgmt_ServiceName("namf-callback"),
-		models.Nrf_NFMgmt_NFType_AMF)
+	serviceName, targetNF := amfCallbackTokenTarget()
+	ctx, problemDetails, err := s.consumer.Context().GetTokenCtx(serviceName, targetNF)
 	if err != nil {
 		return nil, err
 	} else if problemDetails != nil {
