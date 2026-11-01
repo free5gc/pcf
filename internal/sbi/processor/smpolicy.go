@@ -1199,7 +1199,8 @@ func (p *Processor) SendSMPolicyUpdateNotification(
 		return
 	}
 
-	ctx, _, err := p.Context().GetTokenCtx(models.Nrf_NFMgmt_ServiceName("nsmf-callback"), models.Nrf_NFMgmt_NFType_SMF)
+	ctx, _, err := p.Context().GetTokenCtx(
+		pcf_context.ServiceNameNSMFCallback, models.Nrf_NFMgmt_NFType_SMF)
 	if err != nil {
 		return
 	}
@@ -1231,7 +1232,8 @@ func (p *Processor) SendSMPolicyTerminationRequestNotification(
 		return
 	}
 
-	ctx, _, err := p.Context().GetTokenCtx(models.Nrf_NFMgmt_ServiceName("nsmf-callback"), models.Nrf_NFMgmt_NFType_SMF)
+	ctx, _, err := p.Context().GetTokenCtx(
+		pcf_context.ServiceNameNSMFCallback, models.Nrf_NFMgmt_NFType_SMF)
 	if err != nil {
 		return
 	}
