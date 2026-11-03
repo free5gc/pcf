@@ -22,6 +22,7 @@ require (
 
 require (
 	github.com/aead/cmac v0.0.0-20160719120800-7af84192f0b1 // indirect
+	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/free5gc/nas v1.2.4-0.20260707083822-348faf940c55 // indirect
 	github.com/free5gc/ngap v1.1.4-0.20260707055048-c26215fe47ef // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect

@@ -37,8 +37,10 @@ var (
 	UNAUTHORIZED_SPONSORED_DATA_CONNECTIVITY     = "UNAUTHORIZED_SPONSORED_DATA_CONNECTIVITY"
 	PDU_SESSION_NOT_AVAILABLE                    = "PDU_SESSION_NOT_AVAILABLE"
 	APPLICATION_SESSION_CONTEXT_NOT_FOUND        = "APPLICATION_SESSION_CONTEXT_NOT_FOUND"
+	INSUFFICIENT_RESOURCES                       = "INSUFFICIENT_RESOURCES"
 	ERROR_IDGENERATOR                            = "ERROR_IDGENERATOR"
 	PcpErrHttpStatusMap                          = map[string]int32{
+		INSUFFICIENT_RESOURCES:                       http.StatusInternalServerError,
 		ERROR_REQUEST_PARAMETERS:                     http.StatusBadRequest,
 		USER_UNKNOWN:                                 http.StatusBadRequest,
 		ERROR_INITIAL_PARAMETERS:                     http.StatusBadRequest,
