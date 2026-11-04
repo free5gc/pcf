@@ -1,6 +1,7 @@
 package consumer
 
 import (
+	"context"
 	"reflect"
 	"sync"
 
@@ -69,23 +70,13 @@ func (s *npcfService) SendAMPolicyUpdateNotification(ue *pcf_context.UeContext,
 		return
 	}
 
-	ctx, problemDetails, err := s.consumer.Context().GetTokenCtx(models.Nrf_NFMgmt_ServiceName("namf-callback"),
-		models.Nrf_NFMgmt_NFType_AMF)
-	if err != nil {
-		logger.ConsumerLog.Warnf("Policy Update Notification Error[%s]", err.Error())
-		return
-	} else if problemDetails != nil {
-		logger.ConsumerLog.Warnf("Policy Update Notification Fault[%s]", problemDetails.Detail)
-		return
-	}
-
 	client := s.getAMPolicyControl(uri)
 	param := AMPolCtrl.CreateIndividualAMPolicyAssociationPolicyUpdateNotificationRequest{
 		RequestBody: &request,
 	}
 	rsp, err := client.AMPolicyAssociationsCollectionApi.
 		CreateIndividualAMPolicyAssociationPolicyUpdateNotification(
-			ctx, uri, &param)
+			context.Background(), uri, &param)
 	if err != nil {
 		logger.ConsumerLog.Warnf("SendAMPolicyUpdateNotification function in consumer Error[%s]",
 			err.Error())
@@ -114,15 +105,6 @@ func (s *npcfService) SendAMPolicyAssociationPolicyAssocitionTerminationRequestN
 		return &problemDetail, nil
 	}
 
-	ctx, problemDetails, err := s.consumer.Context().GetTokenCtx(
-		models.Nrf_NFMgmt_ServiceName("namf-callback"),
-		models.Nrf_NFMgmt_NFType_AMF)
-	if err != nil {
-		return nil, err
-	} else if problemDetails != nil {
-		return problemDetails, nil
-	}
-
 	client := s.getAMPolicyControl(uri)
 	param := AMPolCtrl.
 		CreateIndividualAMPolicyAssociationPolicyAssocitionTerminationRequestNotificationRequest{
@@ -130,7 +112,7 @@ func (s *npcfService) SendAMPolicyAssociationPolicyAssocitionTerminationRequestN
 	}
 	_, err = client.AMPolicyAssociationsCollectionApi.
 		CreateIndividualAMPolicyAssociationPolicyAssocitionTerminationRequestNotification(
-			ctx, uri, &param)
+			context.Background(), uri, &param)
 	if err != nil {
 		logger.AmPolicyLog.Warnf(
 			"CreateIndividualAMPolicyAssociationPolicyAssocitionTerminationRequestNotification Error[%s]",

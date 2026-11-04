@@ -101,7 +101,7 @@ func (s *nnrfService) SendSearchNFInstances(
 		return nil, errors.Errorf("SendSearchNFInstances: nrf not found")
 	}
 
-	ctx, _, err := s.consumer.Context().GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NNRF_DISC, models.Nrf_NFMgmt_NFType_NRF)
+	ctx, _, err := s.consumer.Context().GetTokenCtxForNRF(models.Nrf_NFMgmt_ServiceName_NNRF_DISC)
 	if err != nil {
 		return nil, err
 	}
@@ -192,6 +192,11 @@ func (s *nnrfService) BuildNFInstance(
 	profile.Ipv4Addresses = append(profile.Ipv4Addresses, context.RegisterIPv4)
 	services := []models.Nrf_NFMgmt_NFService{}
 	for _, nfService := range context.NfService {
+		allowedNfTypes, known := pcf_context.AllowedNfTypesForService(nfService.ServiceName)
+		if !known {
+			return profile, fmt.Errorf("no AllowedNfTypes policy for service %q", nfService.ServiceName)
+		}
+		nfService.AllowedNfTypes = allowedNfTypes
 		services = append(services, nfService)
 	}
 	if len(services) > 0 {
@@ -244,8 +249,7 @@ func (s *nnrfService) SendRegisterNFInstance(ctx context.Context, applyOAuth2 bo
 			if res.Nrf_NFMgmt_NFProfile != nil {
 				nf = *res.Nrf_NFMgmt_NFProfile
 			}
-			s.processRegisterResponse(pcfContext, nf, applyOAuth2)
-			return nil
+			return s.processRegisterResponse(pcfContext, nf, applyOAuth2)
 		}
 		logger.ConsumerLog.Errorf("PCF register to NRF Error[%v]", err)
 		select {
@@ -262,7 +266,7 @@ func (s *nnrfService) processRegisterResponse(
 	pcfContext *pcf_context.PCFContext,
 	nf models.Nrf_NFMgmt_NFProfile,
 	applyOAuth2 bool,
-) {
+) error {
 	s.heartbeatTimer = nf.HeartBeatTimer
 
 	oauth2 := false
@@ -273,13 +277,11 @@ func (s *nnrfService) processRegisterResponse(
 		}
 	}
 	if applyOAuth2 {
-		pcfContext.OAuth2Required = oauth2
-		if oauth2 && pcfContext.NrfCertPem == "" {
-			logger.CfgLog.Error("OAuth2 enable but no nrfCertPem provided in config.")
-		}
+		return pcfContext.SetOAuth2Required(oauth2)
 	} else if oauth2 != pcfContext.OAuth2Required {
 		logger.ConsumerLog.Warnf("NRF OAuth2 setting changed to %v, restart PCF to apply it", oauth2)
 	}
+	return nil
 }
 
 // SendUpdateNFInstance sends an NFUpdate PATCH to the NRF, honoring ctx. The
@@ -289,10 +291,7 @@ func (s *nnrfService) SendUpdateNFInstance(ctx context.Context, patchItems []mod
 	nf models.Nrf_NFMgmt_NFProfile, problemDetails *models.ProblemDetails, err error,
 ) {
 	pcfContext := s.consumer.Context()
-	tokCtx, pd, err := pcfContext.GetTokenCtx(
-		models.Nrf_NFMgmt_ServiceName_NNRF_NFM,
-		models.Nrf_NFMgmt_NFType_NRF,
-	)
+	tokCtx, pd, err := pcfContext.GetTokenCtxForNRF(models.Nrf_NFMgmt_ServiceName_NNRF_NFM)
 	if err != nil {
 		return nf, pd, err
 	}
@@ -335,7 +334,7 @@ func (s *nnrfService) SendDeregisterNFInstance() (*models.ProblemDetails, error)
 	logger.ConsumerLog.Infof("Send Deregister NFInstance")
 
 	pcfContext := s.consumer.Context()
-	ctx, pd, err := pcfContext.GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NNRF_NFM, models.Nrf_NFMgmt_NFType_NRF)
+	ctx, pd, err := pcfContext.GetTokenCtxForNRF(models.Nrf_NFMgmt_ServiceName_NNRF_NFM)
 	if err != nil {
 		return pd, err
 	}
