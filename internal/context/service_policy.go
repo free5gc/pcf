@@ -6,11 +6,7 @@ import (
 	"github.com/free5gc/openapi/models"
 )
 
-const (
-	ServiceNameNAMFCallback models.Nrf_NFMgmt_ServiceName = "namf-callback"
-	ServiceNameNPCFCallback models.Nrf_NFMgmt_ServiceName = "npcf-callback"
-	ServiceNameNSMFCallback models.Nrf_NFMgmt_ServiceName = "nsmf-callback"
-)
+const ServiceNameNPCFCallback models.Nrf_NFMgmt_ServiceName = "npcf-callback"
 
 var servicePolicies = map[models.Nrf_NFMgmt_ServiceName][]models.Nrf_NFMgmt_NFType{
 	models.Nrf_NFMgmt_ServiceName_NPCF_AM_POLICY_CONTROL: {
