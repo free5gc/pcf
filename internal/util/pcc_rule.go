@@ -276,3 +276,24 @@ func setUpPathChgEvent(trafficInfluData *models.Udr_DR_TrafficInfluData) *models
 		DnaiChgType:     trafficInfluData.DnaiChgType,
 	}
 }
+
+// ConfiguredFlowDirection reads an operator-defined flow rule. Older database
+// records omit the direction and retain their current bidirectional behavior.
+func ConfiguredFlowDirection(value interface{}) (models.Pcf_SMPolCtrl_FlowDirectionRm, error) {
+	if value == nil || value == "" {
+		return models.Pcf_SMPolCtrl_FlowDirectionRm_BIDIRECTIONAL, nil
+	}
+	text, ok := value.(string)
+	if !ok {
+		return "", fmt.Errorf("flowDirection must be a string")
+	}
+	direction := models.Pcf_SMPolCtrl_FlowDirectionRm(text)
+	switch direction {
+	case models.Pcf_SMPolCtrl_FlowDirectionRm_DOWNLINK,
+		models.Pcf_SMPolCtrl_FlowDirectionRm_UPLINK,
+		models.Pcf_SMPolCtrl_FlowDirectionRm_BIDIRECTIONAL:
+		return direction, nil
+	default:
+		return "", fmt.Errorf("unsupported flowDirection %q", text)
+	}
+}
