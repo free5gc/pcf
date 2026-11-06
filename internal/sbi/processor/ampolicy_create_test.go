@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -28,10 +29,24 @@ func (a *amCreateTestPCF) CancelContext() context.Context   { return context.Bac
 
 func amCreateFixture(t *testing.T, discover bool, udr http.HandlerFunc) (*Processor, *pcf_context.PCFContext) {
 	t.Helper()
+	return amCreateFixtureWithAMF(t, discover, udr, nil)
+}
+
+func amCreateFixtureWithAMF(
+	t *testing.T, discover bool, udr, amf http.HandlerFunc,
+) (*Processor, *pcf_context.PCFContext) {
+	t.Helper()
 	var server *httptest.Server
 	server = httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if strings.HasPrefix(r.URL.Path, "/nnrf-disc/") {
+			if amf != nil && r.URL.Query().Get("target-nf-type") == "AMF" {
+				writeAMTestResponse(t, w, fmt.Sprintf(`{"nfInstances":[{
+                    "nfInstanceId":"amf-test","nfType":"AMF","nfStatus":"REGISTERED",
+                    "nfServices":[{"serviceInstanceId":"comm","serviceName":"namf-comm",
+                    "nfServiceStatus":"REGISTERED","scheme":"http","apiPrefix":%q}]}]}`, server.URL))
+				return
+			}
 			if !discover {
 				writeAMTestResponse(t, w, `{"nfInstances":[]}`)
 				return
@@ -49,6 +64,10 @@ func amCreateFixture(t *testing.T, discover bool, udr http.HandlerFunc) (*Proces
 			}}); err != nil {
 				t.Error(err)
 			}
+			return
+		}
+		if amf != nil && strings.HasSuffix(r.URL.Path, "/subscriptions") {
+			amf(w, r)
 			return
 		}
 		if !strings.HasSuffix(r.URL.Path, "/am-data") {
@@ -190,5 +209,70 @@ func writeAMTestResponse(t *testing.T, w http.ResponseWriter, body string) {
 	t.Helper()
 	if _, err := w.Write([]byte(body)); err != nil {
 		t.Error(err)
+	}
+}
+
+func TestAMCreateWhileAMFSubscriptionPending(t *testing.T) {
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	p, ctx := amCreateFixtureWithAMF(t, true, func(w http.ResponseWriter, _ *http.Request) {
+		writeAMTestResponse(t, w, `{}`)
+	}, func(w http.ResponseWriter, r *http.Request) {
+		close(entered)
+		<-release
+		var subscription models.Amf_Comm_SubscriptionData
+		if err := json.NewDecoder(r.Body).Decode(&subscription); err != nil {
+			t.Error(err)
+			return
+		}
+		w.Header().Set("Location", "/namf-comm/v1/subscriptions/1")
+		w.WriteHeader(http.StatusCreated)
+		if err := json.NewEncoder(w).Encode(subscription); err != nil {
+			t.Error(err)
+		}
+	})
+	unblock := sync.OnceFunc(func() { close(release) })
+	t.Cleanup(unblock)
+	req := amRequest("imsi-001010000000001")
+	create := func(request models.Pcf_AMPolCtrl_PolicyAssociationRequest) <-chan string {
+		done := make(chan string, 1)
+		go func() {
+			_, location, _ := p.PostPoliciesProcedure("", request)
+			done <- location
+		}()
+		return done
+	}
+	withGuami := req
+	guamiJSON := []byte(`{"plmnId":{"mcc":"001","mnc":"01"},"amfId":"cafe00"}`)
+	if err := json.Unmarshal(guamiJSON, &withGuami.Guami); err != nil {
+		t.Fatal(err)
+	}
+	first := create(withGuami)
+	select {
+	case <-entered:
+	case <-first:
+		t.Fatal("first create returned before subscription")
+	case <-time.After(5 * time.Second):
+		t.Fatal("AMF subscription did not start")
+	}
+	select {
+	case location := <-create(req):
+		if !strings.HasSuffix(location, req.Supi+"-2") {
+			t.Fatalf("unexpected second location %q", location)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("second create blocked on AMF subscription")
+	}
+	unblock()
+	select {
+	case location := <-first:
+		if !strings.HasSuffix(location, req.Supi+"-1") {
+			t.Fatalf("unexpected first location %q", location)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("first create did not finish")
+	}
+	if _, ok := ctx.AMFStatusSubsData.Load("1"); !ok {
+		t.Fatal("AMF subscription was not retained")
 	}
 }

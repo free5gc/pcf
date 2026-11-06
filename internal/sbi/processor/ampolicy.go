@@ -216,47 +216,37 @@ func (p *Processor) PostPoliciesProcedure(polAssoId string,
 			ue = newUe
 		}
 	}
-	ue.AMPolicyCreateMu.Lock()
-	defer ue.AMPolicyCreateMu.Unlock()
-
-	udrUri := p.getUdrUri(ue)
-	if udrUri == "" {
-		// Can't find any UDR support this Ue
+	// The UDR client only needs the SUPI and URI. Resolve and query it
+	// before taking the lock that protects association creation.
+	lookup := &pcf_context.UeContext{Supi: ue.Supi, UdrUri: ue.UdrUri}
+	lookup.UdrUri = p.getUdrUri(lookup)
+	if lookup.UdrUri == "" {
 		problemDetail := util.GetProblemDetail("Ue is not supported in PCF", util.USER_UNKNOWN)
 		logger.AmPolicyLog.Errorf("Ue[%s] is not supported in PCF", ue.Supi)
 		return nil, "", &problemDetail
 	}
-	ue.UdrUri = udrUri
 
-	response.Request = deepcopy.Copy(&policyAssociationRequest).(*models.Pcf_AMPolCtrl_PolicyAssociationRequest)
-	assolId := fmt.Sprintf("%s-%d", ue.Supi, ue.PolAssociationIDGenerator)
-	amPolicy := ue.AMPolicyData[assolId]
-
-	if amPolicy == nil || amPolicy.AmPolicyData == nil {
-		rsp, problemDetail, err := p.Consumer().GetAccessAndMobilityPolicyData(ue)
-		if err != nil {
-			logger.AmPolicyLog.Errorf("Get Access And Mobility Policy Data Error Problem[%+v]", err)
-			problemDetail := util.GetProblemDetail("Get Access And Mobility Policy Data error[%+v]", err.Error())
-			return nil, "", &problemDetail
-		} else if problemDetail != nil {
-			logger.AmPolicyLog.Errorf("Get Access And Mobility Policy Data Failed Problem[%+v]", problemDetail)
-			problemDetail := util.GetProblemDetail("Get Access And Mobility Policy Data Failed[%+v]", problemDetail.Cause)
-			return nil, "", &problemDetail
-		}
-
-		if newUE {
-			// Publish only after UDR validation. A concurrent successful create may
-			// already own this SUPI; use its context rather than replacing it.
-			if _, loaded := pcfSelf.UePool.LoadOrStore(ue.Supi, ue); loaded {
-				return p.PostPoliciesProcedure(polAssoId, policyAssociationRequest)
-			}
-		}
-
-		if amPolicy == nil {
-			amPolicy = ue.NewUeAMPolicyData(assolId, policyAssociationRequest)
-		}
-		amPolicy.AmPolicyData = rsp
+	rsp, problemDetail, err := p.Consumer().GetAccessAndMobilityPolicyData(lookup)
+	if err != nil {
+		logger.AmPolicyLog.Errorf("Get Access And Mobility Policy Data Error Problem[%+v]", err)
+		problemDetail := util.GetProblemDetail("Get Access And Mobility Policy Data error[%+v]", err.Error())
+		return nil, "", &problemDetail
+	} else if problemDetail != nil {
+		logger.AmPolicyLog.Errorf("Get Access And Mobility Policy Data Failed Problem[%+v]", problemDetail)
+		problemDetail := util.GetProblemDetail("Get Access And Mobility Policy Data Failed[%+v]", problemDetail.Cause)
+		return nil, "", &problemDetail
 	}
+
+	if newUE {
+		ue.UdrUri = lookup.UdrUri
+		actual, _ := pcfSelf.UePool.LoadOrStore(ue.Supi, ue)
+		ue = actual.(*pcf_context.UeContext)
+	}
+	response.Request = deepcopy.Copy(&policyAssociationRequest).(*models.Pcf_AMPolCtrl_PolicyAssociationRequest)
+	ue.AMPolicyCreateMu.Lock()
+	assolId := fmt.Sprintf("%s-%d", ue.Supi, ue.PolAssociationIDGenerator)
+	amPolicy := ue.NewUeAMPolicyData(assolId, policyAssociationRequest)
+	amPolicy.AmPolicyData = rsp
 
 	// TODO: according to PCF Policy to determine ServAreaRes, Rfsp, SuppFeat
 	// amPolicy.ServAreaRes =
@@ -278,6 +268,7 @@ func (p *Processor) PostPoliciesProcedure(polAssoId string,
 	// rsp.Triggers
 	// rsp.Pras
 	ue.PolAssociationIDGenerator++
+	ue.AMPolicyCreateMu.Unlock()
 	// Create location header for update, delete, get
 	locationHeader := util.GetResourceUri(models.Nrf_NFMgmt_ServiceName_NPCF_AM_POLICY_CONTROL, assolId)
 	logger.AmPolicyLog.Tracef("AMPolicy association Id[%s] Create", assolId)
@@ -309,8 +300,6 @@ func (p *Processor) PostPoliciesProcedure(polAssoId string,
 					logger.AmPolicyLog.Errorf("Subscribe AMF status change error[%+v]", err)
 				} else if problemDetails != nil {
 					logger.AmPolicyLog.Errorf("Subscribe AMF status change failed[%+v]", problemDetails)
-				} else {
-					amPolicy.Guami = policyAssociationRequest.Guami
 				}
 			}
 		} else {
