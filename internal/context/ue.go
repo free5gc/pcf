@@ -15,6 +15,8 @@ import (
 
 // key is supi
 type UeContext struct {
+	// AMPolicyMu protects AMPolicyData and its policies, association ID allocation, UdrUri, Gpsi, Pei, and GroupIds.
+	AMPolicyMu sync.RWMutex
 	// Ue Context
 	Supi                      string
 	Gpsi                      string
@@ -107,6 +109,7 @@ type UeSmPolicyData struct {
 	BsfBindingId string
 }
 
+// Caller must hold AMPolicyMu while creating and initializing the policy.
 // NewUeAMPolicyData returns created UeAMPolicyData data and insert this data to Ue.AMPolicyData with assolId as key
 func (ue *UeContext) NewUeAMPolicyData(
 	assolId string,
@@ -470,6 +473,8 @@ func (ue *UeContext) FindAMPolicy(anType models.AccessType, plmnId *models.PlmnI
 	if ue == nil || plmnId == nil {
 		return nil
 	}
+	ue.AMPolicyMu.RLock()
+	defer ue.AMPolicyMu.RUnlock()
 	for _, amPolicy := range ue.AMPolicyData {
 		if amPolicy == nil || amPolicy.ServingPlmn == nil {
 			logger.CtxLog.Warnln("AM Policy or ServingPlmn is nil")

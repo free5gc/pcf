@@ -104,12 +104,14 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 		return
 	}
 	// TODO: check service restrict
+	ue.AMPolicyMu.Lock()
 	if ue.Gpsi == "" {
 		ue.Gpsi = request.Gpsi
 	}
 	if ue.Pei == "" {
 		ue.Pei = request.Pei
 	}
+	ue.AMPolicyMu.Unlock()
 	creation := newSmPolicyCreation(ue, smPolicyID, pcfSelf.RatingGroupIdGenerator)
 	defer creation.rollback()
 	smPolicyData = ue.NewUeSmPolicyData(smPolicyID, request, &smData)

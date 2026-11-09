@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/mohae/deepcopy"
@@ -23,7 +24,13 @@ func (p *Processor) HandleDeletePoliciesPolAssoId(
 	logger.AmPolicyLog.Infof("Handle AM Policy Association Delete")
 
 	ue := p.Context().PCFUeFindByPolicyId(polAssoId)
+	if ue != nil {
+		ue.AMPolicyMu.Lock()
+	}
 	if ue == nil || ue.AMPolicyData[polAssoId] == nil {
+		if ue != nil {
+			ue.AMPolicyMu.Unlock()
+		}
 		problemDetails := util.GetProblemDetail("polAssoId not found in PCF", util.CONTEXT_NOT_FOUND)
 		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetails.Cause)
 		c.JSON(int(problemDetails.Status), problemDetails)
@@ -31,6 +38,7 @@ func (p *Processor) HandleDeletePoliciesPolAssoId(
 	}
 
 	delete(ue.AMPolicyData, polAssoId)
+	ue.AMPolicyMu.Unlock()
 	c.Status(http.StatusNoContent)
 }
 
@@ -42,7 +50,13 @@ func (p *Processor) HandleGetPoliciesPolAssoId(
 	logger.AmPolicyLog.Infof("Handle AM Policy Association Get")
 
 	ue := p.Context().PCFUeFindByPolicyId(polAssoId)
+	if ue != nil {
+		ue.AMPolicyMu.RLock()
+	}
 	if ue == nil || ue.AMPolicyData[polAssoId] == nil {
+		if ue != nil {
+			ue.AMPolicyMu.RUnlock()
+		}
 		problemDetails := util.GetProblemDetail("polAssoId not found  in PCF", util.CONTEXT_NOT_FOUND)
 		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetails.Cause)
 		c.JSON(int(problemDetails.Status), problemDetails)
@@ -67,6 +81,7 @@ func (p *Processor) HandleGetPoliciesPolAssoId(
 			}
 		}
 	}
+	ue.AMPolicyMu.RUnlock()
 	c.JSON(http.StatusOK, rsp)
 }
 
@@ -99,6 +114,10 @@ func (p *Processor) UpdatePostPoliciesPolAssoIdProcedure(polAssoId string,
 	policyAssociationUpdateRequest models.Pcf_AMPolCtrl_PolicyAssociationUpdateRequest,
 ) (*models.Pcf_AMPolCtrl_PolicyUpdate, *models.ProblemDetails) {
 	ue := p.Context().PCFUeFindByPolicyId(polAssoId)
+	if ue != nil {
+		ue.AMPolicyMu.Lock()
+		defer ue.AMPolicyMu.Unlock()
+	}
 	if ue == nil || ue.AMPolicyData[polAssoId] == nil {
 		problemDetails := util.GetProblemDetail("polAssoId not found  in PCF", util.CONTEXT_NOT_FOUND)
 		return nil, &problemDetails
@@ -205,6 +224,22 @@ func (p *Processor) PostPoliciesProcedure(polAssoId string,
 	if val, ok := pcfSelf.UePool.Load(policyAssociationRequest.Supi); ok {
 		ue = val.(*pcf_context.UeContext)
 	}
+	if ue == nil && !strings.HasPrefix(policyAssociationRequest.Supi, "imsi-") {
+		problemDetail := util.GetProblemDetail("Supi Format Error", util.ERROR_REQUEST_PARAMETERS)
+		return nil, "", &problemDetail
+	}
+	// Resolve UDR before publishing a new UE, so discovery failure leaves no orphan.
+	lookupUE := ue
+	if lookupUE == nil {
+		lookupUE = &pcf_context.UeContext{Supi: policyAssociationRequest.Supi}
+	}
+	udrUri := p.getUdrUri(lookupUE)
+	if udrUri == "" {
+		// Can't find any UDR support this Ue
+		problemDetail := util.GetProblemDetail("Ue is not supported in PCF", util.USER_UNKNOWN)
+		logger.AmPolicyLog.Errorf("Ue[%s] is not supported in PCF", lookupUE.Supi)
+		return nil, "", &problemDetail
+	}
 	if ue == nil {
 		if newUe, err := pcfSelf.NewPCFUe(policyAssociationRequest.Supi); err != nil {
 			// supi format dose not match "imsi-..."
@@ -215,37 +250,24 @@ func (p *Processor) PostPoliciesProcedure(polAssoId string,
 			ue = newUe
 		}
 	}
-	udrUri := p.getUdrUri(ue)
-	if udrUri == "" {
-		// Can't find any UDR support this Ue
-		pcfSelf.UePool.Delete(ue.Supi)
-		problemDetail := util.GetProblemDetail("Ue is not supported in PCF", util.USER_UNKNOWN)
-		logger.AmPolicyLog.Errorf("Ue[%s] is not supported in PCF", ue.Supi)
-		return nil, "", &problemDetail
-	}
+	ue.AMPolicyMu.Lock()
 	ue.UdrUri = udrUri
+	ue.AMPolicyMu.Unlock()
 
 	response.Request = deepcopy.Copy(&policyAssociationRequest).(*models.Pcf_AMPolCtrl_PolicyAssociationRequest)
-	assolId := fmt.Sprintf("%s-%d", ue.Supi, ue.PolAssociationIDGenerator)
-	amPolicy := ue.AMPolicyData[assolId]
-
-	if amPolicy == nil || amPolicy.AmPolicyData == nil {
-		rsp, problemDetail, err := p.Consumer().GetAccessAndMobilityPolicyData(ue)
-		if err != nil {
-			logger.AmPolicyLog.Errorf("Get Access And Mobility Policy Data Error Problem[%+v]", err)
-			problemDetail := util.GetProblemDetail("Get Access And Mobility Policy Data error[%+v]", err.Error())
-			return nil, "", &problemDetail
-		} else if problemDetail != nil {
-			logger.AmPolicyLog.Errorf("Get Access And Mobility Policy Data Failed Problem[%+v]", problemDetail)
-			problemDetail := util.GetProblemDetail("Get Access And Mobility Policy Data Failed[%+v]", problemDetail.Cause)
-			return nil, "", &problemDetail
-		}
-
-		if amPolicy == nil {
-			amPolicy = ue.NewUeAMPolicyData(assolId, policyAssociationRequest)
-		}
-		amPolicy.AmPolicyData = rsp
+	// Retrieve subscription data before entering the per-UE critical section.
+	rsp, problemDetail, err := p.Consumer().GetAccessAndMobilityPolicyData(ue)
+	if err != nil {
+		problemDetail := util.GetProblemDetail("Get Access And Mobility Policy Data error[%+v]", err.Error())
+		return nil, "", &problemDetail
+	} else if problemDetail != nil {
+		problemDetail := util.GetProblemDetail("Get Access And Mobility Policy Data Failed[%+v]", problemDetail.Cause)
+		return nil, "", &problemDetail
 	}
+	ue.AMPolicyMu.Lock()
+	assolId := fmt.Sprintf("%s-%d", ue.Supi, ue.PolAssociationIDGenerator)
+	amPolicy := ue.NewUeAMPolicyData(assolId, policyAssociationRequest)
+	amPolicy.AmPolicyData = rsp
 
 	// TODO: according to PCF Policy to determine ServAreaRes, Rfsp, SuppFeat
 	// amPolicy.ServAreaRes =
@@ -267,6 +289,7 @@ func (p *Processor) PostPoliciesProcedure(polAssoId string,
 	// rsp.Triggers
 	// rsp.Pras
 	ue.PolAssociationIDGenerator++
+	ue.AMPolicyMu.Unlock()
 	// Create location header for update, delete, get
 	locationHeader := util.GetResourceUri(models.Nrf_NFMgmt_ServiceName_NPCF_AM_POLICY_CONTROL, assolId)
 	logger.AmPolicyLog.Tracef("AMPolicy association Id[%s] Create", assolId)
@@ -299,7 +322,9 @@ func (p *Processor) PostPoliciesProcedure(polAssoId string,
 				} else if problemDetails != nil {
 					logger.AmPolicyLog.Errorf("Subscribe AMF status change failed[%+v]", problemDetails)
 				} else {
+					ue.AMPolicyMu.Lock()
 					amPolicy.Guami = policyAssociationRequest.Guami
+					ue.AMPolicyMu.Unlock()
 				}
 			}
 		} else {
@@ -317,14 +342,17 @@ func (p *Processor) SendAMPolicyTerminationRequestNotification(ue *pcf_context.U
 		logger.AmPolicyLog.Warnln("Policy Assocition Termination Request Notification Error[Ue is nil]")
 		return
 	}
+	ue.AMPolicyMu.RLock()
 	amPolicyData := ue.AMPolicyData[PolId]
 	if amPolicyData == nil {
+		ue.AMPolicyMu.RUnlock()
 		logger.AmPolicyLog.Warnf(
 			"Policy Assocition Termination Request Notification Error[Can't find polAssoId[%s] in UE(%s)]", PolId, ue.Supi)
 		return
 	}
 
 	uri := amPolicyData.NotificationUri
+	ue.AMPolicyMu.RUnlock()
 
 	if uri != "" {
 		pd, err := p.Consumer().SendAMPolicyAssociationPolicyAssocitionTerminationRequestNotification(uri, &request)
@@ -341,8 +369,11 @@ func (p *Processor) SendAMPolicyTerminationRequestNotification(ue *pcf_context.U
 
 // returns UDR Uri of Ue, if ue.UdrUri dose not exist, query NRF to get supported Udr Uri
 func (p *Processor) getUdrUri(ue *pcf_context.UeContext) string {
-	if ue.UdrUri != "" {
-		return ue.UdrUri
+	ue.AMPolicyMu.RLock()
+	uri := ue.UdrUri
+	ue.AMPolicyMu.RUnlock()
+	if uri != "" {
+		return uri
 	}
 	return p.Consumer().SendNFInstancesUDR(p.Context().NrfUri, ue.Supi)
 }

@@ -228,8 +228,8 @@ func (c *PCFContext) NewPCFUe(Supi string) (*UeContext, error) {
 		newUeContext.PolAssociationIDGenerator = 1
 		newUeContext.AppSessionIDGenerator = idgenerator.NewGenerator(1, math.MaxInt64)
 		newUeContext.Supi = Supi
-		c.UePool.Store(Supi, newUeContext)
-		return newUeContext, nil
+		actual, _ := c.UePool.LoadOrStore(Supi, newUeContext)
+		return actual.(*UeContext), nil
 	} else {
 		return nil, fmt.Errorf(" add Ue context fail ")
 	}
@@ -348,7 +348,10 @@ func (c *PCFContext) SessionBinding(req *models.Pcf_PolAuth_AppSessionContextReq
 	if req.Gpsi != "" && selectedUE == nil {
 		c.UePool.Range(func(key, value interface{}) bool {
 			ue := value.(*UeContext)
-			if ue.Gpsi == req.Gpsi {
+			ue.AMPolicyMu.RLock()
+			gpsi := ue.Gpsi
+			ue.AMPolicyMu.RUnlock()
+			if gpsi == req.Gpsi {
 				selectedUE = ue
 				return false
 			} else {

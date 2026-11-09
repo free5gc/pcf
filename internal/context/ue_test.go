@@ -1,6 +1,7 @@
 package context
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/free5gc/openapi/models"
@@ -78,5 +79,34 @@ func TestFindAMPolicy(t *testing.T) {
 				t.Fatalf("FindAMPolicy() = %p, want %p", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestConcurrentNewPCFUe(t *testing.T) {
+	ctx := &PCFContext{}
+	var wg sync.WaitGroup
+	results := make(chan *UeContext, 64)
+	for i := 0; i < 64; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ue, err := ctx.NewPCFUe("imsi-001010000000001")
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			results <- ue
+		}()
+	}
+	wg.Wait()
+	close(results)
+	var first *UeContext
+	for ue := range results {
+		if first == nil {
+			first = ue
+		}
+		if ue != first {
+			t.Error("same SUPI allocated multiple contexts")
+		}
 	}
 }
