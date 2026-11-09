@@ -25,7 +25,10 @@ func (w *blockedAMPolicyWriter) Write(b []byte) (int, error) {
 func TestSlowGETDoesNotBlockDelete(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	ctx := &pcf_context.PCFContext{}
-	ue, _ := ctx.NewPCFUe("imsi-001010000000001")
+	ue, err := ctx.NewPCFUe("imsi-001010000000001")
+	if err != nil {
+		t.Fatal(err)
+	}
 	id := ue.Supi + "-1"
 	ue.AMPolicyData[id] = &pcf_context.UeAMPolicyData{PolAssoId: id}
 	p := &Processor{PCF: &allocationTestPCF{ctx: ctx}}
