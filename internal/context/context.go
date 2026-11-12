@@ -102,7 +102,6 @@ func InitPcfContext(context *PCFContext) {
 	sbi := configuration.Sbi
 	context.NrfUri = configuration.NrfUri
 	context.NrfCertPem = configuration.NrfCertPem
-	context.NrfNfInstanceID = configuration.NrfNfInstanceId
 	context.UriScheme = ""
 	context.RegisterIPv4 = factory.PcfSbiDefaultIPv4 // default localhost
 	context.SBIPort = factory.PcfSbiDefaultPort      // default port
@@ -498,6 +497,7 @@ func (c *PCFContext) tokenRequestForNFInstance(serviceName models.Nrf_NFMgmt_Ser
 func (c *PCFContext) SetOAuth2Required(required bool) error {
 	if !required {
 		c.OAuth2Required = false
+		c.NrfNfInstanceID = ""
 		return nil
 	}
 	if strings.TrimSpace(c.NrfCertPem) == "" {
@@ -506,9 +506,11 @@ func (c *PCFContext) SetOAuth2Required(required bool) error {
 	if strings.TrimSpace(c.NrfUri) == "" {
 		return fmt.Errorf("OAuth2 enabled but NRF URI is empty")
 	}
-	if err := uuid.Validate(c.NrfNfInstanceID); err != nil {
-		return fmt.Errorf("OAuth2 enabled but trusted NRF instance ID is invalid: %w", err)
+	nrfNfInstanceID, err := oauth.NFInstanceIDFromCertificate(c.NrfCertPem)
+	if err != nil {
+		return fmt.Errorf("derive trusted NRF instance ID from certificate: %w", err)
 	}
+	c.NrfNfInstanceID = nrfNfInstanceID
 	c.OAuth2Required = true
 	return nil
 }
