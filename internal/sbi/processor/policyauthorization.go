@@ -45,8 +45,15 @@ func transferAfRoutReqRmToAfRoutReq(
 }
 
 func transferMedCompRmToMedComp(medCompRm *models.Pcf_PolAuth_MediaComponentRm) *models.Pcf_PolAuth_MediaComponent {
+	// A null entry means removal; the caller treats the nil result as zero.
+	if medCompRm == nil {
+		return nil
+	}
 	medSubComps := make(map[string]models.Pcf_PolAuth_MediaSubComponent)
 	for id, medSubCompRm := range medCompRm.MedSubComps {
+		if medSubCompRm == nil {
+			continue
+		}
 		medSubComps[id] = models.Pcf_PolAuth_MediaSubComponent(*medSubCompRm)
 	}
 	medComp := models.Pcf_PolAuth_MediaComponent{
