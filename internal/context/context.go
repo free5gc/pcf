@@ -221,6 +221,16 @@ func (c *PCFContext) InitNFService(serviceList []factory.Service, version string
 
 // Allocate PCF Ue with supi and add to pcf Context and returns allocated ue
 func (c *PCFContext) NewPCFUe(Supi string) (*UeContext, error) {
+	ue, err := NewUeContext(Supi)
+	if err != nil {
+		return nil, err
+	}
+	c.UePool.Store(Supi, ue)
+	return ue, nil
+}
+
+// NewUeContext initializes a UE without publishing it in the shared pool.
+func NewUeContext(Supi string) (*UeContext, error) {
 	if strings.HasPrefix(Supi, "imsi-") {
 		newUeContext := &UeContext{}
 		newUeContext.SmPolicyData = make(map[string]*UeSmPolicyData)
@@ -228,7 +238,6 @@ func (c *PCFContext) NewPCFUe(Supi string) (*UeContext, error) {
 		newUeContext.PolAssociationIDGenerator = 1
 		newUeContext.AppSessionIDGenerator = idgenerator.NewGenerator(1, math.MaxInt64)
 		newUeContext.Supi = Supi
-		c.UePool.Store(Supi, newUeContext)
 		return newUeContext, nil
 	} else {
 		return nil, fmt.Errorf(" add Ue context fail ")
