@@ -16,6 +16,7 @@ import (
 	"github.com/free5gc/pcf/pkg/factory"
 	"github.com/free5gc/util/idgenerator"
 	"github.com/free5gc/util/mongoapi"
+	"github.com/google/uuid"
 )
 
 type PCFContext struct {
@@ -32,6 +33,7 @@ type PCFContext struct {
 	PcfSuppFeats    map[models.Nrf_NFMgmt_ServiceName]openapi.SupportedFeature
 	NrfUri          string
 	NrfCertPem      string
+	NrfNfInstanceID string
 	DefaultUdrURI   string
 	Locality        string
 	// UePool          map[string]*UeContext
@@ -99,6 +101,7 @@ func InitPcfContext(context *PCFContext) {
 	sbi := configuration.Sbi
 	context.NrfUri = configuration.NrfUri
 	context.NrfCertPem = configuration.NrfCertPem
+	context.NrfNfInstanceID = configuration.NrfNfInstanceId
 	context.UriScheme = ""
 	context.RegisterIPv4 = factory.PcfSbiDefaultIPv4 // default localhost
 	context.SBIPort = factory.PcfSbiDefaultPort      // default port
@@ -449,8 +452,64 @@ func (c *PCFContext) GetTokenCtx(serviceName models.Nrf_NFMgmt_ServiceName, targ
 	if !c.OAuth2Required {
 		return context.TODO(), nil, nil
 	}
-	return oauth.GetTokenCtx(models.Nrf_NFMgmt_NFType_PCF, targetNF,
-		c.NfId, c.NrfUri, string(serviceName))
+	return oauth.GetTokenCtx(c.tokenRequest(serviceName, targetNF))
+}
+
+func (c *PCFContext) GetTokenCtxForNFInstance(serviceName models.Nrf_NFMgmt_ServiceName,
+	targetNF models.Nrf_NFMgmt_NFType, targetNFInstanceID string,
+) (context.Context, *models.ProblemDetails, error) {
+	if !c.OAuth2Required {
+		return context.TODO(), nil, nil
+	}
+	targetID, err := uuid.Parse(strings.TrimSpace(targetNFInstanceID))
+	if err != nil {
+		return nil, nil, fmt.Errorf("invalid target NF instance ID: %w", err)
+	}
+	if targetID.Version() != 4 {
+		return nil, nil, fmt.Errorf("invalid target NF instance ID: UUID must be version 4")
+	}
+	return oauth.GetTokenCtx(c.tokenRequestForNFInstance(serviceName, targetNF, targetNFInstanceID))
+}
+
+func (c *PCFContext) GetTokenCtxForNRF(serviceName models.Nrf_NFMgmt_ServiceName) (
+	context.Context, *models.ProblemDetails, error,
+) {
+	return c.GetTokenCtxForNFInstance(serviceName, models.Nrf_NFMgmt_NFType_NRF, c.NrfNfInstanceID)
+}
+
+func (c *PCFContext) tokenRequest(serviceName models.Nrf_NFMgmt_ServiceName,
+	targetNF models.Nrf_NFMgmt_NFType,
+) oauth.TokenRequest {
+	return oauth.TokenRequest{
+		ConsumerNFType: models.Nrf_NFMgmt_NFType_PCF, ConsumerNFInstanceID: c.NfId,
+		TargetNFType: targetNF, NRFURI: c.NrfUri, Scope: string(serviceName),
+	}
+}
+
+func (c *PCFContext) tokenRequestForNFInstance(serviceName models.Nrf_NFMgmt_ServiceName,
+	targetNF models.Nrf_NFMgmt_NFType, targetNFInstanceID string,
+) oauth.TokenRequest {
+	request := c.tokenRequest(serviceName, targetNF)
+	request.TargetNFInstanceID = targetNFInstanceID
+	return request
+}
+
+func (c *PCFContext) SetOAuth2Required(required bool) error {
+	if !required {
+		c.OAuth2Required = false
+		return nil
+	}
+	if strings.TrimSpace(c.NrfCertPem) == "" {
+		return fmt.Errorf("OAuth2 enabled but NRF certificate path is empty")
+	}
+	if strings.TrimSpace(c.NrfUri) == "" {
+		return fmt.Errorf("OAuth2 enabled but NRF URI is empty")
+	}
+	if err := uuid.Validate(c.NrfNfInstanceID); err != nil {
+		return fmt.Errorf("OAuth2 enabled but trusted NRF instance ID is invalid: %w", err)
+	}
+	c.OAuth2Required = true
+	return nil
 }
 
 func (c *PCFContext) AuthorizationCheck(token string, serviceName models.Nrf_NFMgmt_ServiceName) error {
@@ -460,5 +519,7 @@ func (c *PCFContext) AuthorizationCheck(token string, serviceName models.Nrf_NFM
 	}
 
 	logger.UtilLog.Debugf("PCFContext::AuthorizationCheck: token[%s] serviceName[%s]\n", token, serviceName)
-	return oauth.VerifyOAuth(token, string(serviceName), c.NrfCertPem)
+	return oauth.VerifyOAuth(token, string(serviceName), oauth.AudiencePolicy{
+		NFInstanceID: c.NfId, NFType: models.Nrf_NFMgmt_NFType_PCF,
+	}, c.NrfNfInstanceID, c.NrfCertPem)
 }
