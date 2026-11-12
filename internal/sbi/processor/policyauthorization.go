@@ -3,6 +3,7 @@ package processor
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -67,8 +68,9 @@ func transferMedCompRmToMedComp(medCompRm *models.Pcf_PolAuth_MediaComponentRm) 
 }
 
 // Handle Create/ Modify  Media SubComponent
+// createdRuleIds, when not nil, collects ids of rules newly created here for caller rollback.
 func handleMediaSubComponent(smPolicy *pcf_context.UeSmPolicyData, medComp *models.Pcf_PolAuth_MediaComponent,
-	medSubComp *models.Pcf_PolAuth_MediaSubComponent, var5qi int32,
+	medSubComp *models.Pcf_PolAuth_MediaSubComponent, var5qi int32, createdRuleIds *[]string,
 ) (*models.Pcf_SMPolCtrl_PccRule, *models.ProblemDetails) {
 	var flowInfos []models.Pcf_SMPolCtrl_FlowInformation
 	if tempFlowInfos, err := getFlowInfos(medSubComp); err != nil {
@@ -105,6 +107,9 @@ func handleMediaSubComponent(smPolicy *pcf_context.UeSmPolicyData, medComp *mode
 		tcData := util.CreateTcData(smPolicy.PccRuleIdGenerator, "", medSubComp.FStatus)
 		util.SetPccRuleRelatedData(smPolicy.PolicyDecision, pccRule, tcData, &qosData, nil, nil)
 		smPolicy.PccRuleIdGenerator++
+		if createdRuleIds != nil {
+			*createdRuleIds = append(*createdRuleIds, pccRule.PccRuleId)
+		}
 	} else {
 		// update qos
 		var qosData models.Pcf_SMPolCtrl_QosData
@@ -123,6 +128,82 @@ func handleMediaSubComponent(smPolicy *pcf_context.UeSmPolicyData, medComp *mode
 	}
 	smPolicy.PolicyDecision.PccRules[pccRule.PccRuleId] = pccRule
 	return pccRule, nil
+}
+
+// policyAuthSnapshot captures what a policy-auth request may extend in the stored decision —
+// trigger count and both id generators — so a rejected request can undo it (#1181/#1184/#1185).
+type policyAuthSnapshot struct {
+	triggers      int
+	pccRuleIDGen  int32
+	packFiltIDGen int32
+}
+
+func snapshotPolicyAuth(smPolicy *pcf_context.UeSmPolicyData) policyAuthSnapshot {
+	snap := policyAuthSnapshot{
+		pccRuleIDGen:  smPolicy.PccRuleIdGenerator,
+		packFiltIDGen: smPolicy.PackFiltIdGenerator,
+	}
+	if decision := smPolicy.PolicyDecision; decision != nil {
+		snap.triggers = len(decision.PolicyCtrlReqTriggers)
+	}
+	return snap
+}
+
+// rollbackPolicyAuth undoes a rejected request: releases exactly the rules it created via
+// RemovePccRule, truncates PolicyCtrlReqTriggers, rewinds the id generators. Ids come from the
+// request, not a rule-set diff — handlers run unlocked, so a diff could delete a peer's rules.
+func rollbackPolicyAuth(smPolicy *pcf_context.UeSmPolicyData, snap policyAuthSnapshot, createdRuleIds []string) {
+	decision := smPolicy.PolicyDecision
+	if decision == nil {
+		return
+	}
+	for _, pccRuleID := range createdRuleIds {
+		if _, exist := decision.PccRules[pccRuleID]; !exist {
+			continue
+		}
+		if err := smPolicy.RemovePccRule(pccRuleID, nil); err != nil {
+			logger.PolicyAuthLog.Warnf("Roll back PCC rule[%s] added by the rejected request failed: %s",
+				pccRuleID, err.Error())
+			continue
+		}
+		logger.PolicyAuthLog.Infof("Roll back PCC rule[%s] added by the rejected request", pccRuleID)
+	}
+	if len(decision.PolicyCtrlReqTriggers) > snap.triggers {
+		decision.PolicyCtrlReqTriggers = decision.PolicyCtrlReqTriggers[:snap.triggers]
+	}
+	// Never rewind below a still-live id: unlocked peers may own ids above the snapshot.
+	if ceiling := livePccRuleIdCeiling(decision); ceiling > snap.pccRuleIDGen {
+		smPolicy.PccRuleIdGenerator = ceiling
+	} else {
+		smPolicy.PccRuleIdGenerator = snap.pccRuleIDGen
+	}
+	if ceiling := livePackFiltIdCeiling(smPolicy); ceiling > snap.packFiltIDGen {
+		smPolicy.PackFiltIdGenerator = ceiling
+	} else {
+		smPolicy.PackFiltIdGenerator = snap.packFiltIDGen
+	}
+}
+
+// livePccRuleIdCeiling returns one above the highest "PccRuleId-<n>" still in the decision.
+func livePccRuleIdCeiling(decision *models.Pcf_SMPolCtrl_SmPolicyDecision) int32 {
+	var highest int32 = -1
+	for ruleId := range decision.PccRules {
+		if n, err := strconv.Atoi(strings.TrimPrefix(ruleId, "PccRuleId-")); err == nil && int32(n) > highest {
+			highest = int32(n)
+		}
+	}
+	return highest + 1
+}
+
+// livePackFiltIdCeiling is the PackFiltId counterpart: every allocated id is a PackFiltMapToPccRuleId key.
+func livePackFiltIdCeiling(smPolicy *pcf_context.UeSmPolicyData) int32 {
+	var highest int32 = -1
+	for packFiltId := range smPolicy.PackFiltMapToPccRuleId {
+		if n, err := strconv.Atoi(strings.TrimPrefix(packFiltId, "PackFiltId-")); err == nil && int32(n) > highest {
+			highest = int32(n)
+		}
+	}
+	return highest + 1
 }
 
 // HandlePostAppSessionsContext - Creates a new Individual Application Session Context resource
@@ -202,6 +283,16 @@ func (p *Processor) postAppSessCtxProcedure(appSessCtx *models.Pcf_PolAuth_AppSe
 	ue := smPolicy.PcfUe
 	updateSMpolicy := false
 
+	// Roll back the rules installed below if the request is rejected before the app session owns them.
+	policyAuthSnap := snapshotPolicyAuth(smPolicy)
+	var createdRuleIds []string
+	committed := false
+	defer func() {
+		if !committed {
+			rollbackPolicyAuth(smPolicy, policyAuthSnap, createdRuleIds)
+		}
+	}()
+
 	var requestSuppFeat openapi.SupportedFeature
 	if tempRequestSuppFeat, err := openapi.NewSupportedFeature(ascReqData.SuppFeat); err != nil {
 		logger.PolicyAuthLog.Error(err.Error())
@@ -230,7 +321,7 @@ func (p *Processor) postAppSessCtxProcedure(appSessCtx *models.Pcf_PolAuth_AppSe
 			if medComp.MedSubComps != nil {
 				for _, medSubComp := range medComp.MedSubComps {
 					if tempPccRule, problemDetail := handleMediaSubComponent(smPolicy,
-						&medComp, &medSubComp, var5qi); problemDetail != nil {
+						&medComp, &medSubComp, var5qi, &createdRuleIds); problemDetail != nil {
 						return nil, "", problemDetail
 					} else {
 						pccRule = tempPccRule
@@ -268,6 +359,7 @@ func (p *Processor) postAppSessCtxProcedure(appSessCtx *models.Pcf_PolAuth_AppSe
 					}
 				}
 				util.SetPccRuleRelatedData(smPolicy.PolicyDecision, pccRule, nil, &qosData, nil, nil)
+				createdRuleIds = append(createdRuleIds, pccRule.PccRuleId)
 				smPolicy.PccRuleIdGenerator++
 				if precedence < Precedence_Maximum {
 					precedence++
@@ -289,7 +381,8 @@ func (p *Processor) postAppSessCtxProcedure(appSessCtx *models.Pcf_PolAuth_AppSe
 			}
 			// Initial provisioning of traffic routing information
 			if traffRoutSupp {
-				pccRule = provisioningOfTrafficRoutingInfo(smPolicy, appID, routeReq, medComp.FStatus)
+				pccRule = provisioningOfTrafficRoutingInfo(smPolicy, appID, routeReq, medComp.FStatus,
+					&createdRuleIds)
 			}
 			key := fmt.Sprintf("%d", medComp.MedCompN)
 			relatedPccRuleIds[key] = pccRule.PccRuleId
@@ -299,7 +392,8 @@ func (p *Processor) postAppSessCtxProcedure(appSessCtx *models.Pcf_PolAuth_AppSe
 		// Initial provisioning of traffic routing information
 		if ascReqData.AfRoutReq != nil && traffRoutSupp {
 			logger.PolicyAuthLog.Infof("AF influence on Traffic Routing - AppId[%s]", ascReqData.AfAppId)
-			pccRule := provisioningOfTrafficRoutingInfo(smPolicy, ascReqData.AfAppId, ascReqData.AfRoutReq, "")
+			pccRule := provisioningOfTrafficRoutingInfo(smPolicy, ascReqData.AfAppId, ascReqData.AfRoutReq,
+				"", &createdRuleIds)
 			key := fmt.Sprintf("appID-%s", ascReqData.AfAppId)
 			relatedPccRuleIds[key] = pccRule.PccRuleId
 			updateSMpolicy = true
@@ -443,6 +537,7 @@ func (p *Processor) postAppSessCtxProcedure(appSessCtx *models.Pcf_PolAuth_AppSe
 		}
 		go p.SendSMPolicyUpdateNotification(smPolicy.PolicyContext.NotificationUri, &notification)
 	}
+	committed = true
 	return appSessCtx, locationHeader, nil
 }
 
@@ -578,6 +673,15 @@ func (p *Processor) HandleModAppSessionContext(
 		c.JSON(int(problemDetail.Status), problemDetail)
 		return
 	}
+	// Roll back the rules installed below if the request is rejected before the RelatedPccRuleIds write-back.
+	policyAuthSnap := snapshotPolicyAuth(smPolicy)
+	var createdRuleIds []string
+	committed := false
+	defer func() {
+		if !committed {
+			rollbackPolicyAuth(smPolicy, policyAuthSnap, createdRuleIds)
+		}
+	}()
 	// Validate sponsored connectivity before media processing mutates shared policy state.
 	// A rejected update must not leave rules without app-session ownership (issue #1185).
 	var umData *models.Pcf_SMPolCtrl_UsageMonitoringData
@@ -644,7 +748,7 @@ func (p *Processor) HandleModAppSessionContext(
 			if medComp.MedSubComps != nil {
 				for _, medSubComp := range medComp.MedSubComps {
 					if tempPccRule, problemDetail := handleMediaSubComponent(smPolicy, medComp,
-						&medSubComp, var5qi); problemDetail != nil {
+						&medSubComp, var5qi, &createdRuleIds); problemDetail != nil {
 						c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
 						c.JSON(int(problemDetail.Status), problemDetail)
 						return
@@ -688,6 +792,7 @@ func (p *Processor) HandleModAppSessionContext(
 					}
 				}
 				util.SetPccRuleRelatedData(smPolicy.PolicyDecision, pccRule, nil, &qosData, nil, nil)
+				createdRuleIds = append(createdRuleIds, pccRule.PccRuleId)
 				smPolicy.PccRuleIdGenerator++
 				if precedence < Precedence_Maximum {
 					precedence++
@@ -711,7 +816,8 @@ func (p *Processor) HandleModAppSessionContext(
 			}
 			// Modify provisioning of traffic routing information
 			if traffRoutSupp {
-				pccRule = provisioningOfTrafficRoutingInfo(smPolicy, appID, routeReq, medComp.FStatus)
+				pccRule = provisioningOfTrafficRoutingInfo(smPolicy, appID, routeReq, medComp.FStatus,
+					&createdRuleIds)
 			}
 			key := fmt.Sprintf("%d", medComp.MedCompN)
 			relatedPccRuleIds[key] = pccRule.PccRuleId
@@ -732,7 +838,7 @@ func (p *Processor) HandleModAppSessionContext(
 		appSessCtx.AscReqData.AfRoutReq = transferAfRoutReqRmToAfRoutReq(appSessionContextUpdateData.AfRoutReq)
 		// Update SmPolicyDecision
 		pccRule := provisioningOfTrafficRoutingInfo(smPolicy,
-			appSessCtx.AscReqData.AfAppId, appSessCtx.AscReqData.AfRoutReq, "")
+			appSessCtx.AscReqData.AfAppId, appSessCtx.AscReqData.AfRoutReq, "", &createdRuleIds)
 		key := fmt.Sprintf("appID-%s", appSessCtx.AscReqData.AfAppId)
 		relatedPccRuleIds[key] = pccRule.PccRuleId
 		updateSMpolicy = true
@@ -818,6 +924,8 @@ func (p *Processor) HandleModAppSessionContext(
 		appSession.RelatedPccRuleIds = relatedPccRuleIds
 		appSession.PccRuleIdMapToCompId = reverseStringMap(relatedPccRuleIds)
 	}
+	// The app session owns the rules now: commit.
+	committed = true
 	appSessCtx.EvsNotif = &models.Pcf_PolAuth_EventsNotification{}
 	// Set Event Subsciption related Data
 	if len(eventSubs) > 0 {
@@ -1793,8 +1901,10 @@ func modifyRemainBitRate(smPolicy *pcf_context.UeSmPolicyData, qosData *models.P
 	return nil
 }
 
+// createdRuleIds: same contract as handleMediaSubComponent.
 func provisioningOfTrafficRoutingInfo(smPolicy *pcf_context.UeSmPolicyData, appID string,
 	routeReq *models.Pcf_PolAuth_AfRoutingRequirement, fStatus models.Pcf_PolAuth_FlowStatus,
+	createdRuleIds *[]string,
 ) *models.Pcf_SMPolCtrl_PccRule {
 	if routeReq == nil {
 		logger.PolicyAuthLog.Warnf("provisioningOfTrafficRoutingInfo: routeReq is nil for appID[%s], skipping", appID)
@@ -1845,6 +1955,9 @@ func provisioningOfTrafficRoutingInfo(smPolicy *pcf_context.UeSmPolicyData, appI
 		// pccRule.RefTcData = []string{tcData.TcId}
 		util.SetPccRuleRelatedData(smPolicy.PolicyDecision, pccRule, tcData, nil, nil, nil)
 		smPolicy.PccRuleIdGenerator++
+		if createdRuleIds != nil {
+			*createdRuleIds = append(*createdRuleIds, pccRule.PccRuleId)
+		}
 		logger.PolicyAuthLog.Infof("Create PCC rule[%s] with new Traffic Control Data[%s]",
 			pccRule.PccRuleId, tcData.TcId)
 	}
