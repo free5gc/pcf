@@ -51,13 +51,16 @@ func (s *npcfService) SendAMPolicyUpdateNotification(ue *pcf_context.UeContext,
 		logger.ConsumerLog.Warnln("Policy Update Notification Error[Ue is nil]")
 		return
 	}
+	ue.AMPolicyMu.RLock()
 	amPolicyData := ue.AMPolicyData[PolId]
 	if amPolicyData == nil {
+		ue.AMPolicyMu.RUnlock()
 		logger.ConsumerLog.Warnf("Policy Update Notification Error[Can't find polAssoId[%s] in UE(%s)]", PolId, ue.Supi)
 		return
 	}
 
 	uri := amPolicyData.NotificationUri
+	ue.AMPolicyMu.RUnlock()
 
 	if uri == "" {
 		logger.ConsumerLog.Warnln("NPcf client can't find call back uri")

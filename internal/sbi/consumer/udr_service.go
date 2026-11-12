@@ -226,7 +226,10 @@ func (s *nudrService) GetAccessAndMobilityPolicyData(ue *pcf_context.UeContext) 
 		return nil, &problemDetail, nil
 	}
 
-	if ue.UdrUri == "" {
+	ue.AMPolicyMu.RLock()
+	udrUri := ue.UdrUri
+	ue.AMPolicyMu.RUnlock()
+	if udrUri == "" {
 		problemDetail := util.GetProblemDetail("Can't find corresponding UDR with UE", util.USER_UNKNOWN)
 		logger.ConsumerLog.Warnf("Can't find corresponding UDR with UE[%s]", ue.Supi)
 		return nil, &problemDetail, nil
@@ -239,7 +242,7 @@ func (s *nudrService) GetAccessAndMobilityPolicyData(ue *pcf_context.UeContext) 
 		return nil, pd, nil
 	}
 
-	client := s.getDataSubscription(ue.UdrUri)
+	client := s.getDataSubscription(udrUri)
 	param := DR.ReadAccessAndMobilityPolicyDataRequest{
 		UeId: &ue.Supi,
 	}
@@ -264,7 +267,10 @@ func (s *nudrService) CreateInfluenceDataSubscription(
 ) (
 	subscriptionID string, problemDetails *models.ProblemDetails, err error,
 ) {
-	if ue.UdrUri == "" {
+	ue.AMPolicyMu.RLock()
+	udrUri := ue.UdrUri
+	ue.AMPolicyMu.RUnlock()
+	if udrUri == "" {
 		problemDetail := util.GetProblemDetail("Can't find corresponding UDR with UE", util.USER_UNKNOWN)
 		logger.ConsumerLog.Warnf("Can't find corresponding UDR with UE[%s]", ue.Supi)
 		return "", &problemDetail, nil
@@ -273,7 +279,7 @@ func (s *nudrService) CreateInfluenceDataSubscription(
 	if err != nil {
 		return "", pd, err
 	}
-	client := s.getDataSubscription(ue.UdrUri)
+	client := s.getDataSubscription(udrUri)
 	trafficInfluSub := s.buildTrafficInfluSub(request)
 	individualInfluenceDataSubscReq := DR.CreateIndividualInfluenceDataSubscriptionRequest{
 		RequestBody: &trafficInfluSub,
@@ -317,7 +323,10 @@ func (
 func (s *nudrService) RemoveInfluenceDataSubscription(ue *pcf_context.UeContext, subscriptionID string) (
 	problemDetails *models.ProblemDetails, err error,
 ) {
-	if ue.UdrUri == "" {
+	ue.AMPolicyMu.RLock()
+	udrUri := ue.UdrUri
+	ue.AMPolicyMu.RUnlock()
+	if udrUri == "" {
 		problemDetail := util.GetProblemDetail("Can't find corresponding UDR with UE", util.USER_UNKNOWN)
 		logger.ConsumerLog.Warnf("Can't find corresponding UDR with UE[%s]", ue.Supi)
 		return &problemDetail, nil
@@ -326,7 +335,7 @@ func (s *nudrService) RemoveInfluenceDataSubscription(ue *pcf_context.UeContext,
 	if err != nil {
 		return pd, err
 	}
-	client := s.getDataSubscription(ue.UdrUri)
+	client := s.getDataSubscription(udrUri)
 	deleteIndividualInfluenceDataSubscriptionReq := DR.DeleteIndividualInfluenceDataSubscriptionRequest{
 		SubscriptionId: &subscriptionID,
 	}
