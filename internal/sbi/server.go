@@ -13,7 +13,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/free5gc/openapi/models"
-	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
 	"github.com/free5gc/pcf/internal/sbi/consumer"
 	"github.com/free5gc/pcf/internal/sbi/processor"
@@ -97,10 +96,7 @@ func NewServer(pcf pcf, tlsKeyLogPath string) (*Server, error) {
 
 	httpcallbackRoutes := s.getHttpCallBackRoutes()
 	httpcallbackGroup := s.router.Group(factory.PcfCallbackResUriPrefix)
-	pcfCallbackAuthCheck := util.NewRouterAuthorizationCheck(pcf_context.ServiceNameNPCFCallback)
-	httpcallbackGroup.Use(func(c *gin.Context) {
-		pcfCallbackAuthCheck.Check(c, s.Context())
-	})
+	// TS 29.500 Rel-17 §6.7.3 excludes notify operations from OAuth.
 	applyRoutes(httpcallbackGroup, httpcallbackRoutes)
 
 	oamRoutes := s.getOamRoutes()
