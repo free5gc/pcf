@@ -17,6 +17,7 @@ import (
 	"github.com/free5gc/pcf/internal/util"
 	sbi_metrics "github.com/free5gc/util/metrics/sbi"
 	"github.com/free5gc/util/nfheartbeat"
+	"github.com/free5gc/util/serviceuri"
 )
 
 const registerRetryInterval = 2 * time.Second
@@ -134,12 +135,7 @@ func (s *nnrfService) SendNFInstancesUDR(nrfUri, id string) string {
 		logger.ConsumerLog.Error(err.Error())
 		return ""
 	}
-	for _, profile := range result.NfInstances {
-		if uri := util.SearchNFServiceUri(profile, models.Nrf_NFMgmt_ServiceName_NUDR_DR, models.Nrf_NFMgmt_NFServiceStatus_REGISTERED); uri != "" { //nolint:lll
-			return uri
-		}
-	}
-	return ""
+	return util.SearchNFServiceUri(result.NfInstances, models.Nrf_NFMgmt_ServiceName_NUDR_DR)
 }
 
 func (s *nnrfService) SendNFInstancesBSF(nrfUri string) string {
@@ -152,13 +148,7 @@ func (s *nnrfService) SendNFInstancesBSF(nrfUri string) string {
 		logger.ConsumerLog.Error(err.Error())
 		return ""
 	}
-	for _, profile := range result.NfInstances {
-		if uri := util.SearchNFServiceUri(profile, models.Nrf_NFMgmt_ServiceName_NBSF_MANAGEMENT,
-			models.Nrf_NFMgmt_NFServiceStatus_REGISTERED); uri != "" {
-			return uri
-		}
-	}
-	return ""
+	return util.SearchNFServiceUri(result.NfInstances, models.Nrf_NFMgmt_ServiceName_NBSF_MANAGEMENT)
 }
 
 func (
@@ -176,10 +166,7 @@ func (
 		logger.ConsumerLog.Error(err.Error())
 		return ""
 	}
-	for _, profile := range result.NfInstances {
-		return util.SearchNFServiceUri(profile, serviceName, models.Nrf_NFMgmt_NFServiceStatus_REGISTERED)
-	}
-	return ""
+	return util.SearchNFServiceUri(result.NfInstances, serviceName)
 }
 
 // management
@@ -189,7 +176,10 @@ func (s *nnrfService) BuildNFInstance(
 	profile.NfInstanceId = context.NfId
 	profile.NfType = models.Nrf_NFMgmt_NFType_PCF
 	profile.NfStatus = models.Nrf_NFMgmt_NFStatus_REGISTERED
-	profile.Ipv4Addresses = append(profile.Ipv4Addresses, context.RegisterIPv4)
+	addr := serviceuri.NewAddressing(context.RegisterIPv4)
+	profile.Fqdn = addr.FQDN
+	profile.Ipv4Addresses = addr.IPv4Addresses
+	profile.Ipv6Addresses = addr.IPv6Addresses
 	services := []models.Nrf_NFMgmt_NFService{}
 	for _, nfService := range context.NfService {
 		allowedNfTypes, known := pcf_context.AllowedNfTypesForService(nfService.ServiceName)
