@@ -42,7 +42,7 @@ func TestOAuthMigrationAuthorization(t *testing.T) {
 	require.Equal(t, issuer, ctx.NrfNfInstanceID)
 	services := []models.Nrf_NFMgmt_ServiceName{
 		models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL,
-		ServiceNameNPCFCallback,
+		ServiceNameNpcfCallback,
 	}
 	for _, service := range services {
 		t.Run(string(service), func(t *testing.T) {

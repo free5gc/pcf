@@ -6,7 +6,7 @@ import (
 	"github.com/free5gc/openapi/models"
 )
 
-const ServiceNameNPCFCallback models.Nrf_NFMgmt_ServiceName = "npcf-callback"
+const ServiceNameNpcfCallback models.Nrf_NFMgmt_ServiceName = "npcf-callback"
 
 var servicePolicies = map[models.Nrf_NFMgmt_ServiceName][]models.Nrf_NFMgmt_NFType{
 	models.Nrf_NFMgmt_ServiceName_NPCF_AM_POLICY_CONTROL: {
@@ -32,7 +32,7 @@ var servicePolicies = map[models.Nrf_NFMgmt_ServiceName][]models.Nrf_NFMgmt_NFTy
 		models.Nrf_NFMgmt_NFType_AMF,
 		models.Nrf_NFMgmt_NFType_PCF,
 	},
-	ServiceNameNPCFCallback: {
+	ServiceNameNpcfCallback: {
 		models.Nrf_NFMgmt_NFType_AMF,
 		models.Nrf_NFMgmt_NFType_UDR,
 	},
