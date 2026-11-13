@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -1196,17 +1197,12 @@ func (p *Processor) SendSMPolicyUpdateNotification(
 		return
 	}
 
-	ctx, _, err := p.Context().GetTokenCtx(models.Nrf_NFMgmt_ServiceName("nsmf-callback"), models.Nrf_NFMgmt_NFType_SMF)
-	if err != nil {
-		return
-	}
-
 	client := util.GetNpcfSMPolicyCallbackClient()
 	logger.SmPolicyLog.Infof("Send SM Policy Update Notification to SMF")
 	req := SMPolCtrl.CreateSMPolicySmPolicyUpdateNotificationRequest{
 		RequestBody: request,
 	}
-	_, err = client.SMPoliciesCollectionApi.CreateSMPolicySmPolicyUpdateNotification(ctx, uri, &req)
+	_, err := client.SMPoliciesCollectionApi.CreateSMPolicySmPolicyUpdateNotification(context.Background(), uri, &req)
 
 	switch err.(type) {
 	case openapi.GenericOpenAPIError:
@@ -1228,17 +1224,12 @@ func (p *Processor) SendSMPolicyTerminationRequestNotification(
 		return
 	}
 
-	ctx, _, err := p.Context().GetTokenCtx(models.Nrf_NFMgmt_ServiceName("nsmf-callback"), models.Nrf_NFMgmt_NFType_SMF)
-	if err != nil {
-		return
-	}
-
 	client := util.GetNpcfSMPolicyCallbackClient()
 	req := SMPolCtrl.CreateSMPolicySmPolicyControlTerminationRequestNotificationRequest{
 		RequestBody: request,
 	}
-	_, err = client.SMPoliciesCollectionApi.
-		CreateSMPolicySmPolicyControlTerminationRequestNotification(ctx, uri, &req)
+	_, err := client.SMPoliciesCollectionApi.
+		CreateSMPolicySmPolicyControlTerminationRequestNotification(context.Background(), uri, &req)
 
 	switch err.(type) {
 	case openapi.GenericOpenAPIError:
