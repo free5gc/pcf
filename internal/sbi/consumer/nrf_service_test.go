@@ -350,6 +350,7 @@ func TestRegisterNFInstance(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			consumer := newNrfTestConsumer(t)
+			consumer.Context().NrfCertPem = "testdata/nrf.pem"
 
 			gock.New(testNrfUri).
 				Put(testNfIdPath).

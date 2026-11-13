@@ -96,10 +96,7 @@ func NewServer(pcf pcf, tlsKeyLogPath string) (*Server, error) {
 
 	httpcallbackRoutes := s.getHttpCallBackRoutes()
 	httpcallbackGroup := s.router.Group(factory.PcfCallbackResUriPrefix)
-	pcfCallbackAuthCheck := util.NewRouterAuthorizationCheck(models.Nrf_NFMgmt_ServiceName("npcf-callback"))
-	httpcallbackGroup.Use(func(c *gin.Context) {
-		pcfCallbackAuthCheck.Check(c, s.Context())
-	})
+	// TS 29.500 Rel-17 §6.7.3 excludes notify operations from OAuth.
 	applyRoutes(httpcallbackGroup, httpcallbackRoutes)
 
 	oamRoutes := s.getOamRoutes()
@@ -147,10 +144,9 @@ func (s *Server) Run(traceCtx context.Context, wg *sync.WaitGroup) error {
 	ctx := s.CancelContext()
 	if err := s.Consumer().SendRegisterNFInstance(ctx, true); err != nil {
 		logger.InitLog.Errorf("PCF register to NRF Error[%s]", err.Error())
-	} else {
-		// Only a registered profile has something to keep alive.
-		s.Consumer().StartHeartbeat(ctx, wg)
+		return err
 	}
+	s.Consumer().StartHeartbeat(ctx, wg)
 
 	wg.Add(1)
 	go s.startServer(wg)

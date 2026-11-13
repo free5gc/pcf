@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -1205,11 +1206,6 @@ func (p *Processor) SendAppSessionEventNotification(appSession *pcf_context.AppS
 	uri := appSession.EventUri
 
 	if uri != "" {
-		ctx, _, err := p.Context().GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NPCF_POLICYAUTHORIZATION, models.Nrf_NFMgmt_NFType_PCF) //nolint:lll
-		if err != nil {
-			return
-		}
-
 		request.EvSubsUri = fmt.Sprintf("%s/events-subscription",
 			util.GetResourceUri(models.Nrf_NFMgmt_ServiceName_NPCF_POLICYAUTHORIZATION, appSession.AppSessionId))
 		client := util.GetNpcfPolicyAuthorizationCallbackClient()
@@ -1217,7 +1213,7 @@ func (p *Processor) SendAppSessionEventNotification(appSession *pcf_context.AppS
 			RequestBody: &request,
 		}
 		rsp, err := client.EventsSubscriptionDocumentApi.UpdateEventsSubscEventNotification(
-			ctx, uri, &req)
+			context.Background(), uri, &req)
 		if err != nil {
 			if rsp == nil {
 				logger.PolicyAuthLog.Warnf("Send App Session Event Notification Error")
@@ -1243,18 +1239,13 @@ func (p *Processor) SendAppSessionTermination(
 	uri := appSession.AppSessionContext.AscReqData.NotifUri
 
 	if uri != "" {
-		ctx, _, err := p.Context().GetTokenCtx(models.Nrf_NFMgmt_ServiceName_NPCF_POLICYAUTHORIZATION, models.Nrf_NFMgmt_NFType_PCF) //nolint:lll
-		if err != nil {
-			return
-		}
-
 		request.ResUri = util.GetResourceUri(models.Nrf_NFMgmt_ServiceName_NPCF_POLICYAUTHORIZATION, appSession.AppSessionId)
 		client := util.GetNpcfPolicyAuthorizationCallbackClient()
 		req := PolAuth.PostAppSessionsTerminationRequestRequest{
 			RequestBody: &request,
 		}
 		rsp, err := client.ApplicationSessionsCollectionApi.PostAppSessionsTerminationRequest(
-			ctx, uri, &req)
+			context.Background(), uri, &req)
 		if err != nil {
 			if rsp != nil {
 				logger.PolicyAuthLog.Warnf("Send App Session Termination Error")
