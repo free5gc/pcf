@@ -521,7 +521,7 @@ func (c *PCFContext) AuthorizationCheck(token string, serviceName models.Nrf_NFM
 		return nil
 	}
 
-	logger.UtilLog.Debugf("PCFContext::AuthorizationCheck: token[%s] serviceName[%s]\n", token, serviceName)
+	logger.UtilLog.Debugf("PCFContext::AuthorizationCheck: tokenPresent[%t] serviceName[%s]", token != "", serviceName)
 	return oauth.VerifyOAuth(token, string(serviceName), oauth.AudiencePolicy{
 		NFInstanceID: c.NfId, NFType: models.Nrf_NFMgmt_NFType_PCF,
 	}, c.NrfNfInstanceID, c.NrfCertPem)
