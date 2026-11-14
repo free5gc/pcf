@@ -848,6 +848,26 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 		case models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_APP_STO: // ADC (subsclause 4.2.4.6, 5.8 in TS29512)
 			// request.AppDetectionInfos
 		case models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_AN_INFO: // NetLoc (subsclause 4.2.4.9, 5.8 in TS29512)
+			if request.UserLocationInfo != nil {
+				smPolicyContext.UserLocationInfo = request.UserLocationInfo
+			}
+			if request.UeTimeZone != "" {
+				smPolicyContext.UeTimeZone = request.UeTimeZone
+			}
+			// Reporting access network information to the AF (subclause 4.2.5.11 in TS29514)
+			afEventsNotification.EvNotifs = append(afEventsNotification.EvNotifs, models.Pcf_PolAuth_AfEventNotification{
+				Event: models.Pcf_PolAuth_AfEvent_ANI_REPORT,
+			})
+			afEventsNotification.UeLoc = request.UserLocationInfo
+			afEventsNotification.UeLocTime = request.UserLocationInfoTime
+			afEventsNotification.UeTimeZone = request.UeTimeZone
+			if request.UserLocationInfo == nil && request.ServingNetwork != nil {
+				// Location not available: the serving PLMN is reported instead
+				afEventsNotification.PlmnId = request.ServingNetwork
+			}
+			// The SMF reports once per request: the request is fulfilled
+			smPolicy.RemoveAccessNetworkInfoRequest()
+			logger.SmPolicyLog.Tracef("SM Policy Update(%s) Successfully", trigger)
 		case models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_CM_SES_FAIL: // Credit Management Session Failure
 			// request.CreditManageStatus
 		case models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_PS_DA_OFF:
@@ -1087,6 +1107,10 @@ func (p *Processor) sendSmPolicyRelatedAppSessionNotification(smPolicy *pcf_cont
 						} else {
 							continue
 						}
+					case models.Pcf_PolAuth_AfEvent_ANI_REPORT:
+						fillAccessNetworkInfo(&sessionNotif, notification, appSessionReqAnis(appSession))
+						// One-time event: the subscription terminates once reported (subclause 4.2.3.14 in TS29514)
+						delete(appSession.Events, models.Pcf_PolAuth_AfEvent_ANI_REPORT)
 					case models.Pcf_PolAuth_AfEvent_PLMN_CHG:
 						sessionNotif.PlmnId = notification.PlmnId
 					case models.Pcf_PolAuth_AfEvent_QOS_NOTIF:
