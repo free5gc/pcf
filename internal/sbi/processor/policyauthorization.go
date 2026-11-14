@@ -418,6 +418,9 @@ func (p *Processor) postAppSessCtxProcedure(appSessCtx *models.Pcf_PolAuth_AppSe
 	// Event Subscription
 	eventSubs := make(map[models.Pcf_PolAuth_AfEvent]models.Pcf_PolAuth_AfNotifMethod)
 	if ascReqData.EvSubsc != nil {
+		if pd := validateAniSubscription(ascReqData.EvSubsc.Events, ascReqData.EvSubsc.ReqAnis, nSuppFeat); pd != nil {
+			return nil, "", pd
+		}
 		for _, subs := range ascReqData.EvSubsc.Events {
 			if subs.NotifMethod == "" {
 				// default value "EVENT_DETECTION"
@@ -428,6 +431,9 @@ func (p *Processor) postAppSessCtxProcedure(appSessCtx *models.Pcf_PolAuth_AppSe
 			switch subs.Event {
 			case models.Pcf_PolAuth_AfEvent_ACCESS_TYPE_CHANGE:
 				trig = models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_AC_TY_CH
+			case models.Pcf_PolAuth_AfEvent_ANI_REPORT:
+				// Provisioned after the loop, see handleAniSubscription
+				continue
 			// case models.Pcf_PolAuth_AfEvent_FAILED_RESOURCES_ALLOCATION:
 			// 	// Subscription to Service Data Flow Deactivation
 			// 	trig = models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_RES_RELEASE
@@ -487,6 +493,14 @@ func (p *Processor) postAppSessCtxProcedure(appSessCtx *models.Pcf_PolAuth_AppSe
 		}
 	}
 
+	// Request of access network information
+	var reqAnis []models.Pcf_PolAuth_RequiredAccessInfo
+	if ascReqData.EvSubsc != nil {
+		reqAnis = ascReqData.EvSubsc.ReqAnis
+	}
+	aniNotSupported := handleAniSubscription(eventSubs, nSuppFeat, smPolicy, reqAnis, relatedPccRuleIds,
+		&updateSMpolicy)
+
 	// Allocate App Session Id
 	appSessID := ue.AllocUeAppSessionId(pcfSelf)
 	appSessCtx.AscRespData = &models.Pcf_PolAuth_AppSessionContextRespData{
@@ -529,6 +543,9 @@ func (p *Processor) postAppSessCtxProcedure(appSessCtx *models.Pcf_PolAuth_AppSe
 			appSessCtx.EvsNotif.AccessType = smPolicy.PolicyContext.AccessType
 			appSessCtx.EvsNotif.RatType = smPolicy.PolicyContext.RatType
 		}
+	}
+	if aniNotSupported {
+		addAniNotSupported(appSessCtx.EvsNotif)
 	}
 	if appSessCtx.EvsNotif.EvNotifs == nil {
 		appSessCtx.EvsNotif = nil
@@ -858,6 +875,12 @@ func (p *Processor) HandleModAppSessionContext(
 	}
 
 	if appSessionContextUpdateData.EvSubsc != nil {
+		if pd := validateAniSubscription(appSessionContextUpdateData.EvSubsc.Events,
+			appSessionContextUpdateData.EvSubsc.ReqAnis, negotiatedSuppFeat(appSessCtx)); pd != nil {
+			c.Set(sbi.IN_PB_DETAILS_CTX_STR, pd.Cause)
+			c.JSON(int(pd.Status), pd)
+			return
+		}
 		for _, subs := range appSessionContextUpdateData.EvSubsc.Events {
 			if subs.NotifMethod == "" {
 				// default value "EVENT_DETECTION"
@@ -868,6 +891,9 @@ func (p *Processor) HandleModAppSessionContext(
 			switch subs.Event {
 			case models.Pcf_PolAuth_AfEvent_ACCESS_TYPE_CHANGE:
 				trig = models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_AC_TY_CH
+			case models.Pcf_PolAuth_AfEvent_ANI_REPORT:
+				// Provisioned after the loop, see handleAniSubscription
+				continue
 			// case models.Pcf_PolAuth_AfEvent_FAILED_RESOURCES_ALLOCATION:
 			// 	// Subscription to Service Data Flow Deactivation
 			// 	trig = models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_SUCC_RES_ALLO
@@ -910,6 +936,9 @@ func (p *Processor) HandleModAppSessionContext(
 		if appSessionContextUpdateData.EvSubsc.UsgThres != nil {
 			appSessCtx.AscReqData.EvSubsc.UsgThres = threshRmToThresh(appSessionContextUpdateData.EvSubsc.UsgThres)
 		}
+		if appSessionContextUpdateData.EvSubsc.ReqAnis != nil {
+			appSessCtx.AscReqData.EvSubsc.ReqAnis = appSessionContextUpdateData.EvSubsc.ReqAnis
+		}
 	} else {
 		// remove eventSubs
 		appSession.Events = nil
@@ -927,6 +956,14 @@ func (p *Processor) HandleModAppSessionContext(
 			return
 		}
 	}
+
+	// Request of access network information
+	var reqAnis []models.Pcf_PolAuth_RequiredAccessInfo
+	if appSessionContextUpdateData.EvSubsc != nil {
+		reqAnis = appSessionContextUpdateData.EvSubsc.ReqAnis
+	}
+	aniNotSupported := handleAniSubscription(eventSubs, negotiatedSuppFeat(appSessCtx), smPolicy, reqAnis,
+		relatedPccRuleIds, &updateSMpolicy)
 
 	if len(relatedPccRuleIds) > 0 {
 		appSession.RelatedPccRuleIds = relatedPccRuleIds
@@ -959,6 +996,9 @@ func (p *Processor) HandleModAppSessionContext(
 			appSessCtx.EvsNotif.AccessType = smPolicy.PolicyContext.AccessType
 			appSessCtx.EvsNotif.RatType = smPolicy.PolicyContext.RatType
 		}
+	}
+	if aniNotSupported {
+		addAniNotSupported(appSessCtx.EvsNotif)
 	}
 	if appSessCtx.EvsNotif.EvNotifs == nil {
 		appSessCtx.EvsNotif = nil
@@ -1056,6 +1096,13 @@ func (p *Processor) HandleUpdateEventsSubscContext(
 		c.JSON(int(problemDetail.Status), problemDetail)
 		return
 	}
+	appSessCtx := appSession.AppSessionContext
+	nSuppFeat := negotiatedSuppFeat(appSessCtx)
+	if pd := validateAniSubscription(eventsSubscReqData.Events, eventsSubscReqData.ReqAnis, nSuppFeat); pd != nil {
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, pd.Cause)
+		c.JSON(int(pd.Status), pd)
+		return
+	}
 	eventSubs := make(map[models.Pcf_PolAuth_AfEvent]models.Pcf_PolAuth_AfNotifMethod)
 
 	updataSmPolicy := false
@@ -1071,6 +1118,9 @@ func (p *Processor) HandleUpdateEventsSubscContext(
 		switch subs.Event {
 		case models.Pcf_PolAuth_AfEvent_ACCESS_TYPE_CHANGE:
 			trig = models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_AC_TY_CH
+		case models.Pcf_PolAuth_AfEvent_ANI_REPORT:
+			// Provisioned after the loop, see handleAniSubscription
+			continue
 		// case models.Pcf_PolAuth_AfEvent_FAILED_RESOURCES_ALLOCATION:
 		// 	// Subscription to Service Data Flow Deactivation
 		// 	trig = models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_SUCC_RES_ALLO
@@ -1101,7 +1151,8 @@ func (p *Processor) HandleUpdateEventsSubscContext(
 			updataSmPolicy = true
 		}
 	}
-	appSessCtx := appSession.AppSessionContext
+	aniNotSupported := handleAniSubscription(eventSubs, nSuppFeat, smPolicy, eventsSubscReqData.ReqAnis,
+		appSession.RelatedPccRuleIds, &updataSmPolicy)
 	// update Context
 	if appSessCtx.AscReqData.EvSubsc == nil {
 		appSessCtx.AscReqData.EvSubsc = new(models.Pcf_PolAuth_EventsSubscReqData)
@@ -1109,6 +1160,7 @@ func (p *Processor) HandleUpdateEventsSubscContext(
 	appSessCtx.AscReqData.EvSubsc.Events = eventsSubscReqData.Events
 	appSessCtx.AscReqData.EvSubsc.UsgThres = eventsSubscReqData.UsgThres
 	appSessCtx.AscReqData.EvSubsc.NotifUri = eventsSubscReqData.NotifUri
+	appSessCtx.AscReqData.EvSubsc.ReqAnis = eventsSubscReqData.ReqAnis
 	appSessCtx.EvsNotif = nil
 	// update app Session
 	appSession.EventUri = eventsSubscReqData.NotifUri
@@ -1141,6 +1193,9 @@ func (p *Processor) HandleUpdateEventsSubscContext(
 			appSessCtx.EvsNotif.RatType = smPolicy.PolicyContext.RatType
 		}
 	}
+	if aniNotSupported {
+		addAniNotSupported(appSessCtx.EvsNotif)
+	}
 	if appSessCtx.EvsNotif.EvNotifs == nil {
 		appSessCtx.EvsNotif = nil
 	}
@@ -1162,6 +1217,7 @@ func (p *Processor) HandleUpdateEventsSubscContext(
 		resp.EvSubsUri = appSessCtx.EvsNotif.EvSubsUri
 		resp.EvNotifs = appSessCtx.EvsNotif.EvNotifs
 		resp.FailedResourcAllocReports = appSessCtx.EvsNotif.FailedResourcAllocReports
+		resp.NoNetLocSupp = appSessCtx.EvsNotif.NoNetLocSupp
 		resp.PlmnId = appSessCtx.EvsNotif.PlmnId
 		resp.QncReports = appSessCtx.EvsNotif.QncReports
 		resp.RatType = appSessCtx.EvsNotif.RatType

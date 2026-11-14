@@ -378,6 +378,8 @@ func (policy *UeSmPolicyData) ArrangeExistEventSubscription() (changed bool) {
 			afEvent = models.Pcf_PolAuth_AfEvent_ACCESS_TYPE_CHANGE
 		case models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_US_RE: // UMC
 			afEvent = models.Pcf_PolAuth_AfEvent_USAGE_REPORT
+		case models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_AN_INFO: // NetLoc
+			afEvent = models.Pcf_PolAuth_AfEvent_ANI_REPORT
 		}
 		if afEvent != "" && !policy.CheckRelatedAfEvent(afEvent) {
 			changed = true
@@ -386,7 +388,11 @@ func (policy *UeSmPolicyData) ArrangeExistEventSubscription() (changed bool) {
 		}
 	}
 	policy.PolicyDecision.PolicyCtrlReqTriggers = triggers
-	return
+	// Withdraw a pending access network information request no AF session waits for anymore.
+	if !policy.CheckRelatedAfEvent(models.Pcf_PolAuth_AfEvent_ANI_REPORT) && policy.RemoveAccessNetworkInfoRequest() {
+		changed = true
+	}
+	return changed
 }
 
 // Increase remain GBR of this policy and returns original UL DL GBR for resume case
