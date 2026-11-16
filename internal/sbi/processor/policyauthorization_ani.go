@@ -1,8 +1,10 @@
 package processor
 
 import (
+	"fmt"
 	"path"
 	"slices"
+	"time"
 
 	"github.com/free5gc/openapi/models"
 	pcf_context "github.com/free5gc/pcf/internal/context"
@@ -266,4 +268,98 @@ func sortedPccRuleIds(relatedPccRuleIds map[string]string) []string {
 	}
 	slices.Sort(pccRuleIds)
 	return pccRuleIds
+}
+
+// deliverAccessNetworkInfoToDeletions hands the access network information reported by the
+// SMF to the deletions of AF sessions waiting for it (TS 29.514 clause 4.2.4.6).
+func deliverAccessNetworkInfoToDeletions(pcfSelf *pcf_context.PCFContext, smPolicy *pcf_context.UeSmPolicyData,
+	notification models.Pcf_PolAuth_EventsNotification,
+) {
+	if !hasAniReportNotif(notification) {
+		return
+	}
+	// Collected first: a resumed deletion removes its AF session from smPolicy.AppSessions.
+	var appSessions []*pcf_context.AppSessionData
+	for appSessionID := range smPolicy.AppSessions {
+		if val, exist := pcfSelf.AppSessionPool.Load(appSessionID); exist {
+			appSessions = append(appSessions, val.(*pcf_context.AppSessionData))
+		}
+	}
+	for _, appSession := range appSessions {
+		appSession.DeliverAccessNetworkInfo(notification)
+	}
+}
+
+func hasAniReportNotif(notification models.Pcf_PolAuth_EventsNotification) bool {
+	return slices.ContainsFunc(notification.EvNotifs, func(notif models.Pcf_PolAuth_AfEventNotification) bool {
+		return notif.Event == models.Pcf_PolAuth_AfEvent_ANI_REPORT
+	})
+}
+
+// Request and report of access network information at deletion, TS 29.514 clause 4.2.4.6.
+
+// aniDeletionTimeout bounds how long the deletion of an AF session waits for the access network
+// information requested from the SMF. TS 29.514 does not specify it; on expiry the AF session is
+// deleted without the information (204 No Content).
+var aniDeletionTimeout = 5 * time.Second
+
+// aniAtDeletion checks the event subscription of a deletion request. It returns either the
+// EventsNotification to answer with right away (the SMF does not support NetLoc), or waitAni
+// when the access network information shall be requested from the SMF and waited for.
+func aniAtDeletion(evSubsc *models.Pcf_PolAuth_EventsSubscReqData, negotiatedSuppFeat string,
+	smPolicy *pcf_context.UeSmPolicyData,
+) (evsNotif *models.Pcf_PolAuth_EventsNotification, waitAni bool, problemDetails *models.ProblemDetails) {
+	if evSubsc == nil {
+		return nil, false, nil
+	}
+	if pd := validateAniSubscription(evSubsc.Events, evSubsc.ReqAnis, negotiatedSuppFeat); pd != nil {
+		return nil, false, pd
+	}
+	if !hasAniReportEvent(evSubsc.Events) || !util.CheckSuppFeat(negotiatedSuppFeat, netLocFeature) {
+		logger.PolicyAuthLog.Warn("Delete AppSessions only supports the ANI_REPORT event subscription (NetLoc)")
+		return nil, false, nil
+	}
+	if !util.CheckSuppFeat(smPolicy.PolicyDecision.SuppFeat, netLocFeature) {
+		logger.PolicyAuthLog.Info("Access network information report not supported by the SMF")
+		evsNotif = &models.Pcf_PolAuth_EventsNotification{}
+		addAniNotSupported(evsNotif)
+		return evsNotif, false, nil
+	}
+	return nil, true, nil
+}
+
+// waitAccessNetworkInfo requests the access network information from the SMF for an AF session
+// being deleted and waits for the report, at most aniDeletionTimeout. It returns nil on expiry.
+func (p *Processor) waitAccessNetworkInfo(appSession *pcf_context.AppSessionData,
+	reqAnis []models.Pcf_PolAuth_RequiredAccessInfo, aniReport <-chan models.Pcf_PolAuth_EventsNotification,
+) *models.Pcf_PolAuth_EventsNotification {
+	smPolicy := appSession.SmPolicyData
+	// Keeps the request from being withdrawn by ArrangeExistEventSubscription while waiting.
+	if appSession.Events == nil {
+		appSession.Events = make(map[models.Pcf_PolAuth_AfEvent]models.Pcf_PolAuth_AfNotifMethod)
+	}
+	appSession.Events[models.Pcf_PolAuth_AfEvent_ANI_REPORT] = models.Pcf_PolAuth_AfNotifMethod_ONE_TIME
+	smPolicy.AddAccessNetworkInfoRequest(aniReqData(reqAnis), sortedPccRuleIds(appSession.RelatedPccRuleIds))
+
+	smPolicyID := fmt.Sprintf("%s-%d", smPolicy.PcfUe.Supi, smPolicy.PolicyContext.PduSessionId)
+	notification := models.Pcf_SMPolCtrl_SmPolicyNotification{
+		ResourceUri:      util.GetResourceUri(models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL, smPolicyID),
+		SmPolicyDecision: smPolicy.PolicyDecision,
+	}
+	go p.SendSMPolicyUpdateNotification(smPolicy.PolicyContext.NotificationUri, &notification)
+
+	timer := time.NewTimer(aniDeletionTimeout)
+	defer timer.Stop()
+	select {
+	case reported := <-aniReport:
+		evsNotif := &models.Pcf_PolAuth_EventsNotification{
+			EvNotifs: []models.Pcf_PolAuth_AfEventNotification{{Event: models.Pcf_PolAuth_AfEvent_ANI_REPORT}},
+		}
+		fillAccessNetworkInfo(evsNotif, reported, reqAnis)
+		return evsNotif
+	case <-timer.C:
+		logger.PolicyAuthLog.Warnf("App Session Id[%s]: no access network information from the SMF within %s",
+			appSession.AppSessionId, aniDeletionTimeout)
+		return nil
+	}
 }

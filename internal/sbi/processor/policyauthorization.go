@@ -579,23 +579,48 @@ func (p *Processor) HandleDeleteAppSessionContext(
 	if val, ok := pcfSelf.AppSessionPool.Load(appSessionId); ok {
 		appSession = val.(*pcf_context.AppSessionData)
 	}
-	if appSession == nil {
+	if appSession == nil || appSession.Deleting() {
 		problemDetail := util.GetProblemDetail("can't find app session", util.APPLICATION_SESSION_CONTEXT_NOT_FOUND)
 		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
 		c.JSON(int(problemDetail.Status), problemDetail)
 		return
 	}
-	if eventsSubscReqData != nil {
-		logger.PolicyAuthLog.Warn("Delete AppSessions does not support with Event Subscription")
-	}
 
 	smPolicy := appSession.SmPolicyData
 	if smPolicy == nil {
 		// BDT-only AppSession / AppSession without SM Policy - nothing to undo on the SM Policy side
+		if eventsSubscReqData != nil {
+			logger.PolicyAuthLog.Warn("Delete AppSessions does not support with Event Subscription")
+		}
+		if _, ok := appSession.MarkDeleting(false); !ok {
+			problemDetail := util.GetProblemDetail("can't find app session", util.APPLICATION_SESSION_CONTEXT_NOT_FOUND)
+			c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
+			c.JSON(int(problemDetail.Status), problemDetail)
+			return
+		}
 		pcfSelf.AppSessionPool.Delete(appSessionId)
 		logger.PolicyAuthLog.Infof("App Session Id[%s] Del", appSessionId)
 		c.Status(http.StatusNoContent)
 		return
+	}
+
+	// Request and report of access network information (subclause 4.2.4.6 in TS29514)
+	evsNotif, waitAni, pd := aniAtDeletion(eventsSubscReqData, negotiatedSuppFeat(appSession.AppSessionContext),
+		smPolicy)
+	if pd != nil {
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, pd.Cause)
+		c.JSON(int(pd.Status), pd)
+		return
+	}
+	aniReport, ok := appSession.MarkDeleting(waitAni)
+	if !ok {
+		problemDetail := util.GetProblemDetail("can't find app session", util.APPLICATION_SESSION_CONTEXT_NOT_FOUND)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
+		c.JSON(int(problemDetail.Status), problemDetail)
+		return
+	}
+	if waitAni {
+		evsNotif = p.waitAccessNetworkInfo(appSession, eventsSubscReqData.ReqAnis, aniReport)
 	}
 
 	// Remove related pcc rule resource
@@ -634,6 +659,12 @@ func (p *Processor) HandleDeleteAppSessionContext(
 	}
 	go p.SendSMPolicyUpdateNotification(smPolicy.PolicyContext.NotificationUri, &notification)
 	logger.PolicyAuthLog.Tracef("Send SM Policy[%s] Update Notification", smPolicyID)
+	if evsNotif != nil {
+		evsNotif.EvSubsUri = fmt.Sprintf("%s/events-subscription",
+			util.GetResourceUri(models.Nrf_NFMgmt_ServiceName_NPCF_POLICYAUTHORIZATION, appSessionId))
+		c.JSON(http.StatusOK, models.Pcf_PolAuth_AppSessionContext{EvsNotif: evsNotif})
+		return
+	}
 	c.Status(http.StatusNoContent)
 }
 
@@ -650,7 +681,7 @@ func (p *Processor) HandleGetAppSessionContext(
 	if val, ok := pcfSelf.AppSessionPool.Load(appSessionId); ok {
 		appSession = val.(*pcf_context.AppSessionData)
 	}
-	if appSession == nil {
+	if appSession == nil || appSession.Deleting() {
 		problemDetail := util.GetProblemDetail("can't find app session", util.APPLICATION_SESSION_CONTEXT_NOT_FOUND)
 		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
 		c.JSON(int(problemDetail.Status), problemDetail)
@@ -673,7 +704,7 @@ func (p *Processor) HandleModAppSessionContext(
 	if val, ok := pcfSelf.AppSessionPool.Load(appSessionId); ok {
 		appSession = val.(*pcf_context.AppSessionData)
 	}
-	if appSession == nil {
+	if appSession == nil || appSession.Deleting() {
 		problemDetail := util.GetProblemDetail("can't find app session", util.APPLICATION_SESSION_CONTEXT_NOT_FOUND)
 		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
 		c.JSON((int)(problemDetail.Status), problemDetail)
@@ -1034,7 +1065,7 @@ func (p *Processor) HandleDeleteEventsSubscContext(
 	if val, ok := pcfSelf.AppSessionPool.Load(appSessionId); ok {
 		appSession = val.(*pcf_context.AppSessionData)
 	}
-	if appSession == nil {
+	if appSession == nil || appSession.Deleting() {
 		problemDetail := util.GetProblemDetail("can't find app session", util.APPLICATION_SESSION_CONTEXT_NOT_FOUND)
 		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
 		c.JSON(int(problemDetail.Status), problemDetail)
@@ -1083,7 +1114,7 @@ func (p *Processor) HandleUpdateEventsSubscContext(
 	if val, ok := pcfSelf.AppSessionPool.Load(appSessionId); ok {
 		appSession = val.(*pcf_context.AppSessionData)
 	}
-	if appSession == nil {
+	if appSession == nil || appSession.Deleting() {
 		problemDetail := util.GetProblemDetail("can't find app session", util.APPLICATION_SESSION_CONTEXT_NOT_FOUND)
 		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
 		c.JSON(int(problemDetail.Status), problemDetail)
