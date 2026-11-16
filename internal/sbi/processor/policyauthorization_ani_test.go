@@ -5,7 +5,9 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/h2non/gock"
@@ -267,4 +269,163 @@ func TestAniReqData(t *testing.T) {
 		"UNKNOWN",
 	}))
 	require.Empty(t, aniReqData(nil))
+}
+
+// Request and report of access network information at deletion, TS 29.514 clause 4.2.4.6.
+
+const aniTestSmfURL = "http://smf.example/sm-policy"
+
+func deleteWithAni(t *testing.T, p *Processor, reqAnis ...models.Pcf_PolAuth_RequiredAccessInfo,
+) *httptest.ResponseRecorder {
+	t.Helper()
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	evSubsc := aniSubscription(reqAnis...)
+	p.HandleDeleteAppSessionContext(c, aniTestAppSessionID, &evSubsc)
+	c.Writer.WriteHeaderNow() // as gin does when the handler returns, for a status without body
+	return w
+}
+
+func requireAppSessionDeleted(t *testing.T, appSession *pcf_context.AppSessionData) {
+	t.Helper()
+	_, inPool := pcf_context.GetSelf().AppSessionPool.Load(aniTestAppSessionID)
+	require.False(t, inPool)
+	require.NotContains(t, appSession.SmPolicyData.AppSessions, aniTestAppSessionID)
+}
+
+func TestDeleteAppSessionAniSmfWithoutNetLoc(t *testing.T) {
+	p, appSession := newAniTestSession(t, netLocSuppFeat, noNetLocSuppFeat)
+
+	w := deleteWithAni(t, p, models.Pcf_PolAuth_RequiredAccessInfo_USER_LOCATION)
+
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	var resp models.Pcf_PolAuth_AppSessionContext
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	require.NotNil(t, resp.EvsNotif)
+	require.Equal(t, models.Pcf_SMPolCtrl_NetLocAccessSupport_ANR_NOT_SUPPORTED, resp.EvsNotif.NoNetLocSupp)
+	require.Equal(t, []models.Pcf_PolAuth_AfEventNotification{{Event: models.Pcf_PolAuth_AfEvent_ANI_REPORT}},
+		resp.EvsNotif.EvNotifs)
+	require.NotEmpty(t, resp.EvsNotif.EvSubsUri)
+	requireAppSessionDeleted(t, appSession)
+}
+
+// The deletion waits for the SMF to report the access network information, then answers with it.
+func TestDeleteAppSessionAniWaitsForSmfReport(t *testing.T) {
+	p, appSession := newAniTestSession(t, netLocSuppFeat, netLocSuppFeat)
+	smPolicy := appSession.SmPolicyData
+	smPolicy.PolicyContext.NotificationUri = aniTestSmfURL
+	// An AF notification for the AF session being deleted would be unmatched.
+	appSession.EventUri = aniTestAfURL
+	ueLoc := &models.UserLocation{NrLocation: &models.NrLocation{
+		Tai: &models.Tai{PlmnId: &models.PlmnId{Mcc: "208", Mnc: "93"}, Tac: "000001"},
+	}}
+
+	openapi.InterceptInnerHttp2Client(t, false)
+	t.Cleanup(gock.Off)
+	var requested models.Pcf_SMPolCtrl_SmPolicyNotification
+	var report sync.Once
+	smfNotified := make(chan struct{}, 2)
+	// The SMF answers the request with an AN_INFO report.
+	gock.New(aniTestSmfURL).Post("/update").Persist().
+		AddMatcher(func(req *http.Request, _ *gock.Request) (bool, error) {
+			defer func() { smfNotified <- struct{}{} }()
+			report.Do(func() {
+				body, err := io.ReadAll(req.Body)
+				require.NoError(t, err)
+				require.NoError(t, json.Unmarshal(body, &requested))
+				w := httptest.NewRecorder()
+				c, _ := gin.CreateTestContext(w)
+				p.HandleUpdateSmPolicyContextRequest(c, aniTestSmPolicyID, models.Pcf_SMPolCtrl_SmPolicyUpdateContextData{
+					RepPolicyCtrlReqTriggers: []models.Pcf_SMPolCtrl_PolicyControlRequestTrigger{
+						models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_AN_INFO,
+					},
+					UserLocationInfo: ueLoc,
+					UeTimeZone:       "+08:00",
+				})
+				require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+			})
+			return true, nil
+		}).Reply(http.StatusNoContent)
+
+	w := deleteWithAni(t, p, models.Pcf_PolAuth_RequiredAccessInfo_USER_LOCATION)
+	// Requesting the information, then removing the PCC rules: both sent asynchronously.
+	for range 2 {
+		select {
+		case <-smfNotified:
+		case <-time.After(time.Second):
+			t.Fatal("expected two SM policy update notifications to the SMF")
+		}
+	}
+
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	require.Equal(t, []models.Pcf_SMPolCtrl_RequestedRuleData{{
+		RefPccRuleIds: []string{"PccRuleId-1"},
+		ReqData:       []models.Pcf_SMPolCtrl_RequestedRuleDataType{models.Pcf_SMPolCtrl_RequestedRuleDataType_USER_LOC_INFO},
+	}}, requested.SmPolicyDecision.LastReqRuleData)
+	require.Contains(t, requested.SmPolicyDecision.PolicyCtrlReqTriggers,
+		models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_AN_INFO)
+
+	var resp models.Pcf_PolAuth_AppSessionContext
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	require.NotNil(t, resp.EvsNotif)
+	require.Equal(t, []models.Pcf_PolAuth_AfEventNotification{{Event: models.Pcf_PolAuth_AfEvent_ANI_REPORT}},
+		resp.EvsNotif.EvNotifs)
+	require.Equal(t, ueLoc, resp.EvsNotif.UeLoc)
+	require.Empty(t, resp.EvsNotif.UeTimeZone, "time zone not required")
+	require.Empty(t, resp.EvsNotif.NoNetLocSupp)
+
+	requireAppSessionDeleted(t, appSession)
+	require.Empty(t, smPolicy.PolicyDecision.LastReqRuleData)
+	require.NotContains(t, smPolicy.PolicyDecision.PolicyCtrlReqTriggers,
+		models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_AN_INFO)
+	require.False(t, gock.HasUnmatchedRequest(), "no notification to the AF session being deleted")
+}
+
+// Without a report from the SMF, the AF session is deleted without the information.
+func TestDeleteAppSessionAniTimeout(t *testing.T) {
+	p, appSession := newAniTestSession(t, netLocSuppFeat, netLocSuppFeat)
+	timeout := aniDeletionTimeout
+	aniDeletionTimeout = 20 * time.Millisecond
+	t.Cleanup(func() { aniDeletionTimeout = timeout })
+
+	w := deleteWithAni(t, p, models.Pcf_PolAuth_RequiredAccessInfo_USER_LOCATION)
+
+	require.Equal(t, http.StatusNoContent, w.Code, w.Body.String())
+	requireAppSessionDeleted(t, appSession)
+	decision := appSession.SmPolicyData.PolicyDecision
+	require.Empty(t, decision.LastReqRuleData)
+	require.NotContains(t, decision.PolicyCtrlReqTriggers, models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_AN_INFO)
+}
+
+func TestDeleteAppSessionAniWithoutReqAnis(t *testing.T) {
+	p, appSession := newAniTestSession(t, netLocSuppFeat, netLocSuppFeat)
+
+	w := deleteWithAni(t, p)
+
+	require.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+	require.False(t, appSession.Deleting())
+	_, inPool := pcf_context.GetSelf().AppSessionPool.Load(aniTestAppSessionID)
+	require.True(t, inPool)
+}
+
+// An AF session being deleted is no longer accessible.
+func TestAppSessionBeingDeletedNotFound(t *testing.T) {
+	p, appSession := newAniTestSession(t, netLocSuppFeat, netLocSuppFeat)
+	_, ok := appSession.MarkDeleting(true)
+	require.True(t, ok)
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	p.HandleModAppSessionContext(c, aniTestAppSessionID, models.Pcf_PolAuth_AppSessionContextUpdateData{})
+	require.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
+
+	w = httptest.NewRecorder()
+	c, _ = gin.CreateTestContext(w)
+	p.HandleDeleteAppSessionContext(c, aniTestAppSessionID, nil)
+	require.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
+
+	w = httptest.NewRecorder()
+	c, _ = gin.CreateTestContext(w)
+	p.HandleUpdateEventsSubscContext(c, aniTestAppSessionID, aniSubscription())
+	require.Equal(t, http.StatusNotFound, w.Code, w.Body.String())
 }

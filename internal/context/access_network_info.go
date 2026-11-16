@@ -2,6 +2,7 @@ package context
 
 import (
 	"slices"
+	"sync"
 
 	"github.com/free5gc/openapi/models"
 )
@@ -77,4 +78,54 @@ func (policy *UeSmPolicyData) RemoveAccessNetworkInfoRequest() (removed bool) {
 	}
 	decision.LastReqRuleData = ruleDataList
 	return removed
+}
+
+// appSessionDeletion tracks the deletion of an AF session, which may have to wait for the
+// access network information requested at deletion (TS 29.514 clause 4.2.4.6).
+type appSessionDeletion struct {
+	mu        sync.Mutex
+	deleting  bool
+	aniReport chan models.Pcf_PolAuth_EventsNotification
+}
+
+// MarkDeleting marks the AF session as being deleted: it is no longer accessible to the
+// NF service consumer. It returns false if the session is already being deleted.
+// With waitAni, the returned channel receives the access network information reported by
+// the SMF, see DeliverAccessNetworkInfo.
+func (appSession *AppSessionData) MarkDeleting(waitAni bool) (
+	aniReport <-chan models.Pcf_PolAuth_EventsNotification, ok bool,
+) {
+	d := &appSession.deletion
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.deleting {
+		return nil, false
+	}
+	d.deleting = true
+	if waitAni {
+		d.aniReport = make(chan models.Pcf_PolAuth_EventsNotification, 1)
+	}
+	return d.aniReport, true
+}
+
+// Deleting reports whether the AF session is being deleted.
+func (appSession *AppSessionData) Deleting() bool {
+	d := &appSession.deletion
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.deleting
+}
+
+// DeliverAccessNetworkInfo hands the access network information reported by the SMF to the
+// deletion of the AF session waiting for it. It returns false if no deletion is waiting.
+func (appSession *AppSessionData) DeliverAccessNetworkInfo(report models.Pcf_PolAuth_EventsNotification) bool {
+	d := &appSession.deletion
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.aniReport == nil {
+		return false
+	}
+	d.aniReport <- report // buffered: a deletion waits for one report only
+	d.aniReport = nil
+	return true
 }

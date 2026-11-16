@@ -63,3 +63,20 @@ func TestArrangeExistEventSubscriptionWithdrawsAccessNetworkInfoRequest(t *testi
 	require.Empty(t, policy.PolicyDecision.PolicyCtrlReqTriggers)
 	require.Empty(t, policy.PolicyDecision.LastReqRuleData)
 }
+
+func TestAppSessionDeletion(t *testing.T) {
+	appSession := &AppSessionData{}
+	require.False(t, appSession.DeliverAccessNetworkInfo(models.Pcf_PolAuth_EventsNotification{}),
+		"no deletion waiting")
+
+	aniReport, ok := appSession.MarkDeleting(true)
+	require.True(t, ok)
+	require.True(t, appSession.Deleting())
+	_, ok = appSession.MarkDeleting(true)
+	require.False(t, ok, "already being deleted")
+
+	report := models.Pcf_PolAuth_EventsNotification{UeTimeZone: "+08:00"}
+	require.True(t, appSession.DeliverAccessNetworkInfo(report))
+	require.False(t, appSession.DeliverAccessNetworkInfo(report), "a deletion waits for one report only")
+	require.Equal(t, report, <-aniReport)
+}
