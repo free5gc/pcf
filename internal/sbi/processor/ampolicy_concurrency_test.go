@@ -8,12 +8,13 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/models"
 	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/sbi/consumer"
 	"github.com/free5gc/pcf/pkg/factory"
-	"github.com/gin-gonic/gin"
 )
 
 func TestConcurrentAMPolicyLifecycle(t *testing.T) {
@@ -23,7 +24,9 @@ func TestConcurrentAMPolicyLifecycle(t *testing.T) {
 	t.Cleanup(func() { factory.PcfConfig = oldConfig })
 	server := newAllocationTestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = fmt.Fprint(w, `{}`)
+		if _, err := fmt.Fprint(w, `{}`); err != nil {
+			t.Errorf("write UDR response: %v", err)
+		}
 	}))
 	feature, err := openapi.NewSupportedFeature("0")
 	if err != nil {
@@ -43,7 +46,13 @@ func TestConcurrentAMPolicyLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	p := &Processor{PCF: app}
-	request := models.Pcf_AMPolCtrl_PolicyAssociationRequest{Supi: ue.Supi, SuppFeat: "0", NotificationUri: "http://localhost/notify", ServingPlmn: &models.PlmnIdNid{Mcc: "001", Mnc: "01"}, AccessType: models.AccessType_3_GPP_ACCESS}
+	request := models.Pcf_AMPolCtrl_PolicyAssociationRequest{
+		Supi:            ue.Supi,
+		SuppFeat:        "0",
+		NotificationUri: "http://localhost/notify",
+		ServingPlmn:     &models.PlmnIdNid{Mcc: "001", Mnc: "01"},
+		AccessType:      models.AccessType_3_GPP_ACCESS,
+	}
 	var wg sync.WaitGroup
 	ids := make(chan string, 64)
 	start := make(chan struct{})
@@ -61,7 +70,10 @@ func TestConcurrentAMPolicyLifecycle(t *testing.T) {
 			ids <- id
 			c, _ := gin.CreateTestContext(httptest.NewRecorder())
 			p.HandleGetPoliciesPolAssoId(c, id)
-			_, pd = p.UpdatePostPoliciesPolAssoIdProcedure(id, models.Pcf_AMPolCtrl_PolicyAssociationUpdateRequest{NotificationUri: "http://localhost/updated"})
+			update := models.Pcf_AMPolCtrl_PolicyAssociationUpdateRequest{
+				NotificationUri: "http://localhost/updated",
+			}
+			_, pd = p.UpdatePostPoliciesPolAssoIdProcedure(id, update)
 			if pd != nil {
 				t.Errorf("update failed: %+v", pd)
 			}

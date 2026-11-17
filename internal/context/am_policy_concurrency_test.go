@@ -1,9 +1,10 @@
 package context
 
 import (
-	"github.com/free5gc/openapi/models"
 	"sync"
 	"testing"
+
+	"github.com/free5gc/openapi/models"
 )
 
 func TestAMCreateVsSessionBinding(t *testing.T) {
@@ -25,7 +26,12 @@ func TestAMCreateVsSessionBinding(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for i := 0; i < 1000; i++ {
-			_, _ = ctx.SessionBinding(&models.Pcf_PolAuth_AppSessionContextReqData{Gpsi: "msisdn-123"})
+			// This test only exercises GPSI lookup. It does not provide a UE IP.
+			_, err := ctx.SessionBinding(&models.Pcf_PolAuth_AppSessionContextReqData{Gpsi: "msisdn-123"})
+			if err == nil || err.Error() != "ue finding by MAC address does not support" {
+				t.Errorf("SessionBinding returned unexpected error: %v", err)
+				return
+			}
 		}
 	}()
 	wg.Wait()
