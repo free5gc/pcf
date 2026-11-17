@@ -228,8 +228,8 @@ func (c *PCFContext) NewPCFUe(Supi string) (*UeContext, error) {
 	if err != nil {
 		return nil, err
 	}
-	c.UePool.Store(Supi, ue)
-	return ue, nil
+	actual, _ := c.UePool.LoadOrStore(Supi, ue)
+	return actual.(*UeContext), nil
 }
 
 // NewUeContext initializes a UE without publishing it in the shared pool.
@@ -360,7 +360,10 @@ func (c *PCFContext) SessionBinding(req *models.Pcf_PolAuth_AppSessionContextReq
 	if req.Gpsi != "" && selectedUE == nil {
 		c.UePool.Range(func(key, value interface{}) bool {
 			ue := value.(*UeContext)
-			if ue.Gpsi == req.Gpsi {
+			ue.AMPolicyMu.RLock()
+			gpsi := ue.Gpsi
+			ue.AMPolicyMu.RUnlock()
+			if gpsi == req.Gpsi {
 				selectedUE = ue
 				return false
 			} else {

@@ -40,6 +40,7 @@ func (p *Processor) HandleOAMGetAmPolicyRequest(
 
 	if val, exists := pcfSelf.UePool.Load(supi); exists {
 		ue := val.(*context.UeContext)
+		ue.AMPolicyMu.RLock()
 		for _, amPolicy := range ue.AMPolicyData {
 			ueAmPolicy := UEAmPolicy{
 				PolicyAssociationID: amPolicy.PolAssoId,
@@ -55,6 +56,7 @@ func (p *Processor) HandleOAMGetAmPolicyRequest(
 			}
 			*response = append(*response, ueAmPolicy)
 		}
+		ue.AMPolicyMu.RUnlock()
 		c.JSON(http.StatusOK, response)
 		return
 	} else {
