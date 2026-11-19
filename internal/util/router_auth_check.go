@@ -2,6 +2,7 @@ package util
 
 import (
 	"fmt"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 
@@ -33,8 +34,12 @@ func (rac *RouterAuthorizationCheck) Check(c *gin.Context, pcfContext pcf_contex
 		}
 		status, challenge, reason := oauthChallenge(c.Request, string(rac.serviceName), token, err, baseURI)
 		c.Header("WWW-Authenticate", challenge)
-		c.JSON(status, gin.H{"error": reason})
-		c.Abort()
+		c.Header("Content-Type", "application/problem+json")
+		c.AbortWithStatusJSON(status, models.ProblemDetails{
+			Status: int32(status),
+			Title:  http.StatusText(status),
+			Detail: reason,
+		})
 		return
 	}
 
