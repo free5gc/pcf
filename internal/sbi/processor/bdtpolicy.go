@@ -265,17 +265,7 @@ func (p *Processor) getDefaultUdrUri(context *pcf_context.PCFContext) string {
 	if err != nil {
 		return ""
 	}
-	for _, nfProfile := range resp.NfInstances {
-		udruri := util.SearchNFServiceUri(
-			nfProfile,
-			models.Nrf_NFMgmt_ServiceName_NUDR_DR,
-			models.Nrf_NFMgmt_NFServiceStatus_REGISTERED,
-		)
-		if udruri != "" {
-			return udruri
-		}
-	}
-	return ""
+	return util.SearchNFServiceUri(resp.NfInstances, models.Nrf_NFMgmt_ServiceName_NUDR_DR)
 }
 
 // get default background data transfer policy
