@@ -98,7 +98,37 @@ func (s *Server) HTTPDeleteSMPolicy(c *gin.Context) {
 		c.JSON(int(problemDetails.Status), problemDetails)
 		return
 	}
-	s.Processor().HandleDeleteSmPolicyContextRequest(c, smPolicyId)
+	// SmPolicyDeleteData, e.g. the access network information with NetLoc (subclause 4.2.5.2 in TS29512)
+	var deleteData *models.Pcf_SMPolCtrl_SmPolicyDeleteData
+	requestBody, err := c.GetRawData()
+	if err != nil {
+		problemDetail := models.ProblemDetails{
+			Title:  "System failure",
+			Status: http.StatusInternalServerError,
+			Detail: err.Error(),
+			Cause:  "SYSTEM_FAILURE",
+		}
+		logger.SmPolicyLog.Errorf("Get Request Body error: %+v", err)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
+		c.JSON(http.StatusInternalServerError, problemDetail)
+		return
+	}
+	if len(requestBody) != 0 {
+		deleteData = new(models.Pcf_SMPolCtrl_SmPolicyDeleteData)
+		if err = openapi.Deserialize(deleteData, requestBody, "application/json"); err != nil {
+			problemDetail := "[Request Body] " + err.Error()
+			rsp := models.ProblemDetails{
+				Title:  "Malformed request syntax",
+				Status: http.StatusBadRequest,
+				Detail: problemDetail,
+			}
+			logger.SmPolicyLog.Errorln(problemDetail)
+			c.Set(sbi.IN_PB_DETAILS_CTX_STR, http.StatusText(int(rsp.Status)))
+			c.JSON(int(rsp.Status), rsp)
+			return
+		}
+	}
+	s.Processor().HandleDeleteSmPolicyContextRequest(c, smPolicyId, deleteData)
 }
 
 // SmPoliciesSmPolicyIdGet -

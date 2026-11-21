@@ -3,6 +3,7 @@ package context
 import (
 	"slices"
 	"sync"
+	"time"
 
 	"github.com/free5gc/openapi/models"
 )
@@ -96,6 +97,11 @@ type appSessionDeletion struct {
 	mu        sync.Mutex
 	deleting  bool
 	aniReport chan models.Pcf_PolAuth_EventsNotification
+
+	// terminated by the PCF, waiting to be deleted (TS 29.514 clause 4.2.5.3)
+	terminated     bool
+	terminationAni *models.Pcf_PolAuth_EventsNotification
+	cleanup        *time.Timer
 }
 
 // MarkDeleting marks the AF session as being deleted: it is no longer accessible to the
@@ -138,4 +144,50 @@ func (appSession *AppSessionData) DeliverAccessNetworkInfo(report models.Pcf_Pol
 	d.aniReport <- report // buffered: a deletion waits for one report only
 	d.aniReport = nil
 	return true
+}
+
+// MarkTerminated marks the AF session as terminated by the PCF because its PDU session is terminated
+// (TS 29.514 clause 4.2.5.3): it is no longer accessible to the NF service consumer, except to
+// delete it. ani is the access network information the SMF provided at the termination of the PDU
+// session, if any. cleanup runs after timeout unless the AF session is deleted before, see
+// TakeTermination. It returns false if the AF session is already being deleted.
+func (appSession *AppSessionData) MarkTerminated(ani *models.Pcf_PolAuth_EventsNotification,
+	timeout time.Duration, cleanup func(),
+) bool {
+	d := &appSession.deletion
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.deleting {
+		return false
+	}
+	d.deleting = true
+	d.terminated = true
+	d.terminationAni = ani
+	d.cleanup = time.AfterFunc(timeout, cleanup)
+	return true
+}
+
+// Terminated reports whether the AF session is terminated by the PCF and not deleted yet.
+func (appSession *AppSessionData) Terminated() bool {
+	d := &appSession.deletion
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.terminated
+}
+
+// TakeTermination claims the deletion of an AF session terminated by the PCF. It returns the
+// access network information provided by the SMF, and false if the AF session is not terminated
+// or its deletion is already claimed.
+func (appSession *AppSessionData) TakeTermination() (ani *models.Pcf_PolAuth_EventsNotification, ok bool) {
+	d := &appSession.deletion
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if !d.terminated {
+		return nil, false
+	}
+	d.terminated = false
+	if d.cleanup != nil {
+		d.cleanup.Stop()
+	}
+	return d.terminationAni, true
 }
