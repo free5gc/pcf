@@ -519,6 +519,7 @@ func newQosDataWithQosFlowMap(qosFlow map[string]interface{}) *models.Pcf_SMPolC
 func (p *Processor) HandleDeleteSmPolicyContextRequest(
 	c *gin.Context,
 	smPolicyId string,
+	deleteData *models.Pcf_SMPolCtrl_SmPolicyDeleteData,
 ) {
 	logger.SmPolicyLog.Infof("Handle DeleteSmPolicyContext")
 
@@ -558,18 +559,8 @@ func (p *Processor) HandleDeleteSmPolicyContextRequest(
 	delete(ue.SmPolicyData, smPolicyId)
 	logger.SmPolicyLog.Tracef("SMPolicy smPolicyID[%s] DELETE", smPolicyId)
 
-	// Release related App Session
-	terminationInfo := models.Pcf_PolAuth_TerminationInfo{
-		TermCause: models.Pcf_PolAuth_TerminationCause_PDU_SESSION_TERMINATION,
-	}
-	for appSessionID := range smPolicy.AppSessions {
-		if val, exist := pcfSelf.AppSessionPool.Load(appSessionID); exist {
-			appSession := val.(*pcf_context.AppSessionData)
-			p.SendAppSessionTermination(appSession, terminationInfo)
-			pcfSelf.AppSessionPool.Delete(appSessionID)
-			logger.SmPolicyLog.Tracef("SMPolicy[%s] DELETE Related AppSession[%s]", smPolicyId, appSessionID)
-		}
-	}
+	// Release related App Session (subclause 4.2.5.3 in TS29514)
+	p.terminateAppSessions(smPolicy, deleteData)
 
 	for _, ratingGroup := range ue.RatingGroupData[smPolicyId] {
 		pcfSelf.RatingGroupIdGenerator.FreeID(int64(ratingGroup))
@@ -850,6 +841,26 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 		case models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_APP_STO: // ADC (subsclause 4.2.4.6, 5.8 in TS29512)
 			// request.AppDetectionInfos
 		case models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_AN_INFO: // NetLoc (subsclause 4.2.4.9, 5.8 in TS29512)
+			if request.UserLocationInfo != nil {
+				smPolicyContext.UserLocationInfo = request.UserLocationInfo
+			}
+			if request.UeTimeZone != "" {
+				smPolicyContext.UeTimeZone = request.UeTimeZone
+			}
+			// Reporting access network information to the AF (subclause 4.2.5.11 in TS29514)
+			afEventsNotification.EvNotifs = append(afEventsNotification.EvNotifs, models.Pcf_PolAuth_AfEventNotification{
+				Event: models.Pcf_PolAuth_AfEvent_ANI_REPORT,
+			})
+			afEventsNotification.UeLoc = request.UserLocationInfo
+			afEventsNotification.UeLocTime = request.UserLocationInfoTime
+			afEventsNotification.UeTimeZone = request.UeTimeZone
+			if request.UserLocationInfo == nil && request.ServingNetwork != nil {
+				// Location not available: the serving PLMN is reported instead
+				afEventsNotification.PlmnId = request.ServingNetwork
+			}
+			// The SMF reports once per request: the request is fulfilled
+			smPolicy.RemoveAccessNetworkInfoRequest()
+			logger.SmPolicyLog.Tracef("SM Policy Update(%s) Successfully", trigger)
 		case models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_CM_SES_FAIL: // Credit Management Session Failure
 			// request.CreditManageStatus
 		case models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_PS_DA_OFF:
@@ -991,6 +1002,9 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 		afEventsNotification.EvNotifs = append(afEventsNotification.EvNotifs, afNotif)
 	}
 	if afEventsNotification.EvNotifs != nil {
+		// Resume deletions waiting for access network information once this request is answered,
+		// as they go on modifying the SM policy.
+		defer deliverAccessNetworkInfoToDeletions(p.Context(), smPolicy, afEventsNotification)
 		p.sendSmPolicyRelatedAppSessionNotification(
 			smPolicy, afEventsNotification, request.AccuUsageReports, successRules, failRules)
 	}
@@ -1024,6 +1038,10 @@ func (p *Processor) sendSmPolicyRelatedAppSessionNotification(smPolicy *pcf_cont
 	for appSessionId := range smPolicy.AppSessions {
 		if val, exist := p.Context().AppSessionPool.Load(appSessionId); exist {
 			appSession := val.(*pcf_context.AppSessionData)
+			if appSession.Deleting() {
+				// No more notifications, see deliverAccessNetworkInfoToDeletions
+				continue
+			}
 			if len(appSession.Events) == 0 {
 				continue
 			}
@@ -1089,6 +1107,10 @@ func (p *Processor) sendSmPolicyRelatedAppSessionNotification(smPolicy *pcf_cont
 						} else {
 							continue
 						}
+					case models.Pcf_PolAuth_AfEvent_ANI_REPORT:
+						fillAccessNetworkInfo(&sessionNotif, notification, appSessionReqAnis(appSession))
+						// One-time event: the subscription terminates once reported (subclause 4.2.3.14 in TS29514)
+						delete(appSession.Events, models.Pcf_PolAuth_AfEvent_ANI_REPORT)
 					case models.Pcf_PolAuth_AfEvent_PLMN_CHG:
 						sessionNotif.PlmnId = notification.PlmnId
 					case models.Pcf_PolAuth_AfEvent_QOS_NOTIF:
