@@ -519,6 +519,7 @@ func newQosDataWithQosFlowMap(qosFlow map[string]interface{}) *models.Pcf_SMPolC
 func (p *Processor) HandleDeleteSmPolicyContextRequest(
 	c *gin.Context,
 	smPolicyId string,
+	deleteData *models.Pcf_SMPolCtrl_SmPolicyDeleteData,
 ) {
 	logger.SmPolicyLog.Infof("Handle DeleteSmPolicyContext")
 
@@ -558,18 +559,8 @@ func (p *Processor) HandleDeleteSmPolicyContextRequest(
 	delete(ue.SmPolicyData, smPolicyId)
 	logger.SmPolicyLog.Tracef("SMPolicy smPolicyID[%s] DELETE", smPolicyId)
 
-	// Release related App Session
-	terminationInfo := models.Pcf_PolAuth_TerminationInfo{
-		TermCause: models.Pcf_PolAuth_TerminationCause_PDU_SESSION_TERMINATION,
-	}
-	for appSessionID := range smPolicy.AppSessions {
-		if val, exist := pcfSelf.AppSessionPool.Load(appSessionID); exist {
-			appSession := val.(*pcf_context.AppSessionData)
-			p.SendAppSessionTermination(appSession, terminationInfo)
-			pcfSelf.AppSessionPool.Delete(appSessionID)
-			logger.SmPolicyLog.Tracef("SMPolicy[%s] DELETE Related AppSession[%s]", smPolicyId, appSessionID)
-		}
-	}
+	// Release related App Session (subclause 4.2.5.3 in TS29514)
+	p.terminateAppSessions(smPolicy, deleteData)
 
 	for _, ratingGroup := range ue.RatingGroupData[smPolicyId] {
 		pcfSelf.RatingGroupIdGenerator.FreeID(int64(ratingGroup))

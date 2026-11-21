@@ -579,6 +579,10 @@ func (p *Processor) HandleDeleteAppSessionContext(
 	if val, ok := pcfSelf.AppSessionPool.Load(appSessionId); ok {
 		appSession = val.(*pcf_context.AppSessionData)
 	}
+	// Deletion requested after the PCF terminated the AF session (subclause 4.2.5.3 in TS29514)
+	if appSession != nil && p.deleteTerminatedAppSession(c, appSession, eventsSubscReqData) {
+		return
+	}
 	if appSession == nil || appSession.Deleting() {
 		problemDetail := util.GetProblemDetail("can't find app session", util.APPLICATION_SESSION_CONTEXT_NOT_FOUND)
 		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
