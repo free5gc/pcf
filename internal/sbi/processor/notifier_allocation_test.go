@@ -38,14 +38,17 @@ func TestInfluenceNotificationAllocation(t *testing.T) {
 		maxID       int64
 		invalidLast bool
 		success     bool
+		panicCase   string
 	}{
-		{"first_allocation_failure", "new", 1, false, false},
-		{"later_allocation_failure", "new", 2, false, false},
-		{"update_before_failure", "existing", 2, false, false},
-		{"delete_before_failure", "delete", 1, false, false},
-		{"validation_after_reservation", "new", 2, true, false},
-		{"successful_batch", "new", 3, false, true},
-		{"successful_update", "existing", 3, false, true},
+		{"first_allocation_failure", "new", 1, false, false, ""},
+		{"later_allocation_failure", "new", 2, false, false, ""},
+		{"update_before_failure", "existing", 2, false, false, ""},
+		{"delete_before_failure", "delete", 1, false, false, ""},
+		{"validation_after_reservation", "new", 2, true, false, ""},
+		{"successful_batch", "new", 3, false, true, ""},
+		{"successful_update", "existing", 3, false, true, ""},
+		{"panic_after_transfer", "existing", 3, false, false, "response"},
+		{"panic_before_transfer", "new", 3, false, false, "charging"},
 	} {
 		mt.Run(tc.name, func(mt *mtest.T) {
 			gin.SetMode(gin.TestMode)
@@ -148,6 +151,9 @@ func TestInfluenceNotificationAllocation(t *testing.T) {
 				{Key: "filter", Value: ""},
 				{Key: "chargingMethod", Value: "Online"},
 			}
+			if tc.panicCase == "charging" {
+				seed[len(seed)-1].Value = 123 // Existing type assertion panics before ownership transfer.
+			}
 			find := func(docs ...bson.D) bson.D {
 				return mtest.CreateCursorResponse(0, "pcf_influence_test."+chargingDataColl, mtest.FirstBatch, docs...)
 			}
@@ -158,13 +164,51 @@ func TestInfluenceNotificationAllocation(t *testing.T) {
 			for i := 0; i < reads; i++ {
 				mt.AddMockResponses(find(seed))
 			}
-			if tc.success {
+			if tc.success || tc.panicCase == "response" {
 				for i := 0; i < 2; i++ {
 					mt.AddMockResponses(find(), mtest.CreateSuccessResponse(bson.E{Key: "n", Value: 1}))
 				}
 			}
 			response := httptest.NewRecorder()
 			c, _ := gin.CreateTestContext(response)
+			if tc.panicCase != "" {
+				// A missing response writer panics at the final HTTP status, after ownership transfer.
+				if tc.panicCase == "response" {
+					c = &gin.Context{}
+				}
+				var recovered interface{}
+				func() {
+					defer func() { recovered = recover() }()
+					p.HandleInfluenceDataUpdateNotify(c, ue.Supi, "1", batch)
+				}()
+				if recovered == nil {
+					mt.Fatal("fixture did not reach the existing apply-stage panic")
+				}
+				owned := []int32{int32(holder)}
+				firstFree := int64(2)
+				if tc.panicCase == "response" {
+					owned = append(owned, 2, 3)
+					firstFree = 4
+				}
+				if !reflect.DeepEqual(ue.RatingGroupData[policyID], owned) {
+					mt.Fatalf("unexpected ownership after panic: %v", ue.RatingGroupData[policyID])
+				}
+				seen := make(map[int64]bool)
+				for i := firstFree; i <= tc.maxID; i++ {
+					id, allocErr := generator.Allocate()
+					if allocErr != nil || id < firstFree || id > tc.maxID || seen[id] {
+						mt.Fatalf("unexpected available rating group after panic: %d (%v), already seen %v", id, allocErr, seen)
+					}
+					seen[id] = true
+				}
+				if _, allocErr := generator.Allocate(); allocErr == nil {
+					mt.Fatal("owned rating group released after panic")
+				}
+				if tc.panicCase == "charging" && calls.Load() != 0 {
+					mt.Fatal("uncommitted batch notified SMF")
+				}
+				return
+			}
 			p.HandleInfluenceDataUpdateNotify(c, ue.Supi, "1", batch)
 			c.Writer.WriteHeaderNow()
 			if tc.success {

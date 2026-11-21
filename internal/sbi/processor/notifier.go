@@ -142,6 +142,7 @@ func (p *Processor) HandleInfluenceDataUpdateNotify(
 						c.JSON(int(problemDetails.Status), problemDetails)
 						return
 					}
+					reservations = append(reservations, reservation{id: rg, charging: chargingInterface})
 					chgData = &models.Pcf_SMPolCtrl_ChargingData{
 						ChgId:          util.GetChgId(smPolicy.ChargingIdGenerator),
 						RatingGroup:    int32(rg),
@@ -159,7 +160,6 @@ func (p *Processor) HandleInfluenceDataUpdateNotify(
 					}
 
 					chargingInterface["ratingGroup"] = chgData.RatingGroup
-					reservations = append(reservations, reservation{id: rg, charging: chargingInterface})
 					smPolicy.ChargingIdGenerator++
 				}
 			}
