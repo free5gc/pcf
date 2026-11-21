@@ -969,21 +969,7 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 		}
 	}
 
-	var successRules, failRules []models.Pcf_SMPolCtrl_RuleReport
-	for _, rule := range request.RuleReports {
-		if rule.RuleStatus == models.Pcf_SMPolCtrl_RuleStatus_ACTIVE {
-			successRules = append(successRules, rule)
-		} else {
-			failRules = append(failRules, rule)
-			// release fail pccRules in SmPolicy
-			for _, pccRuleID := range rule.PccRuleIds {
-				if err := smPolicy.RemovePccRule(pccRuleID, nil); err != nil {
-					logger.SmPolicyLog.Warnf(
-						"SM Policy Notification about failed installing PccRule[%s]", err.Error())
-				}
-			}
-		}
-	}
+	successRules, failRules := removeFailedPccRules(smPolicy, request.RuleReports)
 	if len(failRules) > 0 {
 		afNotif := models.Pcf_PolAuth_AfEventNotification{
 			Event: models.Pcf_PolAuth_AfEvent_FAILED_RESOURCES_ALLOCATION,
@@ -1209,6 +1195,10 @@ func (p *Processor) SendSMPolicyUpdateNotification(
 	switch err.(type) {
 	case openapi.GenericOpenAPIError:
 		logger.SmPolicyLog.Warnf("SM Policy Update Notification Error[%s]", err.Error())
+		// The SMF could not install the PCC rules (subclause 4.2.3.2 in TS29512)
+		if ruleReports := notificationRuleReports(err); len(ruleReports) != 0 {
+			p.handleNotificationRuleReports(request.ResourceUri, ruleReports)
+		}
 	case error:
 		logger.SmPolicyLog.Warnf("SM Policy Update Notification Failed[%s]", err.Error())
 	case nil:
