@@ -32,17 +32,17 @@ func (p *Processor) HandleAmfStatusChangeNotify(
 func (p *Processor) HandlePolicyDataChangeNotify(
 	c *gin.Context,
 	supi string,
-	policyDataChangeNotification models.Udr_DR_PolicyDataChangeNotification,
+	notifications []*models.Udr_DR_PolicyDataChangeNotification,
 ) {
 	logger.CallbackLog.Warnf("[PCF] Handle Policy Data Change Notify is not implemented.")
 
-	PolicyDataChangeNotifyProcedure(supi, policyDataChangeNotification)
+	PolicyDataChangeNotifyProcedure(supi, notifications)
 
 	c.JSON(http.StatusNotImplemented, gin.H{})
 }
 
 // TODO: handle Policy Data Change Notify
-func PolicyDataChangeNotifyProcedure(supi string, notification models.Udr_DR_PolicyDataChangeNotification) {
+func PolicyDataChangeNotifyProcedure(supi string, notifications []*models.Udr_DR_PolicyDataChangeNotification) {
 }
 
 func (p *Processor) HandleInfluenceDataUpdateNotify(

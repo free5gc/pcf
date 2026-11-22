@@ -37,7 +37,7 @@ func TestCallbackOAuthRoute(t *testing.T) {
 		want int
 	}{
 		{"/amfstatus", `{"amfStatusInfoList":[]}`, http.StatusNoContent},
-		{"/nudr-notify/policy-data/imsi-1", "{}", http.StatusNotImplemented},
+		{"/nudr-notify/policy-data/imsi-1", `[{"usageMonData":{"limitId":"limit-1"}}]`, http.StatusNotImplemented},
 		{"/nudr-notify/influence-data/imsi-1/1", "[]", http.StatusNotFound},
 	} {
 		req := httptest.NewRequestWithContext(t.Context(), http.MethodPost,
@@ -52,4 +52,44 @@ func TestCallbackOAuthRoute(t *testing.T) {
 	response := httptest.NewRecorder()
 	server.router.ServeHTTP(response, req)
 	require.Equal(t, http.StatusUnauthorized, response.Code)
+}
+
+func TestUdrPolicyDataChangeNotifyPayload(t *testing.T) {
+	app := &callbackOAuthApp{
+		cfg: &factory.Config{Configuration: &factory.Configuration{
+			Sbi: &factory.Sbi{BindingIPv4: "127.0.0.1", Port: 0},
+		}},
+		ctx: &nfcontext.PCFContext{},
+	}
+	server, err := NewServer(app, "")
+	require.NoError(t, err)
+
+	for _, tc := range []struct {
+		name string
+		body string
+		want int
+	}{
+		{"one notification", `[{"usageMonData":{"limitId":"limit-1"}}]`, http.StatusNotImplemented},
+		{
+			"multiple notifications",
+			`[{"usageMonData":{"limitId":"limit-1"}},{"smPolicyData":{}}]`,
+			http.StatusNotImplemented,
+		},
+		{"bare object", `{"usageMonData":{"limitId":"limit-1"}}`, http.StatusBadRequest},
+		{"empty array", `[]`, http.StatusBadRequest},
+		{"null array", `null`, http.StatusBadRequest},
+		{"null item", `[{"usageMonData":{"limitId":"limit-1"}},null]`, http.StatusBadRequest},
+		{"malformed JSON", `[{`, http.StatusBadRequest},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequestWithContext(t.Context(), http.MethodPost,
+				factory.PcfCallbackResUriPrefix+"/nudr-notify/policy-data/imsi-1", strings.NewReader(tc.body))
+			req.Header.Set("Content-Type", "application/json")
+			response := httptest.NewRecorder()
+
+			server.router.ServeHTTP(response, req)
+
+			require.Equal(t, tc.want, response.Code, response.Body.String())
+		})
+	}
 }
