@@ -1114,7 +1114,7 @@ func (p *Processor) sendSmPolicyRelatedAppSessionNotification(smPolicy *pcf_cont
 						}
 					case models.Pcf_PolAuth_AfEvent_ANI_REPORT:
 						reqAnis := appSessionReqAnis(appSession)
-						if !appSession.AcceptAccessNetworkInfo(aniReportComplete(notification, reqAnis)) {
+						if !aniReportComplete(notification, reqAnis) {
 							// Waits for the report answering its request
 							continue
 						}
@@ -1247,7 +1247,7 @@ func (p *Processor) SendSMPolicyUpdateNotification(
 		logger.SmPolicyLog.Tracef("SM Policy Update Notification Success")
 		if rsp != nil {
 			// Access network information in the UeCampingRep (subclause 4.2.3.10 in TS29512)
-			p.handleNotificationAccessNetworkInfo(request, rsp.CreateSMPolicySmPolicyUpdateNotificationResponse200, uri)
+			p.handleNotificationAccessNetworkInfo(request, rsp.CreateSMPolicySmPolicyUpdateNotificationResponse200)
 		}
 	default:
 		logger.SmPolicyLog.Warnf("SM Policy Update Notification Unknown Error %+v", err)

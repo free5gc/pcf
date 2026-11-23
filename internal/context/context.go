@@ -74,8 +74,6 @@ type AppSessionData struct {
 	EventUri string
 	// related Session
 	SmPolicyData *UeSmPolicyData
-	// reports of access network information waited for, see AcceptAccessNetworkInfo
-	aniReport aniReportState
 }
 
 var pcfContext = PCFContext{}

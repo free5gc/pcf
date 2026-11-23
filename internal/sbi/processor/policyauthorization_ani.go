@@ -142,9 +142,12 @@ func ueLocForAf(ueLoc *models.UserLocation) *models.UserLocation {
 	return &afLoc
 }
 
-// aniReportComplete tells whether a report of access network information carries what an AF session
-// requires: the user location (or the serving PLMN when it is not available) and the UE time zone, or
-// the reason the access network does not support the report.
+// aniReportComplete tells whether a report of access network information answers the request of an AF
+// session: it carries what the AF session requires, the user location (or the serving PLMN when it is not
+// available) and the UE time zone, or the reason the access network does not support the report
+// (TS 29.514 clause 4.2.5.11). The SMF answers each request with the information requested (TS 29.512
+// clause 4.2.4.9), but requests of several AF sessions overlap: a report without the information an AF
+// session requires answers an earlier request, and the AF session waits for the answer to its own.
 func aniReportComplete(reported models.Pcf_PolAuth_EventsNotification,
 	reqAnis []models.Pcf_PolAuth_RequiredAccessInfo,
 ) bool {
@@ -159,10 +162,9 @@ func aniReportComplete(reported models.Pcf_PolAuth_EventsNotification,
 }
 
 // refreshAccessNetworkInfoRequest updates the request of access network information to the SMF after a
-// report: it keeps requesting what the AF sessions still waiting for a report require, and withdraws the
-// request and the AN_INFO policy control request trigger once none waits (TS 29.512 clause 4.2.6.5.4).
-// It returns true if an AF session still waits.
-func (p *Processor) refreshAccessNetworkInfoRequest(smPolicy *pcf_context.UeSmPolicyData) (waiting bool) {
+// report: it keeps what the AF sessions still waiting for a report require, and withdraws the request and
+// the AN_INFO policy control request trigger once none waits (TS 29.512 clause 4.2.6.5.4).
+func (p *Processor) refreshAccessNetworkInfoRequest(smPolicy *pcf_context.UeSmPolicyData) {
 	smPolicy.RemoveAccessNetworkInfoRequest()
 	for appSessionID := range smPolicy.AppSessions {
 		val, exist := p.Context().AppSessionPool.Load(appSessionID)
@@ -173,11 +175,9 @@ func (p *Processor) refreshAccessNetworkInfoRequest(smPolicy *pcf_context.UeSmPo
 		if _, found := appSession.Events[models.Pcf_PolAuth_AfEvent_ANI_REPORT]; found {
 			smPolicy.AddAccessNetworkInfoRequest(aniReqData(appSessionReqAnis(appSession)),
 				sortedPccRuleIds(appSession.RelatedPccRuleIds))
-			waiting = true
 		}
 	}
 	smPolicy.ArrangeExistEventSubscription()
-	return waiting
 }
 
 // accessNetworkInfoFromUeCampingRep returns the access network information the SMF provides in its
@@ -202,10 +202,9 @@ func accessNetworkInfoFromUeCampingRep(rep *models.CreateSMPolicySmPolicyUpdateN
 }
 
 // handleNotificationAccessNetworkInfo reports the access network information the SMF provides in its
-// answer to an SM policy update notification to the AF sessions waiting for it, and asks the SMF again
-// for the information AF sessions still wait for.
+// answer to an SM policy update notification to the AF sessions waiting for it.
 func (p *Processor) handleNotificationAccessNetworkInfo(notification *models.Pcf_SMPolCtrl_SmPolicyNotification,
-	rep *models.CreateSMPolicySmPolicyUpdateNotificationResponse200, uri string,
+	rep *models.CreateSMPolicySmPolicyUpdateNotificationResponse200,
 ) {
 	report, ok := accessNetworkInfoFromUeCampingRep(rep)
 	if !ok {
@@ -219,12 +218,7 @@ func (p *Processor) handleNotificationAccessNetworkInfo(notification *models.Pcf
 	}
 	smPolicy := ue.SmPolicyData[smPolicyID]
 	p.sendSmPolicyRelatedAppSessionNotification(smPolicy, report, nil, nil, nil)
-	if p.refreshAccessNetworkInfoRequest(smPolicy) {
-		p.SendSMPolicyUpdateNotification(uri, &models.Pcf_SMPolCtrl_SmPolicyNotification{
-			ResourceUri:      notification.ResourceUri,
-			SmPolicyDecision: smPolicy.PolicyDecision,
-		})
-	}
+	p.refreshAccessNetworkInfoRequest(smPolicy)
 }
 
 // negotiatedSuppFeat returns the features negotiated with the NF service consumer of an AF session.

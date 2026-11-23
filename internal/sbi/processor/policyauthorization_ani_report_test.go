@@ -124,8 +124,9 @@ func TestAniReportWithdrawsRequest(t *testing.T) {
 	require.Contains(t, answered.PolicyCtrlReqTriggers, models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_PLMN_CH)
 }
 
-// Overlapping requests: A requires the time zone, then B the location. The report answering A's
-// request only carries the time zone: B keeps waiting, and gets the location from the next report.
+// Overlapping requests: A requires the time zone, then B the location. The reports answering earlier
+// time zone requests only carry the time zone: B keeps waiting however many arrive, and gets the location
+// from the report answering its request.
 func TestAniReportOverlappingRequests(t *testing.T) {
 	interceptHTTP(t)
 	p, sessionA := newAniTestSession(t, netLocSuppFeat, netLocSuppFeat)
@@ -147,6 +148,11 @@ func TestAniReportOverlappingRequests(t *testing.T) {
 	}}, answered.LastReqRuleData, "the location is still requested")
 	require.Contains(t, answered.PolicyCtrlReqTriggers, anInfoTrigger)
 
+	// Another delayed report answering an earlier time zone request
+	reportAni(t, p, models.Pcf_SMPolCtrl_SmPolicyUpdateContextData{UeTimeZone: "+08:00"})
+	require.False(t, gock.HasUnmatchedRequest(), "B is not notified without the location")
+	require.Contains(t, sessionB.Events, models.Pcf_PolAuth_AfEvent_ANI_REPORT)
+
 	var gotB models.Pcf_PolAuth_EventsNotification
 	expectAfNotification(aniTestAfURLB, &gotB)
 	answered = reportAni(t, p, models.Pcf_SMPolCtrl_SmPolicyUpdateContextData{
@@ -160,25 +166,30 @@ func TestAniReportOverlappingRequests(t *testing.T) {
 	require.NotContains(t, answered.PolicyCtrlReqTriggers, anInfoTrigger)
 }
 
-// The SMF does not have the information: after a second report without it, the AF gets what is
-// available rather than waiting forever.
-func TestAniReportIncompleteTwice(t *testing.T) {
+// Reports without the required information never complete the request: the AF is notified with the
+// user location or serving PLMN it requires (TS 29.514 clause 4.2.5.11).
+func TestAniReportIncompleteKeepsWaiting(t *testing.T) {
 	interceptHTTP(t)
 	p, appSession := newAniTestSession(t, netLocSuppFeat, netLocSuppFeat)
 	subscribeAni(appSession, aniTestAfURLA, append(reqUserLocation, reqUeTimeZone...))
-	report := models.Pcf_SMPolCtrl_SmPolicyUpdateContextData{UeTimeZone: "+08:00"}
 
-	answered := reportAni(t, p, report)
-	require.False(t, gock.HasUnmatchedRequest())
-	require.Contains(t, answered.PolicyCtrlReqTriggers, anInfoTrigger)
+	for range 3 {
+		answered := reportAni(t, p, models.Pcf_SMPolCtrl_SmPolicyUpdateContextData{UeTimeZone: "+08:00"})
+		require.False(t, gock.HasUnmatchedRequest(), "not notified without the location")
+		require.Contains(t, answered.PolicyCtrlReqTriggers, anInfoTrigger)
+		require.NotEmpty(t, answered.LastReqRuleData)
+	}
 
 	var got models.Pcf_PolAuth_EventsNotification
 	expectAfNotification(aniTestAfURLA, &got)
-	answered = reportAni(t, p, report)
+	servingNetwork := &models.PlmnIdNid{Mcc: "208", Mnc: "93"}
+	answered := reportAni(t, p, models.Pcf_SMPolCtrl_SmPolicyUpdateContextData{
+		ServingNetwork: servingNetwork, UeTimeZone: "+08:00",
+	})
 
 	require.True(t, gock.IsDone())
+	require.Equal(t, servingNetwork, got.PlmnId, "the serving PLMN when the location is not available")
 	require.Equal(t, "+08:00", got.UeTimeZone)
-	require.Nil(t, got.UeLoc)
 	require.NotContains(t, answered.PolicyCtrlReqTriggers, anInfoTrigger)
 }
 
@@ -236,19 +247,20 @@ func TestAniReportNotSupportedByAccessNetwork(t *testing.T) {
 	require.NotContains(t, appSession.SmPolicyData.PolicyDecision.PolicyCtrlReqTriggers, anInfoTrigger)
 }
 
-// The SMF may answer the notification with the access network information itself; when it is not
-// what the AF session requires, the PCF asks again.
+// The SMF may answer the notification with the access network information itself, used like a report.
 func TestAniReportInUeCampingRep(t *testing.T) {
 	interceptHTTP(t)
 	p, appSession := newAniTestSession(t, netLocSuppFeat, netLocSuppFeat)
 	subscribeAni(appSession, aniTestAfURLA, reqUserLocation)
-	// The SMF first answers with the time zone only...
-	gock.New(aniTestSmfURL).Post("/update").Reply(http.StatusOK).
-		JSON(models.CreateSMPolicySmPolicyUpdateNotificationResponse200{UeTimeZone: "+08:00"})
+
+	// Without the location: still waiting, the PCF does not notify the SMF again.
+	notifyAni(t, p, appSession, models.CreateSMPolicySmPolicyUpdateNotificationResponse200{UeTimeZone: "+08:00"})
+	require.True(t, gock.IsDone())
+	require.False(t, gock.HasUnmatchedRequest())
+	require.Contains(t, appSession.Events, models.Pcf_PolAuth_AfEvent_ANI_REPORT)
+
 	var got models.Pcf_PolAuth_EventsNotification
 	expectAfNotification(aniTestAfURLA, &got)
-
-	// ...then with the location, when the PCF asks again.
 	notifyAni(t, p, appSession, models.CreateSMPolicySmPolicyUpdateNotificationResponse200{
 		UserLocationInfo: aniTestUeLoc,
 	})
