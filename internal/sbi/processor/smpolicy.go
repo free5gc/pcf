@@ -1003,7 +1003,8 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 	if afEventsNotification.EvNotifs != nil {
 		// Resume deletions waiting for access network information once this request is answered,
 		// as they go on modifying the SM policy.
-		defer deliverAccessNetworkInfoToDeletions(p.Context(), smPolicy, afEventsNotification)
+		resumeDeletions := acceptAccessNetworkInfoForDeletions(p.Context(), smPolicy, afEventsNotification)
+		defer resumeDeletions()
 		p.sendSmPolicyRelatedAppSessionNotification(
 			smPolicy, afEventsNotification, request.AccuUsageReports, successRules, failRules)
 	}
@@ -1042,7 +1043,7 @@ func (p *Processor) sendSmPolicyRelatedAppSessionNotification(smPolicy *pcf_cont
 		if val, exist := p.Context().AppSessionPool.Load(appSessionId); exist {
 			appSession := val.(*pcf_context.AppSessionData)
 			if appSession.Deleting() {
-				// No more notifications, see deliverAccessNetworkInfoToDeletions
+				// No more notifications, see acceptAccessNetworkInfoForDeletions
 				continue
 			}
 			if len(appSession.Events) == 0 {

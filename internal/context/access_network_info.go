@@ -97,6 +97,8 @@ type appSessionDeletion struct {
 	mu        sync.Mutex
 	deleting  bool
 	aniReport chan models.Pcf_PolAuth_EventsNotification
+	// access network information required at deletion
+	reqAnis []models.Pcf_PolAuth_RequiredAccessInfo
 
 	// terminated by the PCF, waiting to be deleted (TS 29.514 clause 4.2.5.3)
 	terminated     bool
@@ -130,6 +132,26 @@ func (appSession *AppSessionData) Deleting() bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	return d.deleting
+}
+
+// RequireAccessNetworkInfo records the access network information the deletion of the AF session
+// waits for, see MarkDeleting.
+func (appSession *AppSessionData) RequireAccessNetworkInfo(reqAnis []models.Pcf_PolAuth_RequiredAccessInfo) {
+	d := &appSession.deletion
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.reqAnis = reqAnis
+}
+
+// WaitingAccessNetworkInfo returns the access network information the deletion of the AF session
+// waits for, and false if no deletion waits.
+func (appSession *AppSessionData) WaitingAccessNetworkInfo() (reqAnis []models.Pcf_PolAuth_RequiredAccessInfo,
+	waiting bool,
+) {
+	d := &appSession.deletion
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.reqAnis, d.aniReport != nil
 }
 
 // DeliverAccessNetworkInfo hands the access network information reported by the SMF to the
