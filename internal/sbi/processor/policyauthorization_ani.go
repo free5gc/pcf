@@ -123,7 +123,25 @@ func fillAccessNetworkInfo(sessionNotif *models.Pcf_PolAuth_EventsNotification,
 	if wantTz {
 		sessionNotif.UeTimeZone = reported.UeTimeZone
 	}
-	sessionNotif.NoNetLocSupp = reported.NoNetLocSupp
+	// The reason, if it is about information the AF session required
+	if noLoc, noTz := unsupportedAccessInfo(reported.NoNetLocSupp); (wantLoc && noLoc) || (wantTz && noTz) {
+		sessionNotif.NoNetLocSupp = reported.NoNetLocSupp
+	}
+}
+
+// unsupportedAccessInfo tells which access network information the access network does not support
+// reporting, according to reason (NetLocAccessSupport, TS 29.512).
+func unsupportedAccessInfo(reason models.Pcf_SMPolCtrl_NetLocAccessSupport) (loc, tz bool) {
+	switch reason {
+	case models.Pcf_SMPolCtrl_NetLocAccessSupport_ANR_NOT_SUPPORTED:
+		return true, true
+	case models.Pcf_SMPolCtrl_NetLocAccessSupport_LOC_NOT_SUPPORTED:
+		return true, false
+	case models.Pcf_SMPolCtrl_NetLocAccessSupport_TZR_NOT_SUPPORTED:
+		return false, true
+	default:
+		return false, false
+	}
 }
 
 // ueLocForAf returns the user location to report to the AF: the "n3gppTai" and "n3IwfId" attributes
@@ -143,22 +161,21 @@ func ueLocForAf(ueLoc *models.UserLocation) *models.UserLocation {
 }
 
 // aniReportComplete tells whether a report of access network information answers the request of an AF
-// session: it carries what the AF session requires, the user location (or the serving PLMN when it is not
-// available) and the UE time zone, or the reason the access network does not support the report
-// (TS 29.514 clause 4.2.5.11). The SMF answers each request with the information requested (TS 29.512
+// session: for each information the AF session requires, it carries the user location (or the serving
+// PLMN when it is not available) or the UE time zone, or a reason the access network does not support
+// reporting that information (TS 29.514 clauses 4.2.4.6 and 4.2.5.11): LOC_NOT_SUPPORTED does not answer
+// a request of the time zone. The SMF answers each request with the information requested (TS 29.512
 // clause 4.2.4.9), but requests of several AF sessions overlap: a report without the information an AF
 // session requires answers an earlier request, and the AF session waits for the answer to its own.
 func aniReportComplete(reported models.Pcf_PolAuth_EventsNotification,
 	reqAnis []models.Pcf_PolAuth_RequiredAccessInfo,
 ) bool {
-	if reported.NoNetLocSupp != "" {
-		return true
-	}
 	wantLoc, wantTz := requiresAccessInfo(reqAnis)
-	if wantLoc && reported.UeLoc == nil && reported.PlmnId == nil {
+	noLoc, noTz := unsupportedAccessInfo(reported.NoNetLocSupp)
+	if wantLoc && reported.UeLoc == nil && reported.PlmnId == nil && !noLoc {
 		return false
 	}
-	return !wantTz || reported.UeTimeZone != ""
+	return !wantTz || reported.UeTimeZone != "" || noTz
 }
 
 // refreshAccessNetworkInfoRequest updates the request of access network information to the SMF after a

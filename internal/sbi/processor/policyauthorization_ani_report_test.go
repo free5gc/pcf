@@ -269,3 +269,54 @@ func TestAniReportInUeCampingRep(t *testing.T) {
 	require.Equal(t, aniTestUeLoc, got.UeLoc)
 	require.NotContains(t, appSession.SmPolicyData.PolicyDecision.PolicyCtrlReqTriggers, anInfoTrigger)
 }
+
+// A reason answers the information it is about only (TS 29.514 clauses 4.2.4.6 and 4.2.5.11): A requires
+// the location, B the time zone. LOC_NOT_SUPPORTED answers A, while B keeps waiting for the time zone.
+func TestAniReportUnsupportedReasonPerInformation(t *testing.T) {
+	interceptHTTP(t)
+	p, sessionA := newAniTestSession(t, netLocSuppFeat, netLocSuppFeat)
+	subscribeAni(sessionA, aniTestAfURLA, reqUserLocation)
+	sessionB := addAniTestSession(t, sessionA, aniTestAppSessionID+"-b", "PccRuleId-2")
+	subscribeAni(sessionB, aniTestAfURLB, reqUeTimeZone)
+
+	var gotA models.Pcf_PolAuth_EventsNotification
+	expectAfNotification(aniTestAfURLA, &gotA)
+	notifyAni(t, p, sessionA, models.CreateSMPolicySmPolicyUpdateNotificationResponse200{
+		NetLocAccSupp: models.Pcf_SMPolCtrl_NetLocAccessSupport_LOC_NOT_SUPPORTED,
+	})
+
+	require.True(t, gock.IsDone(), "A gets the reason")
+	require.False(t, gock.HasUnmatchedRequest(), "B is not notified without the time zone")
+	require.Equal(t, models.Pcf_SMPolCtrl_NetLocAccessSupport_LOC_NOT_SUPPORTED, gotA.NoNetLocSupp)
+	require.Contains(t, sessionB.Events, models.Pcf_PolAuth_AfEvent_ANI_REPORT)
+
+	var gotB models.Pcf_PolAuth_EventsNotification
+	expectAfNotification(aniTestAfURLB, &gotB)
+	notifyAni(t, p, sessionA, models.CreateSMPolicySmPolicyUpdateNotificationResponse200{
+		UeTimeZone:    "+08:00",
+		NetLocAccSupp: models.Pcf_SMPolCtrl_NetLocAccessSupport_LOC_NOT_SUPPORTED,
+	})
+
+	require.True(t, gock.IsDone())
+	require.Equal(t, "+08:00", gotB.UeTimeZone)
+	require.Empty(t, gotB.NoNetLocSupp, "the reason is not about information B required")
+}
+
+func TestAniReportCompleteWithReason(t *testing.T) {
+	both := append(append([]models.Pcf_PolAuth_RequiredAccessInfo{}, reqUserLocation...), reqUeTimeZone...)
+	for _, tc := range []struct {
+		reason          models.Pcf_SMPolCtrl_NetLocAccessSupport
+		tz              string
+		loc, tzOnly, lt bool // complete for location, time zone, both
+	}{
+		{reason: models.Pcf_SMPolCtrl_NetLocAccessSupport_ANR_NOT_SUPPORTED, loc: true, tzOnly: true, lt: true},
+		{reason: models.Pcf_SMPolCtrl_NetLocAccessSupport_LOC_NOT_SUPPORTED, loc: true},
+		{reason: models.Pcf_SMPolCtrl_NetLocAccessSupport_LOC_NOT_SUPPORTED, tz: "+08:00", loc: true, tzOnly: true, lt: true},
+		{reason: models.Pcf_SMPolCtrl_NetLocAccessSupport_TZR_NOT_SUPPORTED, tzOnly: true},
+	} {
+		reported := models.Pcf_PolAuth_EventsNotification{NoNetLocSupp: tc.reason, UeTimeZone: tc.tz}
+		require.Equal(t, tc.loc, aniReportComplete(reported, reqUserLocation), "%s location", tc.reason)
+		require.Equal(t, tc.tzOnly, aniReportComplete(reported, reqUeTimeZone), "%s time zone", tc.reason)
+		require.Equal(t, tc.lt, aniReportComplete(reported, both), "%s both", tc.reason)
+	}
+}
