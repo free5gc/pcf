@@ -74,6 +74,18 @@ func (p *Processor) HandleInfluenceDataUpdateNotify(
 		ChargingIdGenerator: storedPolicy.ChargingIdGenerator,
 		TrafficInfluence:    deepcopy.Copy(storedPolicy.TrafficInfluence).(*pcf_context.TrafficInfluenceState),
 	}
+	type reservation struct {
+		id       int64
+		charging map[string]interface{}
+	}
+	var reservations []reservation
+	transferred := 0
+	defer func() {
+		for _, item := range reservations[transferred:] {
+			p.Context().RatingGroupIdGenerator.FreeID(item.id)
+		}
+	}()
+
 	for _, notification := range trafficInfluDataNotif {
 		influenceID := getInfluenceID(notification.ResUri)
 		if influenceID == "" {
@@ -125,11 +137,12 @@ func (p *Processor) HandleInfluenceDataUpdateNotify(
 					rg, err1 := p.Context().RatingGroupIdGenerator.Allocate()
 					if err1 != nil {
 						logger.SmPolicyLog.Error("rating group allocate error")
-						problemDetails := util.GetProblemDetail("rating group allocate error", util.ERROR_IDGENERATOR)
+						problemDetails := util.GetProblemDetail("rating group allocate error", util.INSUFFICIENT_RESOURCES)
 						c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetails.Cause)
 						c.JSON(int(problemDetails.Status), problemDetails)
 						return
 					}
+					reservations = append(reservations, reservation{id: rg, charging: chargingInterface})
 					chgData = &models.Pcf_SMPolCtrl_ChargingData{
 						ChgId:          util.GetChgId(smPolicy.ChargingIdGenerator),
 						RatingGroup:    int32(rg),
@@ -147,17 +160,7 @@ func (p *Processor) HandleInfluenceDataUpdateNotify(
 					}
 
 					chargingInterface["ratingGroup"] = chgData.RatingGroup
-					logger.SmPolicyLog.Tracef("put ratingGroup[%+v] for [%+v] to MongoDB", chgData.RatingGroup, ue.Supi)
-					if _, err = mongoapi.RestfulAPIPutOne(
-						chargingDataColl, chargingInterface, chargingInterface, 2); err != nil {
-						logger.SmPolicyLog.Errorf("Fail to put charging data to mongoDB err: %+v", err)
-					} else {
-						smPolicy.ChargingIdGenerator++
-					}
-					if ue.RatingGroupData == nil {
-						ue.RatingGroupData = make(map[string][]int32)
-					}
-					ue.RatingGroupData[smPolicyID] = append(ue.RatingGroupData[smPolicyID], chgData.RatingGroup)
+					smPolicy.ChargingIdGenerator++
 				}
 			}
 
@@ -172,6 +175,17 @@ func (p *Processor) HandleInfluenceDataUpdateNotify(
 		}
 	}
 	decision := util.TrafficInfluencePolicyChanges(storedPolicy.PolicyDecision, smPolicy.PolicyDecision)
+	for _, item := range reservations {
+		logger.SmPolicyLog.Tracef("put ratingGroup[%d] for [%s] to MongoDB", item.id, ue.Supi)
+		if _, err := mongoapi.RestfulAPIPutOne(chargingDataColl, item.charging, item.charging, 2); err != nil {
+			logger.SmPolicyLog.Errorf("Fail to put charging data to mongoDB err: %+v", err)
+		}
+		if ue.RatingGroupData == nil {
+			ue.RatingGroupData = make(map[string][]int32)
+		}
+		ue.RatingGroupData[smPolicyID] = append(ue.RatingGroupData[smPolicyID], int32(item.id))
+		transferred++
+	}
 	*storedPolicy.PolicyDecision = *smPolicy.PolicyDecision
 	storedPolicy.PccRuleIdGenerator = smPolicy.PccRuleIdGenerator
 	storedPolicy.ChargingIdGenerator = smPolicy.ChargingIdGenerator
