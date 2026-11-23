@@ -180,9 +180,11 @@ func aniReportComplete(reported models.Pcf_PolAuth_EventsNotification,
 
 // refreshAccessNetworkInfoRequest updates the request of access network information to the SMF after a
 // report: it keeps what the AF sessions still waiting for a report require, and withdraws the request and
-// the AN_INFO policy control request trigger once none waits (TS 29.512 clause 4.2.6.5.4).
+// the AN_INFO policy control request trigger once none waits (TS 29.512 clause 4.2.6.5.4). The other
+// policy control request triggers are left as they are, such as those the PCF provisions by default.
 func (p *Processor) refreshAccessNetworkInfoRequest(smPolicy *pcf_context.UeSmPolicyData) {
 	smPolicy.RemoveAccessNetworkInfoRequest()
+	waiting := false
 	for appSessionID := range smPolicy.AppSessions {
 		val, exist := p.Context().AppSessionPool.Load(appSessionID)
 		if !exist {
@@ -192,9 +194,12 @@ func (p *Processor) refreshAccessNetworkInfoRequest(smPolicy *pcf_context.UeSmPo
 		if _, found := appSession.Events[models.Pcf_PolAuth_AfEvent_ANI_REPORT]; found {
 			smPolicy.AddAccessNetworkInfoRequest(aniReqData(appSessionReqAnis(appSession)),
 				sortedPccRuleIds(appSession.RelatedPccRuleIds))
+			waiting = true
 		}
 	}
-	smPolicy.ArrangeExistEventSubscription()
+	if !waiting {
+		smPolicy.RemoveAccessNetworkInfoTrigger()
+	}
 }
 
 // accessNetworkInfoFromUeCampingRep returns the access network information the SMF provides in its

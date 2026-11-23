@@ -78,3 +78,13 @@ func (policy *UeSmPolicyData) RemoveAccessNetworkInfoRequest() (removed bool) {
 	decision.LastReqRuleData = ruleDataList
 	return removed
 }
+
+// RemoveAccessNetworkInfoTrigger withdraws the AN_INFO policy control request trigger.
+func (policy *UeSmPolicyData) RemoveAccessNetworkInfoTrigger() {
+	if decision := policy.PolicyDecision; decision != nil {
+		decision.PolicyCtrlReqTriggers = slices.DeleteFunc(decision.PolicyCtrlReqTriggers,
+			func(trigger models.Pcf_SMPolCtrl_PolicyControlRequestTrigger) bool {
+				return trigger == models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_AN_INFO
+			})
+	}
+}

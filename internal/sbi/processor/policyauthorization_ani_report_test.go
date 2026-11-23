@@ -100,7 +100,8 @@ func interceptHTTP(t *testing.T) {
 var anInfoTrigger = models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_AN_INFO
 
 // Once reported, the one-time request is withdrawn from the SMF: lastReqRuleData and the AN_INFO
-// trigger, while the triggers other AF sessions subscribed to are kept.
+// trigger, while the other triggers are kept: those other AF sessions subscribed to, and those the PCF
+// provisions by default when no AF session subscribed to the corresponding event.
 func TestAniReportWithdrawsRequest(t *testing.T) {
 	interceptHTTP(t)
 	p, appSession := newAniTestSession(t, netLocSuppFeat, netLocSuppFeat)
@@ -110,6 +111,11 @@ func TestAniReportWithdrawsRequest(t *testing.T) {
 		models.Pcf_PolAuth_AfEvent_PLMN_CHG: models.Pcf_PolAuth_AfNotifMethod_EVENT_DETECTION,
 	}
 	decision := appSession.SmPolicyData.PolicyDecision
+	defaultTriggers := []models.Pcf_SMPolCtrl_PolicyControlRequestTrigger{
+		models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_AC_TY_CH,
+		models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_QOS_NOTIF,
+	}
+	decision.PolicyCtrlReqTriggers = append(decision.PolicyCtrlReqTriggers, defaultTriggers...)
 	decision.PolicyCtrlReqTriggers = append(decision.PolicyCtrlReqTriggers,
 		models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_PLMN_CH)
 	var got models.Pcf_PolAuth_EventsNotification
@@ -122,6 +128,7 @@ func TestAniReportWithdrawsRequest(t *testing.T) {
 	require.Empty(t, answered.LastReqRuleData)
 	require.NotContains(t, answered.PolicyCtrlReqTriggers, anInfoTrigger)
 	require.Contains(t, answered.PolicyCtrlReqTriggers, models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_PLMN_CH)
+	require.Subset(t, answered.PolicyCtrlReqTriggers, defaultTriggers, "triggers provisioned by default are kept")
 }
 
 // Overlapping requests: A requires the time zone, then B the location. The reports answering earlier
