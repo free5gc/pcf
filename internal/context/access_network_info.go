@@ -2,6 +2,7 @@ package context
 
 import (
 	"slices"
+	"sync"
 
 	"github.com/free5gc/openapi/models"
 )
@@ -77,4 +78,29 @@ func (policy *UeSmPolicyData) RemoveAccessNetworkInfoRequest() (removed bool) {
 	}
 	decision.LastReqRuleData = ruleDataList
 	return removed
+}
+
+// aniReportState tracks the reports of access network information that did not carry the
+// information an AF session waits for.
+type aniReportState struct {
+	mu     sync.Mutex
+	missed bool
+}
+
+// AcceptAccessNetworkInfo tells whether a report of access network information from the SMF answers
+// the request of the AF session, complete telling whether the report carries the information the AF
+// session requires. The SMF answers each request, but requests of several AF sessions overlap: a
+// report may answer a request made before the one including the information of this AF session,
+// which the next report answers. So an incomplete report is accepted only after a first one: the
+// SMF does not have the missing information.
+func (appSession *AppSessionData) AcceptAccessNetworkInfo(complete bool) bool {
+	s := &appSession.aniReport
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if complete || s.missed {
+		s.missed = false
+		return true
+	}
+	s.missed = true
+	return false
 }
