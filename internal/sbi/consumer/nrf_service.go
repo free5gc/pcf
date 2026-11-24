@@ -193,10 +193,7 @@ func (s *nnrfService) BuildNFInstance(
 		profile.NfServices = services
 	}
 	profile.PcfInfo = &models.Nrf_NFMgmt_PcfInfo{
-		DnnList: []string{
-			"free5gc",
-			"internet",
-		},
+		DnnList: s.consumer.Config().GetDnnList(),
 		// SupiRanges: &[]models.Nrf_NFMgmt_SupiRange{
 		// 	{
 		// 		//from TS 29.510 6.1.6.2.9 example2

@@ -7,7 +7,9 @@ package factory
 import (
 	"fmt"
 	"os"
+	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -85,6 +87,8 @@ type Configuration struct {
 	ServiceList     []Service      `yaml:"serviceList,omitempty" valid:"required"`
 	Mongodb         *Mongodb       `yaml:"mongodb" valid:"required"`
 	Locality        string         `yaml:"locality,omitempty" valid:"-"`
+	// DnnList advertises the DNNs served by this PCF. Omission keeps free5gc and internet.
+	DnnList []string `yaml:"dnnList,omitempty" valid:"optional"`
 	// NfHeartBeatTimer is the fallback heartbeat interval in seconds, from 1 to
 	// 3600 as the NRF accepts. The interval the NRF assigns always wins.
 	NfHeartBeatTimer int32 `yaml:"nfHeartBeatTimer,omitempty" valid:"optional,range(1|3600)"`
@@ -101,6 +105,14 @@ type Bsf struct {
 }
 
 func (c *Configuration) validate() (bool, error) {
+	if c.DnnList != nil && len(c.DnnList) == 0 {
+		return false, fmt.Errorf("configuration.dnnList must not be empty; omit it to use the default DNNs")
+	}
+	for i, dnn := range c.DnnList {
+		if dnn == "" || strings.ContainsAny(dnn, " \t\r\n") {
+			return false, fmt.Errorf("configuration.dnnList[%d] must be non-empty and contain no whitespace", i)
+		}
+	}
 	if c.NfInstanceId == "" {
 		c.NfInstanceId = uuid.New().String()
 	}
@@ -201,6 +213,16 @@ func (s *Service) validate() (bool, error) {
 	}
 
 	return true, nil
+}
+
+// GetDnnList returns a copy of the NRF registration DNNs, preserving the legacy default when omitted.
+func (c *Config) GetDnnList() []string {
+	c.RLock()
+	defer c.RUnlock()
+	if c.Configuration != nil && c.Configuration.DnnList != nil {
+		return slices.Clone(c.Configuration.DnnList)
+	}
+	return []string{"free5gc", "internet"}
 }
 
 // GetNfHeartBeatTimer returns the fallback heartbeat interval in seconds.
