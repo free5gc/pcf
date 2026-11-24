@@ -13,18 +13,25 @@ import (
 
 // PCC Rule Error Report, TS 29.512 clauses 4.2.3.2 and 4.2.4.15.
 
-// removeFailedPccRules removes from smPolicy the PCC rules the SMF reports as not installed or no
-// longer enforced (ruleStatus INACTIVE), and returns the reports of active and failed PCC rules.
-func removeFailedPccRules(
-	smPolicy *pcf_context.UeSmPolicyData, ruleReports []models.Pcf_SMPolCtrl_RuleReport,
+// splitRuleReports returns the reports of active PCC rules and of PCC rules the SMF reports as not
+// installed or no longer enforced (ruleStatus INACTIVE).
+func splitRuleReports(ruleReports []models.Pcf_SMPolCtrl_RuleReport,
 ) (successRules, failRules []models.Pcf_SMPolCtrl_RuleReport) {
 	for _, rule := range ruleReports {
 		if rule.RuleStatus == models.Pcf_SMPolCtrl_RuleStatus_ACTIVE {
 			successRules = append(successRules, rule)
-			continue
+		} else {
+			failRules = append(failRules, rule)
 		}
-		failRules = append(failRules, rule)
-		// release fail pccRules in SmPolicy
+	}
+	return successRules, failRules
+}
+
+// removeFailedPccRules removes the failed PCC rules from smPolicy. It is called once the AF sessions
+// are notified: the removal also removes the PCC rules from the AF sessions, which the notification
+// needs to find their media components.
+func removeFailedPccRules(smPolicy *pcf_context.UeSmPolicyData, failRules []models.Pcf_SMPolCtrl_RuleReport) {
+	for _, rule := range failRules {
 		for _, pccRuleID := range rule.PccRuleIds {
 			if err := smPolicy.RemovePccRule(pccRuleID, nil); err != nil {
 				logger.SmPolicyLog.Warnf(
@@ -32,7 +39,76 @@ func removeFailedPccRules(
 			}
 		}
 	}
-	return successRules, failRules
+}
+
+// appSessionsWithAllRulesFailed returns the AF sessions of smPolicy all PCC rules of which fail.
+// It is called before the AF sessions are notified, which removes the failed PCC rules from them.
+func appSessionsWithAllRulesFailed(pcfSelf *pcf_context.PCFContext, smPolicy *pcf_context.UeSmPolicyData,
+	failRules []models.Pcf_SMPolCtrl_RuleReport,
+) []*pcf_context.AppSessionData {
+	failed := make(map[string]bool)
+	for _, rule := range failRules {
+		for _, pccRuleID := range rule.PccRuleIds {
+			failed[pccRuleID] = true
+		}
+	}
+	var appSessions []*pcf_context.AppSessionData
+	for appSessionID := range smPolicy.AppSessions {
+		val, exist := pcfSelf.AppSessionPool.Load(appSessionID)
+		if !exist {
+			continue
+		}
+		appSession := val.(*pcf_context.AppSessionData)
+		if len(appSession.RelatedPccRuleIds) == 0 {
+			continue
+		}
+		allFailed := true
+		for _, pccRuleID := range appSession.RelatedPccRuleIds {
+			if !failed[pccRuleID] {
+				allFailed = false
+				break
+			}
+		}
+		if allFailed {
+			appSessions = append(appSessions, appSession)
+		}
+	}
+	return appSessions
+}
+
+// handleRuleReports handles the PCC rule reports of the SMF (TS 29.512 clause 4.2.4.15): the AF
+// sessions subscribed to FAILED_RESOURCES_ALLOCATION are notified of the failed PCC rules, along with
+// afEventsNotification if it has events, then the failed PCC rules are removed. The AF sessions all
+// PCC rules of which fail are requested to be deleted with ALL_SDF_DEACTIVATION (TS 29.514 clause
+// 4.2.5.3).
+func (p *Processor) handleRuleReports(smPolicy *pcf_context.UeSmPolicyData,
+	afEventsNotification models.Pcf_PolAuth_EventsNotification,
+	accuUsageReports []models.Pcf_SMPolCtrl_AccuUsageReport, ruleReports []models.Pcf_SMPolCtrl_RuleReport,
+) {
+	successRules, failRules := splitRuleReports(ruleReports)
+	var terminated []*pcf_context.AppSessionData
+	if len(failRules) > 0 {
+		terminated = appSessionsWithAllRulesFailed(p.Context(), smPolicy, failRules)
+		afEventsNotification.EvNotifs = append(afEventsNotification.EvNotifs, models.Pcf_PolAuth_AfEventNotification{
+			Event: models.Pcf_PolAuth_AfEvent_FAILED_RESOURCES_ALLOCATION,
+		})
+	}
+	if afEventsNotification.EvNotifs != nil {
+		p.sendSmPolicyRelatedAppSessionNotification(
+			smPolicy, afEventsNotification, accuUsageReports, successRules, failRules)
+	}
+	removeFailedPccRules(smPolicy, failRules)
+	terminationInfo := models.Pcf_PolAuth_TerminationInfo{
+		TermCause: models.Pcf_PolAuth_TerminationCause_ALL_SDF_DEACTIVATION,
+	}
+	for _, appSession := range terminated {
+		if appSession.AppSessionContext == nil || appSession.AppSessionContext.AscReqData == nil {
+			continue
+		}
+		logger.PolicyAuthLog.Infof("App Session Id[%s]: all its PCC rules failed, request its deletion",
+			appSession.AppSessionId)
+		p.SendAppSessionTermination(appSession, terminationInfo)
+	}
 }
 
 // notificationRuleReports returns the PCC rule reports of the ErrorReport the SMF answered an SM
@@ -50,9 +126,8 @@ func notificationRuleReports(err error) []models.Pcf_SMPolCtrl_RuleReport {
 }
 
 // handleNotificationRuleReports handles the PCC rules the SMF could not install for an SM policy
-// update notification of the SM policy resourceUri: they are removed from the SM policy, and the
-// AF sessions subscribed to FAILED_RESOURCES_ALLOCATION are notified, as for a PCC rule report
-// received in an SM policy update.
+// update notification of the SM policy resourceUri, as for a PCC rule report received in an SM
+// policy update, see handleRuleReports.
 func (p *Processor) handleNotificationRuleReports(
 	resourceUri string, ruleReports []models.Pcf_SMPolCtrl_RuleReport,
 ) {
@@ -64,13 +139,5 @@ func (p *Processor) handleNotificationRuleReports(
 	}
 	smPolicy := ue.SmPolicyData[smPolicyID]
 
-	successRules, failRules := removeFailedPccRules(smPolicy, ruleReports)
-	if len(failRules) == 0 {
-		return
-	}
-	p.sendSmPolicyRelatedAppSessionNotification(smPolicy, models.Pcf_PolAuth_EventsNotification{
-		EvNotifs: []models.Pcf_PolAuth_AfEventNotification{{
-			Event: models.Pcf_PolAuth_AfEvent_FAILED_RESOURCES_ALLOCATION,
-		}},
-	}, nil, successRules, failRules)
+	p.handleRuleReports(smPolicy, models.Pcf_PolAuth_EventsNotification{}, nil, ruleReports)
 }

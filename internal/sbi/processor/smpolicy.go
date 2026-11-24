@@ -969,17 +969,8 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 		}
 	}
 
-	successRules, failRules := removeFailedPccRules(smPolicy, request.RuleReports)
-	if len(failRules) > 0 {
-		afNotif := models.Pcf_PolAuth_AfEventNotification{
-			Event: models.Pcf_PolAuth_AfEvent_FAILED_RESOURCES_ALLOCATION,
-		}
-		afEventsNotification.EvNotifs = append(afEventsNotification.EvNotifs, afNotif)
-	}
-	if afEventsNotification.EvNotifs != nil {
-		p.sendSmPolicyRelatedAppSessionNotification(
-			smPolicy, afEventsNotification, request.AccuUsageReports, successRules, failRules)
-	}
+	// PCC Rule Error Report (subclause 4.2.4.15 in TS29512), notified with the other AF events
+	p.handleRuleReports(smPolicy, afEventsNotification, request.AccuUsageReports, request.RuleReports)
 
 	if errCause != "" {
 		problemDetail := util.GetProblemDetail(errCause, util.ERROR_TRIGGER_EVENT)
