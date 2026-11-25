@@ -253,6 +253,14 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 
 	logger.SmPolicyLog.Traceln("FlowRules for ueId:", ue.Supi, "snssai:", util.SnssaiModelsToHex(*request.SliceInfo))
 	for i, flowRule := range flowRulesInterface {
+		direction, directionErr := util.ConfiguredFlowDirection(flowRule["flowDirection"])
+		if directionErr != nil {
+			detail := fmt.Sprintf("flow rule %d: %v", i, directionErr)
+			problemDetail := util.GetProblemDetail(detail, util.ERROR_INITIAL_PARAMETERS)
+			c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
+			c.JSON(int(problemDetail.Status), problemDetail)
+			return
+		}
 		logger.SmPolicyLog.Tracef("flowRule %d: %s\n", i, util.MarshToJsonString(flowRule))
 		precedence := int32(flowRule["precedence"].(float64))
 		if val, ok := flowRule["filter"].(string); ok {
@@ -294,7 +302,7 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 			pccRule := util.CreatePccRule(smPolicyData.PccRuleIdGenerator, precedence, []models.Pcf_SMPolCtrl_FlowInformation{
 				{
 					FlowDescription: FlowDescriptionStr,
-					FlowDirection:   models.Pcf_SMPolCtrl_FlowDirectionRm_BIDIRECTIONAL,
+					FlowDirection:   direction,
 				},
 			}, "")
 
