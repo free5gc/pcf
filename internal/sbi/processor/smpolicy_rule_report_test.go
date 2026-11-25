@@ -375,3 +375,21 @@ func TestSMPolicyUpdateRuleReportPsToCsHandover(t *testing.T) {
 	require.Equal(t, []string{"/notify/notify", "/terminate"}, af.received())
 	require.Equal(t, models.Pcf_PolAuth_TerminationCause_PS_TO_CS_HO, af.termination.TermCause)
 }
+
+// An AF session the AF is deleting gets no notification, and is not requested to be deleted when all
+// its PCC rules fail (TS 29.514 clause 4.2.5.3).
+func TestSMPolicyNotificationErrorReportAppSessionBeingDeleted(t *testing.T) {
+	openapi.InterceptInnerHttp2Client(t, false)
+	gock.Flush()
+	t.Cleanup(gock.Off)
+	p, smPolicy, appSession := newRuleReportTestPCF(t)
+	_, ok := appSession.MarkDeleting(false)
+	require.True(t, ok)
+	replyErrorReport(inactiveRuleReport(ruleReportPccRule))
+	af := interceptAfRequests(t)
+
+	p.SendSMPolicyUpdateNotification(ruleReportSmfURL+"/notify", ruleReportNotification())
+
+	require.Empty(t, af.received())
+	require.NotContains(t, smPolicy.PolicyDecision.PccRules, ruleReportPccRule)
+}
