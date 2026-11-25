@@ -2,23 +2,30 @@ package processor
 
 import (
 	"errors"
+	"maps"
 	"path"
+	"slices"
+	"strconv"
+	"strings"
 
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/openapi/pcf/SMPolCtrl"
 	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
+	"github.com/free5gc/pcf/internal/util"
 )
 
 // PCC Rule Error Report, TS 29.512 clauses 4.2.3.2 and 4.2.4.15.
 
-// splitRuleReports returns the reports of active PCC rules and of PCC rules the SMF reports as not
-// installed or no longer enforced (ruleStatus INACTIVE).
+// splitRuleReports returns the reports of PCC rules successfully installed, modified or activated,
+// and of the PCC rules that failed (TS 29.512 clause 4.2.4.15): those reported INACTIVE (not
+// installed, or no longer enforced) and those reported ACTIVE with a failureCode (their modification
+// failed and the SMF retains their previous definition).
 func splitRuleReports(ruleReports []models.Pcf_SMPolCtrl_RuleReport,
 ) (successRules, failRules []models.Pcf_SMPolCtrl_RuleReport) {
 	for _, rule := range ruleReports {
-		if rule.RuleStatus == models.Pcf_SMPolCtrl_RuleStatus_ACTIVE {
+		if rule.RuleStatus == models.Pcf_SMPolCtrl_RuleStatus_ACTIVE && rule.FailureCode == "" {
 			successRules = append(successRules, rule)
 		} else {
 			failRules = append(failRules, rule)
@@ -27,11 +34,84 @@ func splitRuleReports(ruleReports []models.Pcf_SMPolCtrl_RuleReport,
 	return successRules, failRules
 }
 
-// removeFailedPccRules removes the failed PCC rules from smPolicy. It is called once the AF sessions
-// are notified: the removal also removes the PCC rules from the AF sessions, which the notification
-// needs to find their media components.
+// resourcesStatus returns the status of the resources of a failed PCC rule: INACTIVE, or ACTIVE
+// when the SMF retains its previous definition.
+func resourcesStatus(rule models.Pcf_SMPolCtrl_RuleReport) models.Pcf_PolAuth_MediaComponentResourcesStatus {
+	if rule.RuleStatus == models.Pcf_SMPolCtrl_RuleStatus_ACTIVE {
+		return models.Pcf_PolAuth_MediaComponentResourcesStatus_ACTIVE
+	}
+	return models.Pcf_PolAuth_MediaComponentResourcesStatus_INACTIVE
+}
+
+// failedResourcesAllocationReports returns the failedResourcAllocReports of appSession for the
+// failed PCC rules (TS 29.514 clause 4.2.5.8), one per status of their resources (mcResourcStatus).
+// The PCC rules that are no longer active are released from appSession.
+func failedResourcesAllocationReports(appSession *pcf_context.AppSessionData,
+	failRules []models.Pcf_SMPolCtrl_RuleReport,
+) []models.Pcf_PolAuth_ResourcesAllocationInfo {
+	var reports []models.Pcf_PolAuth_ResourcesAllocationInfo
+	for _, status := range []models.Pcf_PolAuth_MediaComponentResourcesStatus{
+		models.Pcf_PolAuth_MediaComponentResourcesStatus_INACTIVE,
+		models.Pcf_PolAuth_MediaComponentResourcesStatus_ACTIVE,
+	} {
+		report := models.Pcf_PolAuth_ResourcesAllocationInfo{McResourcStatus: status}
+		subFlows := make(map[int32]models.Pcf_PolAuth_Flows)
+		for _, rule := range failRules {
+			if resourcesStatus(rule) != status {
+				continue
+			}
+			for _, pccRuleID := range rule.PccRuleIds {
+				key, exist := appSession.PccRuleIdMapToCompId[pccRuleID]
+				if !exist {
+					continue
+				}
+				if status == models.Pcf_PolAuth_MediaComponentResourcesStatus_INACTIVE {
+					// Release related resource
+					delete(appSession.PccRuleIdMapToCompId, pccRuleID)
+					delete(appSession.RelatedPccRuleIds, key)
+				}
+				items := strings.Split(key, "-")
+				if items[0] == "appId" {
+					continue
+				}
+				compN, err := strconv.Atoi(items[0])
+				if err != nil {
+					logger.SmPolicyLog.Errorf("strconv Atoi error %+v", err)
+				}
+				compN32 := int32(compN)
+				switch len(items) {
+				case 1:
+					report.Flows = append(report.Flows, models.Pcf_PolAuth_Flows{MedCompN: compN32})
+				case 2:
+					fNum, err := strconv.Atoi(items[1])
+					if err != nil {
+						logger.SmPolicyLog.Errorf("strconv Atoi error %+v", err)
+					}
+					flow := subFlows[compN32]
+					flow.MedCompN = compN32
+					flow.FNums = append(flow.FNums, int32(fNum))
+					subFlows[compN32] = flow
+				}
+			}
+		}
+		for _, compN := range slices.Sorted(maps.Keys(subFlows)) {
+			report.Flows = append(report.Flows, subFlows[compN])
+		}
+		if report.Flows != nil {
+			reports = append(reports, report)
+		}
+	}
+	return reports
+}
+
+// removeFailedPccRules removes the PCC rules that are no longer active from smPolicy. It is called
+// once the AF sessions are notified: the removal also removes the PCC rules from the AF sessions,
+// which the notification needs to find their media components.
 func removeFailedPccRules(smPolicy *pcf_context.UeSmPolicyData, failRules []models.Pcf_SMPolCtrl_RuleReport) {
 	for _, rule := range failRules {
+		if rule.RuleStatus == models.Pcf_SMPolCtrl_RuleStatus_ACTIVE {
+			continue
+		}
 		for _, pccRuleID := range rule.PccRuleIds {
 			if err := smPolicy.RemovePccRule(pccRuleID, nil); err != nil {
 				logger.SmPolicyLog.Warnf(
@@ -41,18 +121,29 @@ func removeFailedPccRules(smPolicy *pcf_context.UeSmPolicyData, failRules []mode
 	}
 }
 
-// appSessionsWithAllRulesFailed returns the AF sessions of smPolicy all PCC rules of which fail.
-// It is called before the AF sessions are notified, which removes the failed PCC rules from them.
+// appSessionTermination is a request to the AF to delete its AF session.
+type appSessionTermination struct {
+	appSession *pcf_context.AppSessionData
+	cause      models.Pcf_PolAuth_TerminationCause
+}
+
+// appSessionsWithAllRulesFailed returns the AF sessions of smPolicy all PCC rules of which are no
+// longer active, with the cause of their termination (TS 29.514 clause 4.2.5.3): PS_TO_CS_HO if
+// IMS_SBI is supported and all of them failed with PS_TO_CS_HAN, ALL_SDF_DEACTIVATION otherwise.
+// It is called before the AF sessions are notified, which releases the failed PCC rules from them.
 func appSessionsWithAllRulesFailed(pcfSelf *pcf_context.PCFContext, smPolicy *pcf_context.UeSmPolicyData,
 	failRules []models.Pcf_SMPolCtrl_RuleReport,
-) []*pcf_context.AppSessionData {
-	failed := make(map[string]bool)
+) []appSessionTermination {
+	failureCodes := make(map[string]models.Pcf_SMPolCtrl_FailureCode)
 	for _, rule := range failRules {
+		if rule.RuleStatus == models.Pcf_SMPolCtrl_RuleStatus_ACTIVE {
+			continue
+		}
 		for _, pccRuleID := range rule.PccRuleIds {
-			failed[pccRuleID] = true
+			failureCodes[pccRuleID] = rule.FailureCode
 		}
 	}
-	var appSessions []*pcf_context.AppSessionData
+	var terminations []appSessionTermination
 	for appSessionID := range smPolicy.AppSessions {
 		val, exist := pcfSelf.AppSessionPool.Load(appSessionID)
 		if !exist {
@@ -62,33 +153,49 @@ func appSessionsWithAllRulesFailed(pcfSelf *pcf_context.PCFContext, smPolicy *pc
 		if len(appSession.RelatedPccRuleIds) == 0 {
 			continue
 		}
-		allFailed := true
+		allFailed, psToCsHandover := true, imsSbiSupported(appSession)
 		for _, pccRuleID := range appSession.RelatedPccRuleIds {
-			if !failed[pccRuleID] {
+			failureCode, failed := failureCodes[pccRuleID]
+			if !failed {
 				allFailed = false
 				break
 			}
+			if failureCode != models.Pcf_SMPolCtrl_FailureCode_PS_TO_CS_HAN {
+				psToCsHandover = false
+			}
 		}
-		if allFailed {
-			appSessions = append(appSessions, appSession)
+		if !allFailed {
+			continue
 		}
+		cause := models.Pcf_PolAuth_TerminationCause_ALL_SDF_DEACTIVATION
+		if psToCsHandover {
+			cause = models.Pcf_PolAuth_TerminationCause_PS_TO_CS_HO
+		}
+		terminations = append(terminations, appSessionTermination{appSession: appSession, cause: cause})
 	}
-	return appSessions
+	return terminations
+}
+
+// imsSbiSupported returns whether the IMS_SBI feature (feature 5, TS 29.514 clause 5.8) is
+// negotiated for appSession.
+func imsSbiSupported(appSession *pcf_context.AppSessionData) bool {
+	ctx := appSession.AppSessionContext
+	return ctx != nil && ctx.AscRespData != nil && util.CheckSuppFeat(ctx.AscRespData.SuppFeat, 5)
 }
 
 // handleRuleReports handles the PCC rule reports of the SMF (TS 29.512 clause 4.2.4.15): the AF
 // sessions subscribed to FAILED_RESOURCES_ALLOCATION are notified of the failed PCC rules, along with
-// afEventsNotification if it has events, then the failed PCC rules are removed. The AF sessions all
-// PCC rules of which fail are requested to be deleted with ALL_SDF_DEACTIVATION (TS 29.514 clause
-// 4.2.5.3).
+// afEventsNotification if it has events, then the PCC rules that are no longer active are removed.
+// The AF sessions all PCC rules of which are no longer active are requested to be deleted
+// (TS 29.514 clause 4.2.5.3).
 func (p *Processor) handleRuleReports(smPolicy *pcf_context.UeSmPolicyData,
 	afEventsNotification models.Pcf_PolAuth_EventsNotification,
 	accuUsageReports []models.Pcf_SMPolCtrl_AccuUsageReport, ruleReports []models.Pcf_SMPolCtrl_RuleReport,
 ) {
 	successRules, failRules := splitRuleReports(ruleReports)
-	var terminated []*pcf_context.AppSessionData
+	var terminations []appSessionTermination
 	if len(failRules) > 0 {
-		terminated = appSessionsWithAllRulesFailed(p.Context(), smPolicy, failRules)
+		terminations = appSessionsWithAllRulesFailed(p.Context(), smPolicy, failRules)
 		afEventsNotification.EvNotifs = append(afEventsNotification.EvNotifs, models.Pcf_PolAuth_AfEventNotification{
 			Event: models.Pcf_PolAuth_AfEvent_FAILED_RESOURCES_ALLOCATION,
 		})
@@ -98,16 +205,14 @@ func (p *Processor) handleRuleReports(smPolicy *pcf_context.UeSmPolicyData,
 			smPolicy, afEventsNotification, accuUsageReports, successRules, failRules)
 	}
 	removeFailedPccRules(smPolicy, failRules)
-	terminationInfo := models.Pcf_PolAuth_TerminationInfo{
-		TermCause: models.Pcf_PolAuth_TerminationCause_ALL_SDF_DEACTIVATION,
-	}
-	for _, appSession := range terminated {
+	for _, termination := range terminations {
+		appSession := termination.appSession
 		if appSession.AppSessionContext == nil || appSession.AppSessionContext.AscReqData == nil {
 			continue
 		}
-		logger.PolicyAuthLog.Infof("App Session Id[%s]: all its PCC rules failed, request its deletion",
-			appSession.AppSessionId)
-		p.SendAppSessionTermination(appSession, terminationInfo)
+		logger.PolicyAuthLog.Infof("App Session Id[%s]: all its PCC rules failed, request its deletion (%s)",
+			appSession.AppSessionId, termination.cause)
+		p.SendAppSessionTermination(appSession, models.Pcf_PolAuth_TerminationInfo{TermCause: termination.cause})
 	}
 }
 

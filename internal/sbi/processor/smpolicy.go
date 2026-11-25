@@ -1012,57 +1012,9 @@ func (p *Processor) sendSmPolicyRelatedAppSessionNotification(smPolicy *pcf_cont
 						sessionNotif.AccessType = notification.AccessType
 						sessionNotif.RatType = notification.RatType
 					case models.Pcf_PolAuth_AfEvent_FAILED_RESOURCES_ALLOCATION:
-						failItem := models.Pcf_PolAuth_ResourcesAllocationInfo{
-							McResourcStatus: models.Pcf_PolAuth_MediaComponentResourcesStatus_INACTIVE,
-						}
-						flows := make(map[int32]models.Pcf_PolAuth_Flows)
-						for _, report := range failRules {
-							for _, pccRuleId := range report.PccRuleIds {
-								if key, exist := appSession.PccRuleIdMapToCompId[pccRuleId]; exist {
-									items := strings.Split(key, "-")
-									if items[0] != "appId" {
-										compN, err := strconv.Atoi(items[0])
-										if err != nil {
-											logger.SmPolicyLog.Errorf("strconv Atoi error %+v", err)
-										}
-										compN32 := int32(compN)
-										if len(items) == 1 {
-											// Comp
-											flow := models.Pcf_PolAuth_Flows{
-												MedCompN: compN32,
-											}
-											failItem.Flows = append(failItem.Flows, flow)
-										} else if len(items) == 2 {
-											// have subComp
-											fNum, err := strconv.Atoi(items[1])
-											if err != nil {
-												logger.SmPolicyLog.Errorf("strconv Atoi error %+v", err)
-											}
-											fNum32 := int32(fNum)
-
-											flow, exist := flows[compN32]
-											if !exist {
-												flow = models.Pcf_PolAuth_Flows{
-													MedCompN: compN32,
-													FNums:    []int32{fNum32},
-												}
-											} else {
-												flow.FNums = append(flow.FNums, fNum32)
-											}
-											flows[compN32] = flow
-										}
-									}
-									// Release related resource
-									delete(appSession.PccRuleIdMapToCompId, pccRuleId)
-									delete(appSession.RelatedPccRuleIds, key)
-								}
-							}
-						}
-						for _, flow := range flows {
-							failItem.Flows = append(failItem.Flows, flow)
-						}
-						if failItem.Flows != nil {
-							sessionNotif.FailedResourcAllocReports = append(sessionNotif.FailedResourcAllocReports, failItem)
+						reports := failedResourcesAllocationReports(appSession, failRules)
+						if reports != nil {
+							sessionNotif.FailedResourcAllocReports = append(sessionNotif.FailedResourcAllocReports, reports...)
 						} else {
 							continue
 						}
