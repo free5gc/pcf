@@ -55,14 +55,14 @@ func (p *Processor) HandleInfluenceDataUpdateNotify(
 
 	smPolicyID := fmt.Sprintf("%s-%s", supi, pduSessionId)
 	ue := p.Context().PCFUeFindByPolicyId(smPolicyID)
-	if ue == nil || ue.SmPolicyData[smPolicyID] == nil {
+	storedPolicy := ue.LoadSmPolicy(smPolicyID)
+	if storedPolicy == nil {
 		problemDetail := util.GetProblemDetail("smPolicyID not found in PCF", util.CONTEXT_NOT_FOUND)
 		logger.CallbackLog.Error(problemDetail.Detail)
 		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
 		c.JSON(int(problemDetail.Status), problemDetail)
 		return
 	}
-	storedPolicy := ue.SmPolicyData[smPolicyID]
 	storedPolicy.InfluenceDataMu.Lock()
 	defer storedPolicy.InfluenceDataMu.Unlock()
 

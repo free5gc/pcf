@@ -28,7 +28,7 @@ func newSmPolicyCreation(ue *pcf_context.UeContext, policyID string,
 ) *smPolicyCreation {
 	groups, exists := ue.RatingGroupData[policyID]
 	return &smPolicyCreation{
-		ue: ue, policyID: policyID, previousPolicy: ue.SmPolicyData[policyID],
+		ue: ue, policyID: policyID, previousPolicy: ue.LoadSmPolicy(policyID),
 		previousGroups: append([]int32(nil), groups...), hadGroups: exists, generator: generator,
 	}
 }
@@ -83,9 +83,9 @@ func (creation *smPolicyCreation) rollback() {
 		delete(creation.ue.RatingGroupData, creation.policyID)
 	}
 	if creation.previousPolicy != nil {
-		creation.ue.SmPolicyData[creation.policyID] = creation.previousPolicy
+		creation.ue.StoreSmPolicy(creation.policyID, creation.previousPolicy)
 	} else {
-		delete(creation.ue.SmPolicyData, creation.policyID)
+		creation.ue.DeleteSmPolicy(creation.policyID)
 	}
 }
 
