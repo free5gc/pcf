@@ -24,12 +24,21 @@ import (
 func smfNotifications(t *testing.T) <-chan struct{} {
 	t.Helper()
 	notified := make(chan struct{}, 8)
+	settleBackgroundNotifications(t)
 	gock.New(aniTestSmfURL).Post("/update").Persist().
 		AddMatcher(func(*http.Request, *gock.Request) (bool, error) {
 			notified <- struct{}{}
 			return true, nil
 		}).Reply(http.StatusNoContent)
 	return notified
+}
+
+// settleBackgroundNotifications lets the notifications sent in the background complete before the
+// HTTP interception of the test is removed: the removal of the PCC rules of a deleted AF session is
+// notified in the background, and completes after the test has seen it. To call after intercepting.
+func settleBackgroundNotifications(t *testing.T) {
+	t.Helper()
+	t.Cleanup(func() { time.Sleep(50 * time.Millisecond) })
 }
 
 func awaitSmfNotification(t *testing.T, notified <-chan struct{}) {

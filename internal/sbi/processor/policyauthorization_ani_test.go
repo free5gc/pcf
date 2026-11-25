@@ -320,6 +320,7 @@ func TestDeleteAppSessionAniWaitsForSmfReport(t *testing.T) {
 
 	openapi.InterceptInnerHttp2Client(t, false)
 	t.Cleanup(gock.Off)
+	settleBackgroundNotifications(t)
 	var requested models.Pcf_SMPolCtrl_SmPolicyNotification
 	var report sync.Once
 	smfNotified := make(chan struct{}, 2)
