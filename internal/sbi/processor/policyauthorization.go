@@ -1327,6 +1327,12 @@ func (p *Processor) SendAppSessionTermination(
 		logger.PolicyAuthLog.Warnln("Send App Session Termination Error[appSession is nil]")
 		return
 	}
+	if appSession.Deleting() && !appSession.Terminated() {
+		// The NF service consumer is already deleting the AF session (TS 29.514 clause 4.2.4).
+		logger.PolicyAuthLog.Debugf("App Session Id[%s] is being deleted: no termination requested",
+			appSession.AppSessionId)
+		return
+	}
 	uri := appSession.AppSessionContext.AscReqData.NotifUri
 
 	if uri != "" {

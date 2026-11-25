@@ -191,3 +191,44 @@ func TestAccessNetworkInfoAtTermination(t *testing.T) {
 	require.Nil(t, accessNetworkInfoAtTermination(netLoc, nil))
 	require.Nil(t, accessNetworkInfoAtTermination(netLoc, &models.Pcf_SMPolCtrl_SmPolicyDeleteData{}))
 }
+
+// An AF session the AF is deleting is not requested to be deleted again, whatever the PCF terminates
+// it for (e.g. all its PCC rules failing). An AF session terminated by the PCF is.
+func TestAppSessionTerminationSkipsAppSessionBeingDeleted(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		mark func(*pcf_context.AppSessionData)
+		sent bool
+	}{
+		{name: "active", mark: func(*pcf_context.AppSessionData) {}, sent: true},
+		{name: "being deleted", mark: func(appSession *pcf_context.AppSessionData) {
+			_, ok := appSession.MarkDeleting(false)
+			require.True(t, ok)
+		}, sent: false},
+		{name: "terminated", mark: func(appSession *pcf_context.AppSessionData) {
+			require.True(t, appSession.MarkTerminated(nil, time.Minute, func() {}))
+			t.Cleanup(func() { appSession.TakeTermination() })
+		}, sent: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p, appSession := newAniTestSession(t, netLocSuppFeat, netLocSuppFeat)
+			openapi.InterceptInnerHttp2Client(t, false)
+			gock.Flush()
+			t.Cleanup(gock.Off)
+			appSession.AppSessionContext.AscReqData.NotifUri = aniTestAfURL
+			sent := false
+			gock.New(aniTestAfURL).Post("/terminate").
+				AddMatcher(func(*http.Request, *gock.Request) (bool, error) {
+					sent = true
+					return true, nil
+				}).Reply(http.StatusNoContent)
+			tc.mark(appSession)
+
+			p.SendAppSessionTermination(appSession, models.Pcf_PolAuth_TerminationInfo{
+				TermCause: models.Pcf_PolAuth_TerminationCause_ALL_SDF_DEACTIVATION,
+			})
+
+			require.Equal(t, tc.sent, sent)
+		})
+	}
+}
