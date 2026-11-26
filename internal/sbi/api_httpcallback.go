@@ -1,8 +1,10 @@
 package sbi
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 
 	"github.com/gin-gonic/gin"
 
@@ -91,7 +93,7 @@ func (s *Server) HTTPAmfStatusChangeNotify(c *gin.Context) {
 // sm_policy_notify
 // Nudr-Notify-smpolicy
 func (s *Server) HTTPUdrPolicyDataChangeNotify(c *gin.Context) {
-	var policyDataChangeNotification models.Udr_DR_PolicyDataChangeNotification
+	var notifications []*models.Udr_DR_PolicyDataChangeNotification
 
 	requestBody, err := c.GetRawData()
 	if err != nil {
@@ -107,7 +109,10 @@ func (s *Server) HTTPUdrPolicyDataChangeNotify(c *gin.Context) {
 		return
 	}
 
-	err = openapi.Deserialize(&policyDataChangeNotification, requestBody, "application/json")
+	err = openapi.Deserialize(&notifications, requestBody, "application/json")
+	if err == nil && (len(notifications) == 0 || slices.Contains(notifications, nil)) {
+		err = errors.New("expected a non-empty array of policy data change notification objects")
+	}
 	if err != nil {
 		problemDetail := "[Request Body] " + err.Error()
 		rsp := models.ProblemDetails{
@@ -131,7 +136,7 @@ func (s *Server) HTTPUdrPolicyDataChangeNotify(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, problemDetails)
 		return
 	}
-	s.Processor().HandlePolicyDataChangeNotify(c, supi, policyDataChangeNotification)
+	s.Processor().HandlePolicyDataChangeNotify(c, supi, notifications)
 }
 
 // Influence Data Update Notification
