@@ -84,7 +84,10 @@ func TestRouterAuthorizationCheck_Check(t *testing.T) {
 			}
 			c.Request.Header.Set("Authorization", tt.args.token)
 
-			rac := NewRouterAuthorizationCheck("testService")
+			rac, err := NewRouterAuthorizationCheck("testService", "https://pcf.example/testService/v1")
+			if err != nil {
+				t.Fatal(err)
+			}
 			rac.Check(c, newMockPCFContext())
 			if w.Code != tt.want.statusCode {
 				t.Errorf("StatusCode should be %d, but got %d", tt.want.statusCode, w.Code)

@@ -3,23 +3,37 @@ package util
 import (
 	"fmt"
 	"net/http"
+	"net/url"
+	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/free5gc/openapi/models"
 	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
-	"github.com/free5gc/pcf/pkg/factory"
 )
 
 type RouterAuthorizationCheck struct {
+	realm       string
 	serviceName models.Nrf_NFMgmt_ServiceName
 }
 
-func NewRouterAuthorizationCheck(serviceName models.Nrf_NFMgmt_ServiceName) *RouterAuthorizationCheck {
-	return &RouterAuthorizationCheck{
-		serviceName: serviceName,
+func NewRouterAuthorizationCheck(
+	serviceName models.Nrf_NFMgmt_ServiceName, realm string,
+) (*RouterAuthorizationCheck, error) {
+	u, err := url.ParseRequestURI(realm)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" ||
+		u.User != nil || u.Path == "" || u.RawQuery != "" || u.ForceQuery || strings.Contains(realm, "#") {
+		return nil, fmt.Errorf("invalid PCF service URI for %s", serviceName)
 	}
+	if port := u.Port(); port != "" {
+		n, err := strconv.ParseUint(port, 10, 16)
+		if err != nil || n == 0 {
+			return nil, fmt.Errorf("invalid PCF service port for %s", serviceName)
+		}
+	}
+	return &RouterAuthorizationCheck{serviceName: serviceName, realm: realm}, nil
 }
 
 func (rac *RouterAuthorizationCheck) Check(c *gin.Context, pcfContext pcf_context.NFContext) {
@@ -27,12 +41,7 @@ func (rac *RouterAuthorizationCheck) Check(c *gin.Context, pcfContext pcf_contex
 	err := pcfContext.AuthorizationCheck(token, rac.serviceName)
 	if err != nil {
 		logger.UtilLog.Debugf("RouterAuthorizationCheck::Check Unauthorized: %s", err)
-		baseURI := "http://localhost"
-		if factory.PcfConfig != nil && factory.PcfConfig.Configuration != nil && factory.PcfConfig.Configuration.Sbi != nil {
-			baseURI = fmt.Sprintf("%s://%s:%d",
-				factory.PcfConfig.GetSbiScheme(), factory.PcfConfig.Configuration.Sbi.RegisterIPv4, factory.PcfConfig.GetSbiPort())
-		}
-		status, challenge, reason := oauthChallenge(c.Request, string(rac.serviceName), token, err, baseURI)
+		status, challenge, reason := oauthChallenge(string(rac.serviceName), token, err, rac.realm)
 		c.Header("WWW-Authenticate", challenge)
 		c.Header("Content-Type", "application/problem+json")
 		c.AbortWithStatusJSON(status, models.ProblemDetails{

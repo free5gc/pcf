@@ -1,9 +1,7 @@
 package util
 
 import (
-	"fmt"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 )
@@ -18,31 +16,12 @@ const scopeVerificationFailure = "OAuth scope verification failed: insufficient 
 // Bearer response. It does not interpret JWT claims or verify any token: the
 // NFContext.AuthorizationCheck call must perform that work first.
 func oauthChallenge(
-	r *http.Request, serviceName, authorization string, authErr error, baseURI string,
+	serviceName, authorization string, authErr error, realm string,
 ) (int, string, string) {
 	if authErr == nil {
 		return 0, "", ""
 	}
 
-	// Use a trusted advertised URI, never client-controlled Host.
-	uri, parseErr := url.Parse(baseURI)
-	if parseErr != nil || uri == nil || uri.Host == "" ||
-		(uri.Scheme != "http" && uri.Scheme != "https") {
-		baseURI = "http://localhost"
-	} else {
-		baseURI = uri.Scheme + "://" + uri.Host
-	}
-
-	// The challenge realm identifies the *service* API URI rather than the
-	// individual resource. Preserve the route's deployed API version (v1/v2).
-	root := "/" + serviceName + "/v1"
-	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-	if len(parts) >= 2 && parts[0] != "" && strings.HasPrefix(parts[1], "v") {
-		if _, err := strconv.Atoi(strings.TrimPrefix(parts[1], "v")); err == nil {
-			root = "/" + parts[0] + "/" + parts[1]
-		}
-	}
-	realm := fmt.Sprintf("%s%s", baseURI, root)
 	challenge := "Bearer realm=" + strconv.Quote(realm)
 
 	fields := strings.Fields(authorization)

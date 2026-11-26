@@ -18,7 +18,6 @@ import (
 
 	"github.com/free5gc/openapi/models"
 	pcf_context "github.com/free5gc/pcf/internal/context"
-	"github.com/free5gc/pcf/pkg/factory"
 )
 
 func TestRouterOAuthBearerResponse(t *testing.T) {
@@ -29,11 +28,10 @@ func TestRouterOAuthBearerResponse(t *testing.T) {
 		invalid = realm + `, error="invalid_token"`
 	)
 
-	originalConfig := factory.PcfConfig
-	t.Cleanup(func() { factory.PcfConfig = originalConfig })
-	factory.PcfConfig = &factory.Config{Configuration: &factory.Configuration{
-		Sbi: &factory.Sbi{Scheme: "http", RegisterIPv4: "pcf.free5gc.org", Port: 8000},
-	}}
+	check, err := NewRouterAuthorizationCheck(service, "http://pcf.free5gc.org:8000/npcf-smpolicycontrol/v1")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
@@ -85,7 +83,7 @@ func TestRouterOAuthBearerResponse(t *testing.T) {
 			router := gin.New()
 			reached := false
 			router.GET(path, func(c *gin.Context) {
-				NewRouterAuthorizationCheck(service).Check(c, pcf)
+				check.Check(c, pcf)
 			}, func(c *gin.Context) {
 				reached = true
 				c.Status(http.StatusNoContent)

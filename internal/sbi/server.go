@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"runtime/debug"
+	"strings"
 	"sync"
 	"time"
 
@@ -70,60 +71,40 @@ func NewServer(pcf pcf, tlsKeyLogPath string) (*Server, error) {
 
 	s.router.Use(metrics.InboundMetrics())
 
-	smPolicyRoutes := s.getSmPolicyRoutes()
-	smPolicyGroup := s.router.Group(factory.PcfSMpolicyCtlResUriPrefix)
-	smPolicyAuthCheck := util.NewRouterAuthorizationCheck(models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL)
-	smPolicyGroup.Use(func(c *gin.Context) {
-		smPolicyAuthCheck.Check(c, s.Context())
-	})
-	applyRoutes(smPolicyGroup, smPolicyRoutes)
+	for _, api := range []struct {
+		name   models.Nrf_NFMgmt_ServiceName
+		prefix string
+		routes []Route
+	}{
+		{models.Nrf_NFMgmt_ServiceName_NPCF_SMPOLICYCONTROL, factory.PcfSMpolicyCtlResUriPrefix, s.getSmPolicyRoutes()},
+		{models.Nrf_NFMgmt_ServiceName_NPCF_AM_POLICY_CONTROL, factory.PcfAMpolicyCtlResUriPrefix, s.getAmPolicyRoutes()},
+		{models.Nrf_NFMgmt_ServiceName_NPCF_BDTPOLICYCONTROL, factory.PcfBdtPolicyCtlResUriPrefix, s.getBdtPolicyRoutes()},
+		{models.Nrf_NFMgmt_ServiceName_NPCF_OAM, factory.PcfOamResUriPrefix, s.getOamRoutes()},
+		{
+			models.Nrf_NFMgmt_ServiceName_NPCF_POLICYAUTHORIZATION,
+			factory.PcfPolicyAuthResUriPrefix, s.getPolicyAuthorizationRoutes(),
+		},
+		{models.Nrf_NFMgmt_ServiceName_NPCF_UE_POLICY_CONTROL, factory.PcfUePolicyCtlResUriPrefix, s.getUePolicyRoutes()},
+	} {
+		realm, advertised := s.Context().PcfServiceUris[api.name]
+		if !advertised {
+			// Local routes such as OAM can be mounted without NRF advertisement.
+			realm = s.Context().GetIPv4Uri() + strings.TrimSuffix(api.prefix, "/")
+		}
+		check, err := util.NewRouterAuthorizationCheck(api.name, realm)
+		if err != nil {
+			return nil, err
+		}
+		group := s.router.Group(api.prefix)
+		if api.name == models.Nrf_NFMgmt_ServiceName_NPCF_OAM {
+			group.Use(oamCorsMiddleware())
+		}
+		group.Use(func(c *gin.Context) { check.Check(c, s.Context()) })
+		applyRoutes(group, api.routes)
+	}
 
-	amPolicyRoutes := s.getAmPolicyRoutes()
-	amPolicyGroup := s.router.Group(factory.PcfAMpolicyCtlResUriPrefix)
-	amRouterAuthorizationCheck := util.NewRouterAuthorizationCheck(models.Nrf_NFMgmt_ServiceName_NPCF_AM_POLICY_CONTROL)
-	amPolicyGroup.Use(func(c *gin.Context) {
-		amRouterAuthorizationCheck.Check(c, s.Context())
-	})
-	applyRoutes(amPolicyGroup, amPolicyRoutes)
-
-	bdtPolicyRoutes := s.getBdtPolicyRoutes()
-	bdtPolicyGroup := s.router.Group(factory.PcfBdtPolicyCtlResUriPrefix)
-	bdtRouterAuthorizationCheck := util.NewRouterAuthorizationCheck(models.Nrf_NFMgmt_ServiceName_NPCF_BDTPOLICYCONTROL)
-	bdtPolicyGroup.Use(func(c *gin.Context) {
-		bdtRouterAuthorizationCheck.Check(c, s.Context())
-	})
-	applyRoutes(bdtPolicyGroup, bdtPolicyRoutes)
-
-	httpcallbackRoutes := s.getHttpCallBackRoutes()
-	httpcallbackGroup := s.router.Group(factory.PcfCallbackResUriPrefix)
 	// TS 29.500 Rel-17 §6.7.3 excludes notify operations from OAuth.
-	applyRoutes(httpcallbackGroup, httpcallbackRoutes)
-
-	oamRoutes := s.getOamRoutes()
-	oamGroup := s.router.Group(factory.PcfOamResUriPrefix)
-	oamGroup.Use(oamCorsMiddleware())
-	oamRouterAuthorizationCheck := util.NewRouterAuthorizationCheck(models.Nrf_NFMgmt_ServiceName_NPCF_OAM)
-	oamGroup.Use(func(c *gin.Context) {
-		oamRouterAuthorizationCheck.Check(c, s.Context())
-	})
-	applyRoutes(oamGroup, oamRoutes)
-
-	policyAuthorizationRoutes := s.getPolicyAuthorizationRoutes()
-	policyAuthorizationGroup := s.router.Group(factory.PcfPolicyAuthResUriPrefix)
-	policyAuthorizationRouterAuthorizationCheck := util.
-		NewRouterAuthorizationCheck(models.Nrf_NFMgmt_ServiceName_NPCF_POLICYAUTHORIZATION)
-	policyAuthorizationGroup.Use(func(c *gin.Context) {
-		policyAuthorizationRouterAuthorizationCheck.Check(c, s.Context())
-	})
-	applyRoutes(policyAuthorizationGroup, policyAuthorizationRoutes)
-
-	uePolicyRoutes := s.getUePolicyRoutes()
-	uePolicyGroup := s.router.Group(factory.PcfUePolicyCtlResUriPrefix)
-	uePolicyAuthCheck := util.NewRouterAuthorizationCheck(models.Nrf_NFMgmt_ServiceName_NPCF_UE_POLICY_CONTROL)
-	uePolicyGroup.Use(func(c *gin.Context) {
-		uePolicyAuthCheck.Check(c, s.Context())
-	})
-	applyRoutes(uePolicyGroup, uePolicyRoutes)
+	applyRoutes(s.router.Group(factory.PcfCallbackResUriPrefix), s.getHttpCallBackRoutes())
 
 	cfg := s.Config()
 	bindAddr := cfg.GetSbiBindingAddr()
