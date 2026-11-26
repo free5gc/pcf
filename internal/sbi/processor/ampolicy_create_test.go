@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -40,11 +41,13 @@ func amCreateFixtureWithAMF(
 	server = httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if strings.HasPrefix(r.URL.Path, "/nnrf-disc/") {
+			addr := server.Listener.Addr().(*net.TCPAddr)
 			if amf != nil && r.URL.Query().Get("target-nf-type") == "AMF" {
 				writeAMTestResponse(t, w, fmt.Sprintf(`{"nfInstances":[{
                     "nfInstanceId":"amf-test","nfType":"AMF","nfStatus":"REGISTERED",
                     "nfServices":[{"serviceInstanceId":"comm","serviceName":"namf-comm",
-                    "nfServiceStatus":"REGISTERED","scheme":"http","apiPrefix":%q}]}]}`, server.URL))
+                    "nfServiceStatus":"REGISTERED","scheme":"http",
+                    "ipEndPoints":[{"ipv4Address":%q,"port":%d}]}]}]}`, addr.IP.String(), addr.Port))
 				return
 			}
 			if !discover {
@@ -57,7 +60,9 @@ func amCreateFixtureWithAMF(
 					"nfServices": []interface{}{
 						map[string]interface{}{
 							"serviceInstanceId": "dr", "serviceName": "nudr-dr", "nfServiceStatus": "REGISTERED",
-							"scheme": "http", "apiPrefix": server.URL,
+							"scheme": "http", "ipEndPoints": []interface{}{
+								map[string]interface{}{"ipv4Address": addr.IP.String(), "port": addr.Port},
+							},
 						},
 					},
 				},
