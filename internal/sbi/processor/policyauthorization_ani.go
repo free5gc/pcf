@@ -233,12 +233,11 @@ func (p *Processor) handleNotificationAccessNetworkInfo(notification *models.Pcf
 		return
 	}
 	smPolicyID := path.Base(notification.ResourceUri)
-	ue := p.Context().PCFUeFindByPolicyId(smPolicyID)
-	if ue == nil || ue.SmPolicyData[smPolicyID] == nil {
+	smPolicy := p.Context().PCFUeFindByPolicyId(smPolicyID).LoadSmPolicy(smPolicyID)
+	if smPolicy == nil {
 		logger.SmPolicyLog.Warnf("Access network information for unknown SM Policy[%s]", smPolicyID)
 		return
 	}
-	smPolicy := ue.SmPolicyData[smPolicyID]
 	p.sendSmPolicyRelatedAppSessionNotification(smPolicy, report, nil, nil, nil)
 	p.refreshAccessNetworkInfoRequest(smPolicy)
 }
