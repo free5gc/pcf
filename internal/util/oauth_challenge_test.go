@@ -37,11 +37,12 @@ func TestOAuthChallenge(t *testing.T) {
 }
 
 func TestOAuthChallengeNilAndHTTPS(t *testing.T) {
-	status, header, _ := oauthChallenge("nudr-dr", "Bearer bad", errors.New("invalid"), "https://udr.free5gc.org:8000/nudr-dr/v2")
+	const realm = "https://udr.free5gc.org:8000/nudr-dr/v2"
+	status, header, _ := oauthChallenge("nudr-dr", "Bearer bad", errors.New("invalid"), realm)
 	if status != 401 || !strings.Contains(header, `realm="https://udr.free5gc.org:8000/nudr-dr/v2"`) {
 		t.Fatalf("HTTPS/version realm: status=%d header=%q", status, header)
 	}
-	status, header, reason := oauthChallenge("nudr-dr", "", nil, "https://udr.free5gc.org:8000/nudr-dr/v2")
+	status, header, reason := oauthChallenge("nudr-dr", "", nil, realm)
 	if status != 0 || header != "" || reason != "" {
 		t.Fatalf("unexpected response on nil error")
 	}
