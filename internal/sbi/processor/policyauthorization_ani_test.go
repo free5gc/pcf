@@ -42,7 +42,7 @@ func newAniTestSession(t *testing.T, afSuppFeat, smfSuppFeat string) (*Processor
 		PolicyContext:  &models.Pcf_SMPolCtrl_SmPolicyContextData{PduSessionId: 1},
 		PolicyDecision: &models.Pcf_SMPolCtrl_SmPolicyDecision{SuppFeat: smfSuppFeat},
 	}
-	ue.SmPolicyData[aniTestSmPolicyID] = smPolicy
+	ue.StoreSmPolicy(aniTestSmPolicyID, smPolicy)
 	appSession := &pcf_context.AppSessionData{
 		AppSessionId: aniTestAppSessionID,
 		AppSessionContext: &models.Pcf_PolAuth_AppSessionContext{

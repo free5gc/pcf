@@ -373,10 +373,13 @@ func (c *PCFContext) SessionBinding(req *models.Pcf_PolAuth_AppSessionContextReq
 	if selectedUE != nil {
 		policy, err = ueSMPolicyFindByAppSessionContext(selectedUE, req)
 	} else {
+		// No UE was selected by SUPI or GPSI: find the PDU session by the UE
+		// address. Stop at the UE that has it; going on would overwrite the
+		// match with the next UE's "not found".
 		c.UePool.Range(func(key, value interface{}) bool {
 			ue := value.(*UeContext)
 			policy, err = ueSMPolicyFindByAppSessionContext(ue, req)
-			return true
+			return policy == nil
 		})
 	}
 	if policy == nil && err == nil {

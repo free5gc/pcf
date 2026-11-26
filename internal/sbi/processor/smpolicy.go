@@ -71,7 +71,7 @@ func (p *Processor) HandleCreateSmPolicyRequest(
 	}
 	var smData models.Udr_DR_SmPolicyData
 	smPolicyID := fmt.Sprintf("%s-%d", ue.Supi, request.PduSessionId)
-	smPolicyData := ue.SmPolicyData[smPolicyID]
+	smPolicyData := ue.LoadSmPolicy(smPolicyID)
 	if smPolicyData == nil || smPolicyData.SmPolicyData == nil {
 		var response *DR.ReadSessionManagementPolicyDataResponse
 		response, pd, sessionErr := p.Consumer().GetSessionManagementPolicyData(
@@ -528,7 +528,8 @@ func (p *Processor) HandleDeleteSmPolicyContextRequest(
 	logger.AmPolicyLog.Traceln("Handle SM Policy Delete")
 
 	ue := p.Context().PCFUeFindByPolicyId(smPolicyId)
-	if ue == nil || ue.SmPolicyData[smPolicyId] == nil {
+	smPolicy := ue.LoadSmPolicy(smPolicyId)
+	if smPolicy == nil {
 		problemDetail := util.GetProblemDetail("smPolicyID not found in PCF", util.CONTEXT_NOT_FOUND)
 		logger.SmPolicyLog.Warn(problemDetail.Detail)
 		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
@@ -537,7 +538,6 @@ func (p *Processor) HandleDeleteSmPolicyContextRequest(
 	}
 
 	pcfSelf := p.Context()
-	smPolicy := ue.SmPolicyData[smPolicyId]
 
 	problemDetail, err := p.Consumer().RemoveInfluenceDataSubscription(ue, smPolicy.SubscriptionID)
 	if problemDetail != nil {
@@ -557,7 +557,7 @@ func (p *Processor) HandleDeleteSmPolicyContextRequest(
 	}
 
 	// Unsubscrice UDR
-	delete(ue.SmPolicyData, smPolicyId)
+	ue.DeleteSmPolicy(smPolicyId)
 	logger.SmPolicyLog.Tracef("SMPolicy smPolicyID[%s] DELETE", smPolicyId)
 
 	// Release related App Session (subclause 4.2.5.3 in TS29514)
@@ -587,14 +587,14 @@ func (p *Processor) HandleGetSmPolicyContextRequest(
 	logger.SmPolicyLog.Traceln("Handle GET SM Policy Request")
 
 	ue := p.Context().PCFUeFindByPolicyId(smPolicyId)
-	if ue == nil || ue.SmPolicyData[smPolicyId] == nil {
+	smPolicyData := ue.LoadSmPolicy(smPolicyId)
+	if smPolicyData == nil {
 		problemDetail := util.GetProblemDetail("smPolicyID not found in PCF", util.CONTEXT_NOT_FOUND)
 		logger.SmPolicyLog.Warn(problemDetail.Detail)
 		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
 		c.JSON(int(problemDetail.Status), problemDetail)
 		return
 	}
-	smPolicyData := ue.SmPolicyData[smPolicyId]
 	response := &models.Pcf_SMPolCtrl_SmPolicyControl{
 		Policy:  smPolicyData.PolicyDecision,
 		Context: smPolicyData.PolicyContext,
@@ -613,14 +613,14 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 	logger.SmPolicyLog.Traceln("Handle updateSmPolicyContext")
 
 	ue := p.Context().PCFUeFindByPolicyId(smPolicyId)
-	if ue == nil || ue.SmPolicyData[smPolicyId] == nil {
+	smPolicy := ue.LoadSmPolicy(smPolicyId)
+	if smPolicy == nil {
 		problemDetail := util.GetProblemDetail("smPolicyID not found in PCF", util.CONTEXT_NOT_FOUND)
 		logger.SmPolicyLog.Warn(problemDetail.Detail)
 		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
 		c.JSON(int(problemDetail.Status), problemDetail)
 		return
 	}
-	smPolicy := ue.SmPolicyData[smPolicyId]
 	smPolicyDecision := smPolicy.PolicyDecision
 	smPolicyContext := smPolicy.PolicyContext
 	errCause := ""
