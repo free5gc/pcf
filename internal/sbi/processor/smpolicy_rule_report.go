@@ -237,12 +237,11 @@ func (p *Processor) handleNotificationRuleReports(
 	resourceUri string, ruleReports []models.Pcf_SMPolCtrl_RuleReport,
 ) {
 	smPolicyID := path.Base(resourceUri)
-	ue := p.Context().PCFUeFindByPolicyId(smPolicyID)
-	if ue == nil || ue.SmPolicyData[smPolicyID] == nil {
+	smPolicy := p.Context().PCFUeFindByPolicyId(smPolicyID).LoadSmPolicy(smPolicyID)
+	if smPolicy == nil {
 		logger.SmPolicyLog.Warnf("PCC rule reports for unknown SM Policy[%s]", smPolicyID)
 		return
 	}
-	smPolicy := ue.SmPolicyData[smPolicyID]
 
 	p.handleRuleReports(smPolicy, models.Pcf_PolAuth_EventsNotification{}, nil, ruleReports)
 }

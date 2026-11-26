@@ -55,7 +55,7 @@ func newRuleReportTestPCF(t *testing.T, pccRuleIds ...string,
 		},
 		AppSessions: map[string]bool{ruleReportAppSessID: true},
 	}
-	ue.SmPolicyData[ruleReportPolicyID] = smPolicy
+	ue.StoreSmPolicy(ruleReportPolicyID, smPolicy)
 	appSession := &pcf_context.AppSessionData{
 		AppSessionId: ruleReportAppSessID,
 		AppSessionContext: &models.Pcf_PolAuth_AppSessionContext{
