@@ -28,6 +28,9 @@ type UeContext struct {
 	// Udr Ref
 	UdrUri string
 	// SMPolicy
+	// SmPolicyMu protects the SmPolicyData map: storing, deleting and looking
+	// up SM policies. It does not protect the fields of the policies.
+	SmPolicyMu   sync.RWMutex
 	SmPolicyData map[string]*UeSmPolicyData // use smPolicyId(ue.Supi-pduSessionId) as key
 	// App Session Related
 	// AppSessionIDGenerator uint64
@@ -173,8 +176,32 @@ func (ue *UeContext) NewUeSmPolicyData(
 	data.ChargingIdGenerator = 1
 
 	data.PcfUe = ue
-	ue.SmPolicyData[key] = &data
+	ue.StoreSmPolicy(key, &data)
 	return &data
+}
+
+// LoadSmPolicy returns the SM policy stored under smPolicyID, or nil.
+func (ue *UeContext) LoadSmPolicy(smPolicyID string) *UeSmPolicyData {
+	if ue == nil {
+		return nil
+	}
+	ue.SmPolicyMu.RLock()
+	defer ue.SmPolicyMu.RUnlock()
+	return ue.SmPolicyData[smPolicyID]
+}
+
+// StoreSmPolicy stores policy under smPolicyID.
+func (ue *UeContext) StoreSmPolicy(smPolicyID string, policy *UeSmPolicyData) {
+	ue.SmPolicyMu.Lock()
+	defer ue.SmPolicyMu.Unlock()
+	ue.SmPolicyData[smPolicyID] = policy
+}
+
+// DeleteSmPolicy deletes the SM policy stored under smPolicyID.
+func (ue *UeContext) DeleteSmPolicy(smPolicyID string) {
+	ue.SmPolicyMu.Lock()
+	defer ue.SmPolicyMu.Unlock()
+	delete(ue.SmPolicyData, smPolicyID)
 }
 
 // Remove Pcc rule which PccRuleId in the policy
@@ -507,6 +534,8 @@ func (ue *UeContext) AllocUeAppSessionId(context *PCFContext) string {
 
 // returns SM Policy by IPv4
 func (ue *UeContext) SMPolicyFindByIpv4(v4 string) *UeSmPolicyData {
+	ue.SmPolicyMu.RLock()
+	defer ue.SmPolicyMu.RUnlock()
 	for _, smPolicy := range ue.SmPolicyData {
 		if smPolicy.PolicyContext.Ipv4Address == v4 {
 			return smPolicy
@@ -517,6 +546,8 @@ func (ue *UeContext) SMPolicyFindByIpv4(v4 string) *UeSmPolicyData {
 
 // returns SM Policy by IPv6
 func (ue *UeContext) SMPolicyFindByIpv6(v6 string) *UeSmPolicyData {
+	ue.SmPolicyMu.RLock()
+	defer ue.SmPolicyMu.RUnlock()
 	for _, smPolicy := range ue.SmPolicyData {
 		if smPolicy.PolicyContext.Ipv6AddressPrefix == v6 {
 			return smPolicy
@@ -529,6 +560,8 @@ func (ue *UeContext) SMPolicyFindByIpv6(v6 string) *UeSmPolicyData {
 func (ue *UeContext) SMPolicyFindByIdentifiersIpv4(
 	v4 string, sNssai *models.Snssai, dnn string, ipDomain string,
 ) *UeSmPolicyData {
+	ue.SmPolicyMu.RLock()
+	defer ue.SmPolicyMu.RUnlock()
 	for _, smPolicy := range ue.SmPolicyData {
 		policyContext := smPolicy.PolicyContext
 		if policyContext.Ipv4Address == v4 {
@@ -549,6 +582,8 @@ func (ue *UeContext) SMPolicyFindByIdentifiersIpv4(
 
 // returns SM Policy by IPv6
 func (ue *UeContext) SMPolicyFindByIdentifiersIpv6(v6 string, sNssai *models.Snssai, dnn string) *UeSmPolicyData {
+	ue.SmPolicyMu.RLock()
+	defer ue.SmPolicyMu.RUnlock()
 	for _, smPolicy := range ue.SmPolicyData {
 		policyContext := smPolicy.PolicyContext
 		if policyContext.Ipv6AddressPrefix == v6 {
