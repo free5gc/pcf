@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -850,6 +851,24 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 		case models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_APP_STO: // ADC (subsclause 4.2.4.6, 5.8 in TS29512)
 			// request.AppDetectionInfos
 		case models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_AN_INFO: // NetLoc (subsclause 4.2.4.9, 5.8 in TS29512)
+			if request.UserLocationInfo != nil {
+				smPolicyContext.UserLocationInfo = request.UserLocationInfo
+			}
+			if request.UeTimeZone != "" {
+				smPolicyContext.UeTimeZone = request.UeTimeZone
+			}
+			// Reporting access network information to the AF (subclause 4.2.5.11 in TS29514)
+			afEventsNotification.EvNotifs = append(afEventsNotification.EvNotifs, models.Pcf_PolAuth_AfEventNotification{
+				Event: models.Pcf_PolAuth_AfEvent_ANI_REPORT,
+			})
+			afEventsNotification.UeLoc = request.UserLocationInfo
+			afEventsNotification.UeLocTime = request.UserLocationInfoTime
+			afEventsNotification.UeTimeZone = request.UeTimeZone
+			if request.UserLocationInfo == nil && request.ServingNetwork != nil {
+				// Location not available: the serving PLMN is reported instead
+				afEventsNotification.PlmnId = request.ServingNetwork
+			}
+			logger.SmPolicyLog.Tracef("SM Policy Update(%s) Successfully", trigger)
 		case models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_CM_SES_FAIL: // Credit Management Session Failure
 			// request.CreditManageStatus
 		case models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_PS_DA_OFF:
@@ -994,6 +1013,10 @@ func (p *Processor) HandleUpdateSmPolicyContextRequest(
 		p.sendSmPolicyRelatedAppSessionNotification(
 			smPolicy, afEventsNotification, request.AccuUsageReports, successRules, failRules)
 	}
+	if slices.Contains(request.RepPolicyCtrlReqTriggers, models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_AN_INFO) {
+		// The report answers the request of access network information (subclause 4.2.4.9 in TS29512)
+		p.refreshAccessNetworkInfoRequest(smPolicy)
+	}
 
 	if errCause != "" {
 		problemDetail := util.GetProblemDetail(errCause, util.ERROR_TRIGGER_EVENT)
@@ -1089,6 +1112,15 @@ func (p *Processor) sendSmPolicyRelatedAppSessionNotification(smPolicy *pcf_cont
 						} else {
 							continue
 						}
+					case models.Pcf_PolAuth_AfEvent_ANI_REPORT:
+						reqAnis := appSessionReqAnis(appSession)
+						if !aniReportComplete(notification, reqAnis) {
+							// Waits for the report answering its request
+							continue
+						}
+						fillAccessNetworkInfo(&sessionNotif, notification, reqAnis)
+						// One-time event: the subscription terminates once reported (subclause 4.2.3.14 in TS29514)
+						delete(appSession.Events, models.Pcf_PolAuth_AfEvent_ANI_REPORT)
 					case models.Pcf_PolAuth_AfEvent_PLMN_CHG:
 						sessionNotif.PlmnId = notification.PlmnId
 					case models.Pcf_PolAuth_AfEvent_QOS_NOTIF:
@@ -1204,7 +1236,7 @@ func (p *Processor) SendSMPolicyUpdateNotification(
 	req := SMPolCtrl.CreateSMPolicySmPolicyUpdateNotificationRequest{
 		RequestBody: request,
 	}
-	_, err := client.SMPoliciesCollectionApi.CreateSMPolicySmPolicyUpdateNotification(context.Background(), uri, &req)
+	rsp, err := client.SMPoliciesCollectionApi.CreateSMPolicySmPolicyUpdateNotification(context.Background(), uri, &req)
 
 	switch err.(type) {
 	case openapi.GenericOpenAPIError:
@@ -1213,6 +1245,10 @@ func (p *Processor) SendSMPolicyUpdateNotification(
 		logger.SmPolicyLog.Warnf("SM Policy Update Notification Failed[%s]", err.Error())
 	case nil:
 		logger.SmPolicyLog.Tracef("SM Policy Update Notification Success")
+		if rsp != nil {
+			// Access network information in the UeCampingRep (subclause 4.2.3.10 in TS29512)
+			p.handleNotificationAccessNetworkInfo(request, rsp.CreateSMPolicySmPolicyUpdateNotificationResponse200)
+		}
 	default:
 		logger.SmPolicyLog.Warnf("SM Policy Update Notification Unknown Error %+v", err)
 	}
