@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/free5gc/openapi/models"
 	nfcontext "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/sbi/processor"
 	"github.com/free5gc/pcf/pkg/factory"
@@ -24,11 +25,28 @@ func (a *callbackOAuthApp) Context() *nfcontext.PCFContext { return a.ctx }
 
 func (a *callbackOAuthApp) Processor() *processor.Processor { return &processor.Processor{PCF: a} }
 
+func newCallbackTestApp() *callbackOAuthApp {
+	return &callbackOAuthApp{
+		cfg: &factory.Config{Configuration: &factory.Configuration{
+			Sbi: &factory.Sbi{BindingIPv4: "127.0.0.1", Port: 0},
+		}},
+		ctx: &nfcontext.PCFContext{
+			UriScheme: models.UriScheme_HTTP, RegisterIPv4: "pcf.example", SBIPort: 8000,
+		},
+	}
+}
+
 func TestCallbackOAuthRoute(t *testing.T) {
-	app := &callbackOAuthApp{cfg: &factory.Config{Configuration: &factory.Configuration{
-		Sbi: &factory.Sbi{BindingIPv4: "127.0.0.1", Port: 0},
-	}}}
-	app.ctx = &nfcontext.PCFContext{OAuth2Required: true}
+	app := newCallbackTestApp()
+	const service = models.Nrf_NFMgmt_ServiceName_NPCF_AM_POLICY_CONTROL
+	const realm = "https://advertised.example:8443/npcf-am-policy-control/v1"
+	app.ctx.OAuth2Required = true
+	app.ctx.PcfServiceUris = map[models.Nrf_NFMgmt_ServiceName]string{
+		service: "http://:8000/npcf-am-policy-control/v1",
+	}
+	_, err := NewServer(app, "")
+	require.ErrorContains(t, err, string(service))
+	app.ctx.PcfServiceUris[service] = realm
 	server, err := NewServer(app, "")
 	require.NoError(t, err)
 	for _, tc := range []struct {
@@ -52,15 +70,11 @@ func TestCallbackOAuthRoute(t *testing.T) {
 	response := httptest.NewRecorder()
 	server.router.ServeHTTP(response, req)
 	require.Equal(t, http.StatusUnauthorized, response.Code)
+	require.Equal(t, `Bearer realm="`+realm+`"`, response.Header().Get("WWW-Authenticate"))
 }
 
 func TestUdrPolicyDataChangeNotifyPayload(t *testing.T) {
-	app := &callbackOAuthApp{
-		cfg: &factory.Config{Configuration: &factory.Configuration{
-			Sbi: &factory.Sbi{BindingIPv4: "127.0.0.1", Port: 0},
-		}},
-		ctx: &nfcontext.PCFContext{},
-	}
+	app := newCallbackTestApp()
 	server, err := NewServer(app, "")
 	require.NoError(t, err)
 
