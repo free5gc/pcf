@@ -418,6 +418,9 @@ func (p *Processor) postAppSessCtxProcedure(appSessCtx *models.Pcf_PolAuth_AppSe
 	// Event Subscription
 	eventSubs := make(map[models.Pcf_PolAuth_AfEvent]models.Pcf_PolAuth_AfNotifMethod)
 	if ascReqData.EvSubsc != nil {
+		if pd := validateAniSubscription(ascReqData.EvSubsc.Events, ascReqData.EvSubsc.ReqAnis, nSuppFeat); pd != nil {
+			return nil, "", pd
+		}
 		for _, subs := range ascReqData.EvSubsc.Events {
 			if subs.NotifMethod == "" {
 				// default value "EVENT_DETECTION"
@@ -428,6 +431,9 @@ func (p *Processor) postAppSessCtxProcedure(appSessCtx *models.Pcf_PolAuth_AppSe
 			switch subs.Event {
 			case models.Pcf_PolAuth_AfEvent_ACCESS_TYPE_CHANGE:
 				trig = models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_AC_TY_CH
+			case models.Pcf_PolAuth_AfEvent_ANI_REPORT:
+				// Provisioned after the loop, see handleAniSubscription
+				continue
 			// case models.Pcf_PolAuth_AfEvent_FAILED_RESOURCES_ALLOCATION:
 			// 	// Subscription to Service Data Flow Deactivation
 			// 	trig = models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_RES_RELEASE
@@ -487,6 +493,14 @@ func (p *Processor) postAppSessCtxProcedure(appSessCtx *models.Pcf_PolAuth_AppSe
 		}
 	}
 
+	// Request of access network information
+	var reqAnis []models.Pcf_PolAuth_RequiredAccessInfo
+	if ascReqData.EvSubsc != nil {
+		reqAnis = ascReqData.EvSubsc.ReqAnis
+	}
+	aniNotSupported := handleAniSubscription(eventSubs, nSuppFeat, smPolicy, reqAnis, relatedPccRuleIds,
+		&updateSMpolicy)
+
 	// Allocate App Session Id
 	appSessID := ue.AllocUeAppSessionId(pcfSelf)
 	appSessCtx.AscRespData = &models.Pcf_PolAuth_AppSessionContextRespData{
@@ -530,6 +544,9 @@ func (p *Processor) postAppSessCtxProcedure(appSessCtx *models.Pcf_PolAuth_AppSe
 			appSessCtx.EvsNotif.RatType = smPolicy.PolicyContext.RatType
 		}
 	}
+	if aniNotSupported {
+		addAniNotSupported(appSessCtx.EvsNotif)
+	}
 	if appSessCtx.EvsNotif.EvNotifs == nil {
 		appSessCtx.EvsNotif = nil
 	}
@@ -562,23 +579,52 @@ func (p *Processor) HandleDeleteAppSessionContext(
 	if val, ok := pcfSelf.AppSessionPool.Load(appSessionId); ok {
 		appSession = val.(*pcf_context.AppSessionData)
 	}
-	if appSession == nil {
+	// Deletion requested after the PCF terminated the AF session (subclause 4.2.5.3 in TS29514)
+	if appSession != nil && p.deleteTerminatedAppSession(c, appSession, eventsSubscReqData) {
+		return
+	}
+	if appSession == nil || appSession.Deleting() {
 		problemDetail := util.GetProblemDetail("can't find app session", util.APPLICATION_SESSION_CONTEXT_NOT_FOUND)
 		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
 		c.JSON(int(problemDetail.Status), problemDetail)
 		return
 	}
-	if eventsSubscReqData != nil {
-		logger.PolicyAuthLog.Warn("Delete AppSessions does not support with Event Subscription")
-	}
 
 	smPolicy := appSession.SmPolicyData
 	if smPolicy == nil {
 		// BDT-only AppSession / AppSession without SM Policy - nothing to undo on the SM Policy side
+		if eventsSubscReqData != nil {
+			logger.PolicyAuthLog.Warn("Delete AppSessions does not support with Event Subscription")
+		}
+		if _, ok := appSession.MarkDeleting(false); !ok {
+			problemDetail := util.GetProblemDetail("can't find app session", util.APPLICATION_SESSION_CONTEXT_NOT_FOUND)
+			c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
+			c.JSON(int(problemDetail.Status), problemDetail)
+			return
+		}
 		pcfSelf.AppSessionPool.Delete(appSessionId)
 		logger.PolicyAuthLog.Infof("App Session Id[%s] Del", appSessionId)
 		c.Status(http.StatusNoContent)
 		return
+	}
+
+	// Request and report of access network information (subclause 4.2.4.6 in TS29514)
+	evsNotif, waitAni, pd := aniAtDeletion(eventsSubscReqData, negotiatedSuppFeat(appSession.AppSessionContext),
+		smPolicy)
+	if pd != nil {
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, pd.Cause)
+		c.JSON(int(pd.Status), pd)
+		return
+	}
+	aniReport, ok := appSession.MarkDeleting(waitAni)
+	if !ok {
+		problemDetail := util.GetProblemDetail("can't find app session", util.APPLICATION_SESSION_CONTEXT_NOT_FOUND)
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
+		c.JSON(int(problemDetail.Status), problemDetail)
+		return
+	}
+	if waitAni {
+		evsNotif = p.waitAccessNetworkInfo(appSession, eventsSubscReqData.ReqAnis, aniReport)
 	}
 
 	// Remove related pcc rule resource
@@ -617,6 +663,12 @@ func (p *Processor) HandleDeleteAppSessionContext(
 	}
 	go p.SendSMPolicyUpdateNotification(smPolicy.PolicyContext.NotificationUri, &notification)
 	logger.PolicyAuthLog.Tracef("Send SM Policy[%s] Update Notification", smPolicyID)
+	if evsNotif != nil {
+		evsNotif.EvSubsUri = fmt.Sprintf("%s/events-subscription",
+			util.GetResourceUri(models.Nrf_NFMgmt_ServiceName_NPCF_POLICYAUTHORIZATION, appSessionId))
+		c.JSON(http.StatusOK, models.Pcf_PolAuth_AppSessionContext{EvsNotif: evsNotif})
+		return
+	}
 	c.Status(http.StatusNoContent)
 }
 
@@ -633,7 +685,7 @@ func (p *Processor) HandleGetAppSessionContext(
 	if val, ok := pcfSelf.AppSessionPool.Load(appSessionId); ok {
 		appSession = val.(*pcf_context.AppSessionData)
 	}
-	if appSession == nil {
+	if appSession == nil || appSession.Deleting() {
 		problemDetail := util.GetProblemDetail("can't find app session", util.APPLICATION_SESSION_CONTEXT_NOT_FOUND)
 		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
 		c.JSON(int(problemDetail.Status), problemDetail)
@@ -656,7 +708,7 @@ func (p *Processor) HandleModAppSessionContext(
 	if val, ok := pcfSelf.AppSessionPool.Load(appSessionId); ok {
 		appSession = val.(*pcf_context.AppSessionData)
 	}
-	if appSession == nil {
+	if appSession == nil || appSession.Deleting() {
 		problemDetail := util.GetProblemDetail("can't find app session", util.APPLICATION_SESSION_CONTEXT_NOT_FOUND)
 		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
 		c.JSON((int)(problemDetail.Status), problemDetail)
@@ -858,6 +910,12 @@ func (p *Processor) HandleModAppSessionContext(
 	}
 
 	if appSessionContextUpdateData.EvSubsc != nil {
+		if pd := validateAniSubscription(appSessionContextUpdateData.EvSubsc.Events,
+			appSessionContextUpdateData.EvSubsc.ReqAnis, negotiatedSuppFeat(appSessCtx)); pd != nil {
+			c.Set(sbi.IN_PB_DETAILS_CTX_STR, pd.Cause)
+			c.JSON(int(pd.Status), pd)
+			return
+		}
 		for _, subs := range appSessionContextUpdateData.EvSubsc.Events {
 			if subs.NotifMethod == "" {
 				// default value "EVENT_DETECTION"
@@ -868,6 +926,9 @@ func (p *Processor) HandleModAppSessionContext(
 			switch subs.Event {
 			case models.Pcf_PolAuth_AfEvent_ACCESS_TYPE_CHANGE:
 				trig = models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_AC_TY_CH
+			case models.Pcf_PolAuth_AfEvent_ANI_REPORT:
+				// Provisioned after the loop, see handleAniSubscription
+				continue
 			// case models.Pcf_PolAuth_AfEvent_FAILED_RESOURCES_ALLOCATION:
 			// 	// Subscription to Service Data Flow Deactivation
 			// 	trig = models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_SUCC_RES_ALLO
@@ -910,6 +971,9 @@ func (p *Processor) HandleModAppSessionContext(
 		if appSessionContextUpdateData.EvSubsc.UsgThres != nil {
 			appSessCtx.AscReqData.EvSubsc.UsgThres = threshRmToThresh(appSessionContextUpdateData.EvSubsc.UsgThres)
 		}
+		if appSessionContextUpdateData.EvSubsc.ReqAnis != nil {
+			appSessCtx.AscReqData.EvSubsc.ReqAnis = appSessionContextUpdateData.EvSubsc.ReqAnis
+		}
 	} else {
 		// remove eventSubs
 		appSession.Events = nil
@@ -927,6 +991,14 @@ func (p *Processor) HandleModAppSessionContext(
 			return
 		}
 	}
+
+	// Request of access network information
+	var reqAnis []models.Pcf_PolAuth_RequiredAccessInfo
+	if appSessionContextUpdateData.EvSubsc != nil {
+		reqAnis = appSessionContextUpdateData.EvSubsc.ReqAnis
+	}
+	aniNotSupported := handleAniSubscription(eventSubs, negotiatedSuppFeat(appSessCtx), smPolicy, reqAnis,
+		relatedPccRuleIds, &updateSMpolicy)
 
 	if len(relatedPccRuleIds) > 0 {
 		appSession.RelatedPccRuleIds = relatedPccRuleIds
@@ -959,6 +1031,9 @@ func (p *Processor) HandleModAppSessionContext(
 			appSessCtx.EvsNotif.AccessType = smPolicy.PolicyContext.AccessType
 			appSessCtx.EvsNotif.RatType = smPolicy.PolicyContext.RatType
 		}
+	}
+	if aniNotSupported {
+		addAniNotSupported(appSessCtx.EvsNotif)
 	}
 	if appSessCtx.EvsNotif.EvNotifs == nil {
 		appSessCtx.EvsNotif = nil
@@ -994,7 +1069,7 @@ func (p *Processor) HandleDeleteEventsSubscContext(
 	if val, ok := pcfSelf.AppSessionPool.Load(appSessionId); ok {
 		appSession = val.(*pcf_context.AppSessionData)
 	}
-	if appSession == nil {
+	if appSession == nil || appSession.Deleting() {
 		problemDetail := util.GetProblemDetail("can't find app session", util.APPLICATION_SESSION_CONTEXT_NOT_FOUND)
 		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
 		c.JSON(int(problemDetail.Status), problemDetail)
@@ -1043,7 +1118,7 @@ func (p *Processor) HandleUpdateEventsSubscContext(
 	if val, ok := pcfSelf.AppSessionPool.Load(appSessionId); ok {
 		appSession = val.(*pcf_context.AppSessionData)
 	}
-	if appSession == nil {
+	if appSession == nil || appSession.Deleting() {
 		problemDetail := util.GetProblemDetail("can't find app session", util.APPLICATION_SESSION_CONTEXT_NOT_FOUND)
 		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
 		c.JSON(int(problemDetail.Status), problemDetail)
@@ -1054,6 +1129,13 @@ func (p *Processor) HandleUpdateEventsSubscContext(
 		problemDetail := util.GetProblemDetail("Can't find related PDU Session", util.REQUESTED_SERVICE_NOT_AUTHORIZED)
 		c.Set(sbi.IN_PB_DETAILS_CTX_STR, problemDetail.Cause)
 		c.JSON(int(problemDetail.Status), problemDetail)
+		return
+	}
+	appSessCtx := appSession.AppSessionContext
+	nSuppFeat := negotiatedSuppFeat(appSessCtx)
+	if pd := validateAniSubscription(eventsSubscReqData.Events, eventsSubscReqData.ReqAnis, nSuppFeat); pd != nil {
+		c.Set(sbi.IN_PB_DETAILS_CTX_STR, pd.Cause)
+		c.JSON(int(pd.Status), pd)
 		return
 	}
 	eventSubs := make(map[models.Pcf_PolAuth_AfEvent]models.Pcf_PolAuth_AfNotifMethod)
@@ -1071,6 +1153,9 @@ func (p *Processor) HandleUpdateEventsSubscContext(
 		switch subs.Event {
 		case models.Pcf_PolAuth_AfEvent_ACCESS_TYPE_CHANGE:
 			trig = models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_AC_TY_CH
+		case models.Pcf_PolAuth_AfEvent_ANI_REPORT:
+			// Provisioned after the loop, see handleAniSubscription
+			continue
 		// case models.Pcf_PolAuth_AfEvent_FAILED_RESOURCES_ALLOCATION:
 		// 	// Subscription to Service Data Flow Deactivation
 		// 	trig = models.Pcf_SMPolCtrl_PolicyControlRequestTrigger_SUCC_RES_ALLO
@@ -1101,7 +1186,8 @@ func (p *Processor) HandleUpdateEventsSubscContext(
 			updataSmPolicy = true
 		}
 	}
-	appSessCtx := appSession.AppSessionContext
+	aniNotSupported := handleAniSubscription(eventSubs, nSuppFeat, smPolicy, eventsSubscReqData.ReqAnis,
+		appSession.RelatedPccRuleIds, &updataSmPolicy)
 	// update Context
 	if appSessCtx.AscReqData.EvSubsc == nil {
 		appSessCtx.AscReqData.EvSubsc = new(models.Pcf_PolAuth_EventsSubscReqData)
@@ -1109,6 +1195,7 @@ func (p *Processor) HandleUpdateEventsSubscContext(
 	appSessCtx.AscReqData.EvSubsc.Events = eventsSubscReqData.Events
 	appSessCtx.AscReqData.EvSubsc.UsgThres = eventsSubscReqData.UsgThres
 	appSessCtx.AscReqData.EvSubsc.NotifUri = eventsSubscReqData.NotifUri
+	appSessCtx.AscReqData.EvSubsc.ReqAnis = eventsSubscReqData.ReqAnis
 	appSessCtx.EvsNotif = nil
 	// update app Session
 	appSession.EventUri = eventsSubscReqData.NotifUri
@@ -1141,6 +1228,9 @@ func (p *Processor) HandleUpdateEventsSubscContext(
 			appSessCtx.EvsNotif.RatType = smPolicy.PolicyContext.RatType
 		}
 	}
+	if aniNotSupported {
+		addAniNotSupported(appSessCtx.EvsNotif)
+	}
 	if appSessCtx.EvsNotif.EvNotifs == nil {
 		appSessCtx.EvsNotif = nil
 	}
@@ -1162,6 +1252,7 @@ func (p *Processor) HandleUpdateEventsSubscContext(
 		resp.EvSubsUri = appSessCtx.EvsNotif.EvSubsUri
 		resp.EvNotifs = appSessCtx.EvsNotif.EvNotifs
 		resp.FailedResourcAllocReports = appSessCtx.EvsNotif.FailedResourcAllocReports
+		resp.NoNetLocSupp = appSessCtx.EvsNotif.NoNetLocSupp
 		resp.PlmnId = appSessCtx.EvsNotif.PlmnId
 		resp.QncReports = appSessCtx.EvsNotif.QncReports
 		resp.RatType = appSessCtx.EvsNotif.RatType
@@ -1234,6 +1325,12 @@ func (p *Processor) SendAppSessionTermination(
 	logger.PolicyAuthLog.Tracef("Send App Session Termination")
 	if appSession == nil {
 		logger.PolicyAuthLog.Warnln("Send App Session Termination Error[appSession is nil]")
+		return
+	}
+	if appSession.Deleting() && !appSession.Terminated() {
+		// The NF service consumer is already deleting the AF session (TS 29.514 clause 4.2.4).
+		logger.PolicyAuthLog.Debugf("App Session Id[%s] is being deleted: no termination requested",
+			appSession.AppSessionId)
 		return
 	}
 	uri := appSession.AppSessionContext.AscReqData.NotifUri

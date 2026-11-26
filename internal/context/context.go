@@ -74,6 +74,8 @@ type AppSessionData struct {
 	EventUri string
 	// related Session
 	SmPolicyData *UeSmPolicyData
+	// deletion in progress, see MarkDeleting
+	deletion appSessionDeletion
 }
 
 var pcfContext = PCFContext{}
