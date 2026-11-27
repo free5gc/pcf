@@ -12,6 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/integration/mtest"
 
 	"github.com/free5gc/openapi"
@@ -467,4 +468,231 @@ func newAllocationTestServer(t *testing.T, handler http.Handler) *httptest.Serve
 	server.Start()
 	t.Cleanup(server.Close)
 	return server
+}
+
+func TestCreateSmPolicyFlowChargingTemplate(t *testing.T) {
+	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
+	for _, tc := range []struct {
+		name        string
+		requirement interface{}
+		method      interface{}
+		wantStatus  int
+	}{
+		{name: "no charging template", wantStatus: http.StatusCreated},
+		{name: "invalid charging method", method: int32(1), wantStatus: http.StatusInternalServerError},
+		{name: "online template", method: "Online", wantStatus: http.StatusCreated},
+		{name: "offline template", method: "Offline", wantStatus: http.StatusCreated},
+		{
+			name: "explicit free ignores matching template", requirement: false, method: "Online",
+			wantStatus: http.StatusCreated,
+		},
+		{name: "required but missing template", requirement: true, wantStatus: http.StatusInternalServerError},
+		{name: "required online template", requirement: true, method: "Online", wantStatus: http.StatusCreated},
+		{name: "invalid requirement", requirement: "true", wantStatus: http.StatusInternalServerError},
+	} {
+		mt.Run(tc.name, func(mt *mtest.T) {
+			p, ue, request := allocationTestProcessor(mt.T, mt, 2, 0)
+			const flow = "10.70.0.0/16"
+			rule := bson.D{
+				{Key: "filter", Value: flow},
+				{Key: "precedence", Value: float64(128)},
+				{Key: "qosRef", Value: float64(1)},
+			}
+			if tc.requirement != nil {
+				rule = append(rule, bson.E{Key: "chargingRequired", Value: tc.requirement})
+			}
+			qos := bson.D{{Key: "qosRef", Value: float64(1)}, {Key: "5qi", Value: float64(9)}}
+			mt.AddMockResponses(mockFind(qosFlowDataColl, qos), mockFind(flowRuleDataColl, rule), mockFind(chargingDataColl))
+			wantLookup := tc.requirement == nil || tc.requirement == true
+			if wantLookup && tc.method == nil {
+				mt.AddMockResponses(mockFind(chargingDataColl))
+			}
+			if wantLookup && tc.method != nil {
+				mt.AddMockResponses(mockFind(chargingDataColl, bson.D{
+					{Key: "ueId", Value: ue.Supi},
+					{Key: "snssai", Value: "01010203"},
+					{Key: "dnn", Value: request.Dnn},
+					{Key: "filter", Value: flow},
+					{Key: "chargingMethod", Value: tc.method},
+				}))
+				if tc.wantStatus == http.StatusCreated {
+					mockChargingInsert(mt)
+				}
+			}
+
+			response := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(response)
+			p.HandleCreateSmPolicyRequest(c, request)
+			if response.Code != tc.wantStatus {
+				mt.Fatalf("unexpected response: HTTP %d, body %s", response.Code, response.Body.String())
+			}
+
+			sawFlowLookup := false
+			for _, event := range mt.GetAllStartedEvents() {
+				if event.CommandName != "find" || event.Command.Lookup("find").StringValue() != chargingDataColl {
+					continue
+				}
+				filter := event.Command.Lookup("filter").Document()
+				if value, ok := filter.Lookup("filter").StringValueOK(); ok && value == flow &&
+					filter.Lookup("ratingGroup").Type == bson.TypeNull {
+					sawFlowLookup = true
+					if tc.requirement == true {
+						if qosRef, ok := filter.Lookup("qosRef").DoubleOK(); !ok || qosRef != 1 {
+							mt.Fatal("required charging lookup did not match the flow's QoS reference")
+						}
+					}
+				}
+			}
+			if sawFlowLookup != wantLookup {
+				mt.Fatalf("flow charging template lookup: got %t, want %t", sawFlowLookup, wantLookup)
+			}
+
+			if tc.wantStatus == http.StatusInternalServerError {
+				assertProblem(mt.T, response, tc.wantStatus, "SYSTEM_FAILURE")
+				if len(ue.RatingGroupData) != 0 {
+					mt.Fatal("invalid template allocated a rating group")
+				}
+				return
+			}
+
+			var decision models.Pcf_SMPolCtrl_SmPolicyDecision
+			if err := json.Unmarshal(response.Body.Bytes(), &decision); err != nil {
+				mt.Fatal(err)
+			}
+			if len(decision.PccRules) != 1 {
+				mt.Fatalf("expected the flow rule, got %v", decision.PccRules)
+			}
+			for _, flowRule := range decision.PccRules {
+				if !reflect.DeepEqual(flowRule.RefQosData, []string{"1"}) {
+					mt.Fatalf("flow rule lost QoS data: %+v", flowRule)
+				}
+			}
+			if tc.method == nil || tc.requirement == false {
+				if len(decision.ChgDecs) != 0 || len(ue.RatingGroupData) != 0 {
+					mt.Fatal("uncharged flow allocated a rating group")
+				}
+				for _, flowRule := range decision.PccRules {
+					if len(flowRule.RefChgData) != 0 {
+						mt.Fatal("uncharged flow contains a charging reference")
+					}
+				}
+				return
+			}
+			if len(decision.ChgDecs) != 1 {
+				mt.Fatalf("expected one charging decision, got %v", decision.ChgDecs)
+			}
+			for _, charging := range decision.ChgDecs {
+				if charging.RatingGroup == 0 || charging.Online != (tc.method == "Online") ||
+					charging.Offline != (tc.method == "Offline") {
+					mt.Fatalf("unexpected charging decision: %+v", charging)
+				}
+			}
+		})
+	}
+}
+
+func TestCreateSmPolicyChargingWriteFailureRollsBack(t *testing.T) {
+	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
+	for _, tc := range []struct {
+		stage            string
+		successfulWrites int
+		influences       int
+	}{
+		{stage: "default"},
+		{stage: "flow", successfulWrites: 1},
+		{stage: "initial traffic influence", successfulWrites: 2, influences: 1},
+	} {
+		mt.Run(tc.stage, func(mt *mtest.T) {
+			const maxRatingGroup = 5
+			p, ue, request := allocationTestProcessor(mt.T, mt, maxRatingGroup, tc.influences)
+			generator := p.Context().RatingGroupIdGenerator
+			oldGroup, err := generator.Allocate()
+			if err != nil {
+				mt.Fatal(err)
+			}
+			policyID := fmt.Sprintf("%s-%d", ue.Supi, request.PduSessionId)
+			oldPolicy := ue.NewUeSmPolicyData(policyID, request, &models.Udr_DR_SmPolicyData{})
+			ue.RatingGroupData[policyID] = []int32{int32(oldGroup)}
+
+			var flowRules []bson.D
+			if tc.successfulWrites > 0 {
+				flowRules = append(flowRules, bson.D{
+					{Key: "filter", Value: "10.70.0.0/16"},
+					{Key: "precedence", Value: float64(128)},
+					{Key: "qosRef", Value: float64(1)},
+				})
+			}
+			mt.AddMockResponses(mockFind(qosFlowDataColl), mockFind(flowRuleDataColl, flowRules...))
+			for range tc.successfulWrites {
+				mt.AddMockResponses(mockFind(chargingDataColl, chargingSeed()))
+				mockChargingInsert(mt)
+			}
+			mt.AddMockResponses(
+				mockFind(chargingDataColl, chargingSeed()),
+				mockFind(chargingDataColl),
+				mtest.CreateWriteConcernErrorResponse(mtest.WriteConcernError{
+					Code: 64, Message: "injected write acknowledgement failure",
+				}),
+			)
+			for range tc.successfulWrites {
+				mt.AddMockResponses(mtest.CreateSuccessResponse(bson.E{Key: "n", Value: 1}))
+			}
+			// Zero deleted cannot rule out a write that is still in flight.
+			mt.AddMockResponses(mtest.CreateSuccessResponse(bson.E{Key: "n", Value: 0}))
+
+			response := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(response)
+			p.HandleCreateSmPolicyRequest(c, request)
+			assertProblem(mt.T, response, http.StatusInternalServerError, "SYSTEM_FAILURE")
+			if response.Header().Get("Location") != "" ||
+				response.Header().Get("Content-Type") != "application/problem+json" {
+				mt.Fatalf("unexpected response headers: %v", response.Header())
+			}
+			if ue.LoadSmPolicy(policyID) != oldPolicy ||
+				!reflect.DeepEqual(ue.RatingGroupData[policyID], []int32{int32(oldGroup)}) {
+				mt.Fatal("failed create did not restore the previous policy and rating group")
+			}
+
+			inserts := make(map[primitive.ObjectID]int32)
+			deleteCount := 0
+			for _, event := range mt.GetAllStartedEvents() {
+				switch event.CommandName {
+				case "insert":
+					docs, err := event.Command.Lookup("documents").Array().Values()
+					if err != nil || len(docs) != 1 {
+						mt.Fatalf("unexpected insert: %v", event.Command)
+					}
+					doc := docs[0].Document()
+					inserts[doc.Lookup("_id").ObjectID()] = doc.Lookup("ratingGroup").Int32()
+				case "delete":
+					entries, err := event.Command.Lookup("deletes").Array().Values()
+					if err != nil || len(entries) != 1 {
+						mt.Fatalf("unexpected delete: %v", event.Command)
+					}
+					filter := entries[0].Document().Lookup("q").Document()
+					id := filter.Lookup("_id").ObjectID()
+					group, inserted := inserts[id]
+					if !inserted || group == int32(oldGroup) || filter.Lookup("ratingGroup").Int32() != group ||
+						filter.Lookup("ueId").StringValue() != ue.Supi {
+						mt.Fatalf("rollback did not select its own charging copy: %v", filter)
+					}
+					delete(inserts, id)
+					deleteCount++
+				}
+			}
+			if len(inserts) != 0 || deleteCount != tc.successfulWrites+1 {
+				mt.Fatalf("incomplete charging rollback: %d deletes, remaining copies %v", deleteCount, inserts)
+			}
+			failedGroup := oldGroup + int64(tc.successfulWrites) + 1
+			for range maxRatingGroup - 2 {
+				id, err := generator.Allocate()
+				if err != nil || id == oldGroup || id == failedGroup {
+					mt.Fatalf("unexpected reusable rating group %d: %v", id, err)
+				}
+			}
+			if _, err := generator.Allocate(); err == nil {
+				mt.Fatal("old or unconfirmed rating group was freed")
+			}
+		})
+	}
 }

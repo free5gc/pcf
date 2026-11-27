@@ -1,7 +1,10 @@
 package processor
 
 import (
+	"fmt"
+
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 
 	pcf_context "github.com/free5gc/pcf/internal/context"
 	"github.com/free5gc/pcf/internal/logger"
@@ -12,15 +15,16 @@ import (
 // smPolicyCreation owns only resources acquired by one create request. In
 // particular, a failed replacement must not free another session's rating groups.
 type smPolicyCreation struct {
-	ue               *pcf_context.UeContext
-	policyID         string
-	previousPolicy   *pcf_context.UeSmPolicyData
-	previousGroups   []int32
-	hadGroups        bool
-	generator        *idgenerator.IDGenerator
-	allocated        []int64
-	insertedCharging []bson.M
-	committed        bool
+	ue                  *pcf_context.UeContext
+	policyID            string
+	previousPolicy      *pcf_context.UeSmPolicyData
+	previousGroups      []int32
+	hadGroups           bool
+	generator           *idgenerator.IDGenerator
+	allocated           []int64
+	chargingCopies      []bson.M
+	retainedRatingGroup int64
+	committed           bool
 }
 
 func newSmPolicyCreation(ue *pcf_context.UeContext, policyID string,
@@ -41,19 +45,29 @@ func (creation *smPolicyCreation) allocateRatingGroup() (int64, error) {
 	return id, err
 }
 
-func (creation *smPolicyCreation) putChargingData(data map[string]interface{}, strength int) error {
-	existed, err := mongoapi.RestfulAPIPutOne(chargingDataColl, data, data, strength)
-	if err == nil && !existed {
-		// A newly allocated rating group identifies this request's charging copy.
-		// Do not match mutable charging fields when rolling back, and do not
-		// delete unrelated copies that might share the subscriber's UE/S-NSSAI.
-		creation.insertedCharging = append(creation.insertedCharging, bson.M{
-			"ueId": data["ueId"], "snssai": data["snssai"],
-			"dnn": data["dnn"], "filter": data["filter"],
-			"ratingGroup": data["ratingGroup"],
-		})
+func (creation *smPolicyCreation) putChargingData(data map[string]interface{}, ratingGroup int32, strength int) error {
+	id := primitive.NewObjectID()
+	data["_id"] = id
+	data["ueId"] = creation.ue.Supi
+	data["ratingGroup"] = ratingGroup
+	filter := bson.M{"ueId": creation.ue.Supi, "ratingGroup": ratingGroup}
+
+	// Record ownership before the insert so rollback can target the same document
+	// even when the server does not acknowledge the write.
+	creation.chargingCopies = append(creation.chargingCopies, bson.M{
+		"_id": id, "ueId": creation.ue.Supi, "ratingGroup": ratingGroup,
+	})
+	existed, err := mongoapi.RestfulAPIPutOneNotUpdate(chargingDataColl, filter, data, strength)
+	if err != nil {
+		// A timed-out insert can still take effect after the rollback command.
+		creation.retainedRatingGroup = int64(ratingGroup)
+		return err
 	}
-	return err
+	if existed {
+		creation.retainedRatingGroup = int64(ratingGroup)
+		return fmt.Errorf("charging data already exists for rating group %d", ratingGroup)
+	}
+	return nil
 }
 
 func (creation *smPolicyCreation) rollback() {
@@ -63,7 +77,7 @@ func (creation *smPolicyCreation) rollback() {
 	// If MongoDB cannot delete a charging copy, avoid reusing the same
 	// rating group while that copy may still exist in the database.
 	unsafeToReuse := make(map[int64]struct{})
-	for _, filter := range creation.insertedCharging {
+	for _, filter := range creation.chargingCopies {
 		if err := mongoapi.RestfulAPIDeleteOne(chargingDataColl, filter); err != nil {
 			logger.SmPolicyLog.Errorf("Failed to clean up charging data after SM policy create failure: %v", err)
 			if group, ok := filter["ratingGroup"].(int32); ok {
@@ -72,7 +86,7 @@ func (creation *smPolicyCreation) rollback() {
 		}
 	}
 	for _, id := range creation.allocated {
-		if _, unsafe := unsafeToReuse[id]; unsafe {
+		if _, unsafe := unsafeToReuse[id]; unsafe || id == creation.retainedRatingGroup {
 			continue
 		}
 		creation.generator.FreeID(id)
@@ -118,6 +132,7 @@ func (creation *smPolicyCreation) commit() {
 			continue
 		}
 		if err := mongoapi.RestfulAPIDeleteMany(chargingDataColl, bson.M{
+			"ueId":        creation.ue.Supi,
 			"ratingGroup": oldGroup,
 		}); err != nil {
 			// Retain the allocator reservation if a stale charging copy
