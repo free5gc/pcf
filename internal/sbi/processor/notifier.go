@@ -129,11 +129,12 @@ func (p *Processor) HandleInfluenceDataUpdateNotify(
 					"dnn":    "",
 					"filter": "",
 				}
-				chargingInterface, err := mongoapi.RestfulAPIGetOne(chargingDataColl, filterCharging, 2)
+				chargingInterface, online, err := loadChargingTemplate(filterCharging, 2)
 				if err != nil {
-					logger.SmPolicyLog.Errorf("Fail to get charging data to mongoDB err: %+v", err)
-					chgData = nil
-				} else if chargingInterface != nil {
+					sendChargingDataError(c, err)
+					return
+				}
+				if chargingInterface != nil {
 					rg, err1 := p.Context().RatingGroupIdGenerator.Allocate()
 					if err1 != nil {
 						logger.SmPolicyLog.Error("rating group allocate error")
@@ -148,15 +149,8 @@ func (p *Processor) HandleInfluenceDataUpdateNotify(
 						RatingGroup:    int32(rg),
 						ReportingLevel: models.Pcf_SMPolCtrl_ReportingLevel_RAT_GR_LEVEL,
 						MeteringMethod: models.Pcf_SMPolCtrl_MeteringMethod_VOLUME,
-					}
-
-					switch chargingInterface["chargingMethod"].(string) {
-					case "Online":
-						chgData.Online = true
-						chgData.Offline = false
-					case "Offline":
-						chgData.Online = false
-						chgData.Offline = true
+						Online:         online,
+						Offline:        !online,
 					}
 
 					chargingInterface["ratingGroup"] = chgData.RatingGroup
