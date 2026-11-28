@@ -136,6 +136,11 @@ func replyErrorReport(ruleReports ...models.Pcf_SMPolCtrl_RuleReport) {
 		})
 }
 
+func replyPartialSuccess(reports ...models.Pcf_SMPolCtrl_PartialSuccessReport) {
+	gock.New(ruleReportSmfURL).Post("/notify/update").Reply(http.StatusOK).
+		JSON(models.CreateSMPolicySmPolicyUpdateNotificationResponse200{PartialSuccessReports: reports})
+}
+
 // The SMF rejects an SM policy update notification whose PCC rules cannot be installed with an
 // ErrorReport (TS 29.512 clause 4.2.3.2): the PCF notifies the AF and removes them. As all the PCC
 // rules of the AF session fail, the AF is requested to delete it (TS 29.514 clause 4.2.5.3).
@@ -392,4 +397,53 @@ func TestSMPolicyNotificationErrorReportAppSessionBeingDeleted(t *testing.T) {
 
 	require.Empty(t, af.received())
 	require.NotContains(t, smPolicy.PolicyDecision.PccRules, ruleReportPccRule)
+}
+
+// The SMF answers an SM policy update notification it could enforce only partially with "200 OK" and
+// an array of PartialSuccessReport (TS 29.512 clause 4.2.3.2): the failed PCC rules are handled as in
+// an ErrorReport, the AF is notified (TS 29.514 clause 4.2.5.8) and the other PCC rules are kept.
+func TestSMPolicyNotificationPartialSuccessNotifiesAF(t *testing.T) {
+	openapi.InterceptInnerHttp2Client(t, false)
+	gock.Flush()
+	t.Cleanup(gock.Off)
+	p, smPolicy, appSession := newRuleReportTestPCF(t, ruleReportPccRule, "PccRule-3")
+	replyPartialSuccess(models.Pcf_SMPolCtrl_PartialSuccessReport{
+		FailureCause: models.Pcf_SMPolCtrl_FailureCause_PCC_RULE_EVENT,
+		RuleReports:  []models.Pcf_SMPolCtrl_RuleReport{inactiveRuleReport("PccRule-3")},
+	})
+	af := interceptAfRequests(t)
+
+	p.SendSMPolicyUpdateNotification(ruleReportSmfURL+"/notify", ruleReportNotification())
+
+	require.Equal(t, []string{"/notify/notify"}, af.received())
+	require.Equal(t, []models.Pcf_PolAuth_ResourcesAllocationInfo{{
+		McResourcStatus: models.Pcf_PolAuth_MediaComponentResourcesStatus_INACTIVE,
+		Flows:           []models.Pcf_PolAuth_Flows{{MedCompN: 2}},
+	}}, af.notification.FailedResourcAllocReports)
+	require.Contains(t, smPolicy.PolicyDecision.PccRules, ruleReportPccRule)
+	require.NotContains(t, smPolicy.PolicyDecision.PccRules, "PccRule-3")
+	require.Equal(t, map[string]string{ruleReportPccRule: "1"}, appSession.PccRuleIdMapToCompId)
+}
+
+// The PCC rule reports of several PartialSuccessReports are all handled: when all the PCC rules of
+// the AF session fail, the AF is requested to delete it (TS 29.514 clause 4.2.5.3).
+func TestSMPolicyNotificationPartialSuccessAllRulesFail(t *testing.T) {
+	openapi.InterceptInnerHttp2Client(t, false)
+	gock.Flush()
+	t.Cleanup(gock.Off)
+	p, smPolicy, _ := newRuleReportTestPCF(t, ruleReportPccRule, "PccRule-3")
+	replyPartialSuccess(models.Pcf_SMPolCtrl_PartialSuccessReport{
+		FailureCause: models.Pcf_SMPolCtrl_FailureCause_PCC_RULE_EVENT,
+		RuleReports:  []models.Pcf_SMPolCtrl_RuleReport{inactiveRuleReport(ruleReportPccRule)},
+	}, models.Pcf_SMPolCtrl_PartialSuccessReport{
+		FailureCause: models.Pcf_SMPolCtrl_FailureCause_PCC_QOS_FLOW_EVENT,
+		RuleReports:  []models.Pcf_SMPolCtrl_RuleReport{inactiveRuleReport("PccRule-3")},
+	})
+	af := interceptAfRequests(t)
+
+	p.SendSMPolicyUpdateNotification(ruleReportSmfURL+"/notify", ruleReportNotification())
+
+	require.Equal(t, []string{"/notify/notify", "/terminate"}, af.received())
+	require.Equal(t, models.Pcf_PolAuth_TerminationCause_ALL_SDF_DEACTIVATION, af.termination.TermCause)
+	require.Empty(t, smPolicy.PolicyDecision.PccRules)
 }

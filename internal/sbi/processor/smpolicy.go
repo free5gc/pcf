@@ -1177,7 +1177,13 @@ func (p *Processor) SendSMPolicyUpdateNotification(
 		logger.SmPolicyLog.Warnf("SM Policy Update Notification Failed[%s]", err.Error())
 	case nil:
 		logger.SmPolicyLog.Tracef("SM Policy Update Notification Success")
-		if rsp != nil {
+		if rsp == nil || rsp.CreateSMPolicySmPolicyUpdateNotificationResponse200 == nil {
+			break
+		}
+		if reports := rsp.CreateSMPolicySmPolicyUpdateNotificationResponse200.PartialSuccessReports; reports != nil {
+			// The SMF could install only some of the PCC rules (subclause 4.2.3.2 in TS29512)
+			p.handleNotificationPartialSuccess(request, reports)
+		} else {
 			// Access network information in the UeCampingRep (subclause 4.2.3.10 in TS29512)
 			p.handleNotificationAccessNetworkInfo(request, rsp.CreateSMPolicySmPolicyUpdateNotificationResponse200)
 		}

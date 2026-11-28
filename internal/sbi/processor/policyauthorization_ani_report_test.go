@@ -327,3 +327,24 @@ func TestAniReportCompleteWithReason(t *testing.T) {
 		require.Equal(t, tc.lt, aniReportComplete(reported, both), "%s both", tc.reason)
 	}
 }
+
+// The access network information in the UeCampingRep of a PartialSuccessReport (TS 29.512 clause
+// 4.2.3.2) is reported to the AF as in a UeCampingRep.
+func TestAniReportInPartialSuccessReport(t *testing.T) {
+	interceptHTTP(t)
+	p, appSession := newAniTestSession(t, netLocSuppFeat, netLocSuppFeat)
+	subscribeAni(appSession, aniTestAfURLA, reqUserLocation)
+	var got models.Pcf_PolAuth_EventsNotification
+	expectAfNotification(aniTestAfURLA, &got)
+
+	notifyAni(t, p, appSession, models.CreateSMPolicySmPolicyUpdateNotificationResponse200{
+		PartialSuccessReports: []models.Pcf_SMPolCtrl_PartialSuccessReport{{
+			FailureCause: models.Pcf_SMPolCtrl_FailureCause_PCC_RULE_EVENT,
+			UeCampingRep: &models.Pcf_SMPolCtrl_UeCampingRep{UserLocationInfo: aniTestUeLoc},
+		}},
+	})
+
+	require.True(t, gock.IsDone())
+	require.Equal(t, aniTestUeLoc, got.UeLoc)
+	require.NotContains(t, appSession.SmPolicyData.PolicyDecision.PolicyCtrlReqTriggers, anInfoTrigger)
+}

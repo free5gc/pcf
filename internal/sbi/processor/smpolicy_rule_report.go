@@ -245,3 +245,34 @@ func (p *Processor) handleNotificationRuleReports(
 
 	p.handleRuleReports(smPolicy, models.Pcf_PolAuth_EventsNotification{}, nil, ruleReports)
 }
+
+// handleNotificationPartialSuccess handles the "200 OK" answer of the SMF to an SM policy update
+// notification it could enforce only partially (TS 29.512 clause 4.2.3.2): the PCC rules reported in
+// the PartialSuccessReports are handled as in an ErrorReport, then the access network information of
+// their UeCampingRep, if any.
+func (p *Processor) handleNotificationPartialSuccess(notification *models.Pcf_SMPolCtrl_SmPolicyNotification,
+	reports []models.Pcf_SMPolCtrl_PartialSuccessReport,
+) {
+	var ruleReports []models.Pcf_SMPolCtrl_RuleReport
+	for _, report := range reports {
+		logger.SmPolicyLog.Warnf("SM Policy Update Notification partially enforced[%s]", report.FailureCause)
+		ruleReports = append(ruleReports, report.RuleReports...)
+	}
+	if len(ruleReports) != 0 {
+		p.handleNotificationRuleReports(notification.ResourceUri, ruleReports)
+	}
+	for _, report := range reports {
+		if rep := report.UeCampingRep; rep != nil {
+			p.handleNotificationAccessNetworkInfo(notification, &models.CreateSMPolicySmPolicyUpdateNotificationResponse200{
+				AccessType:          rep.AccessType,
+				RatType:             rep.RatType,
+				ServNfId:            rep.ServNfId,
+				ServingNetwork:      rep.ServingNetwork,
+				UserLocationInfo:    rep.UserLocationInfo,
+				UeTimeZone:          rep.UeTimeZone,
+				NetLocAccSupp:       rep.NetLocAccSupp,
+				SatBackhaulCategory: rep.SatBackhaulCategory,
+			})
+		}
+	}
+}
