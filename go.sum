@@ -29,8 +29,6 @@ github.com/free5gc/nas v1.2.4-0.20260707083822-348faf940c55 h1:II2TnEwOTj6z+Iiq+
 github.com/free5gc/nas v1.2.4-0.20260707083822-348faf940c55/go.mod h1:T/krdGjxSut+MQJAFFBS4lsWZa/NPEz7wO0G/D3qHeE=
 github.com/free5gc/ngap v1.1.4-0.20260707055048-c26215fe47ef h1:+TrPHbLcROsjDUuwsMBQTAi7SeKMP2o0v7xjsTJEJ8s=
 github.com/free5gc/ngap v1.1.4-0.20260707055048-c26215fe47ef/go.mod h1:1lfw7JP0fs8bdv0B685KDC2/shOciL9gf1f3KwKnGvk=
-github.com/free5gc/openapi v1.3.1-0.20261104070955-7fad8e868cb2 h1:BOJSQK6arB7Ohf51fAceHY/cPwXSyb07Tnj6bpm5Wxw=
-github.com/free5gc/openapi v1.3.1-0.20261104070955-7fad8e868cb2/go.mod h1:ixcBUsgwkQBAT/4peVVB0daqxk0qv6V8zOMSFvhKVfo=
 github.com/free5gc/util v1.4.1-0.20261118044530-a14766fe79d2 h1:7heQWP9a8p9wg1UczgKz4ZkxsdOZerLVRxt6xm4cKDg=
 github.com/free5gc/util v1.4.1-0.20261118044530-a14766fe79d2/go.mod h1:BKve0a2Zc9/31J3mh+bI/81TvqqALjX1VJ7qVTdwc10=
 github.com/gabriel-vasile/mimetype v1.4.3 h1:in2uUcidCuFcDKtdcBxlR0rJ1+fsokWf+uqxgUFjbI0=
@@ -137,6 +135,8 @@ github.com/stretchr/testify v1.10.0 h1:Xv5erBjTwe/5IxqUQTdXv5kgmIvbHo3QQyRwhJsOf
 github.com/stretchr/testify v1.10.0/go.mod h1:r2ic/lqez/lEtzL7wO/rwa5dbSLXVDPFyf8C91i36aY=
 github.com/tim-ywliu/nested-logrus-formatter v1.3.2 h1:jugNJ2/CNCI79SxOJCOhwUHeN3O7/7/bj+ZRGOFlCSw=
 github.com/tim-ywliu/nested-logrus-formatter v1.3.2/go.mod h1:oGPmcxZB65j9Wo7mCnQKSrKEJtVDqyjD666SGmyStXI=
+github.com/ting0928/openapi v0.0.0-20261128045850-d29bcb9e0435 h1:O+CLJw86ozxsmfU6pMuLlNeUYB7hhXuLAU1oOGH3OeM=
+github.com/ting0928/openapi v0.0.0-20261128045850-d29bcb9e0435/go.mod h1:ixcBUsgwkQBAT/4peVVB0daqxk0qv6V8zOMSFvhKVfo=
 github.com/twitchyliquid64/golang-asm v0.15.1 h1:SU5vSMR7hnwNxj24w34ZyCi/FmDZTkS4MhqMhdFk5YI=
 github.com/twitchyliquid64/golang-asm v0.15.1/go.mod h1:a1lVb/DtPvCB8fslRZhAngC2+aY1QWCk3Cedj/Gdt08=
 github.com/ugorji/go/codec v1.2.12 h1:9LC83zGrHhuUA9l16C9AHXAqEV/2wBQ4nkvumAE65EE=
